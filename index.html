@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEC-ROY SRLS - Gestione Ore</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container" id="container">
+        <!-- LOGIN -->
+        <div id="loginForm">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 60px;">🏭</div>
+                <h1 style="color: var(--text-primary);">MEC-ROY SRLS</h1>
+                <p style="color: var(--text-secondary);">Gestione Presenze e Ore</p>
+            </div>
+            <div class="error-message" id="errorMessage"></div>
+            <form id="loginFormElement">
+                <div class="input-group">
+                    <label>📧 Email</label>
+                    <input type="email" id="userEmail" placeholder="es. mario@mec-roy.it" required>
+                </div>
+                <div class="input-group">
+                    <label>🔒 Password</label>
+                    <input type="password" id="password" placeholder="••••••" required>
+                </div>
+                <button type="submit">Accedi</button>
+            </form>
+            <div style="text-align: center; margin-top: 20px; color: var(--text-secondary); font-size: 12px;">
+                <p>⚠️ Credenziali demo:</p>
+                <p>Admin: admin@mec-roy.it / admin123</p>
+                <p>Utente: mario@mec-roy.it / 123456</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase caricato PRIMA dello script -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    
+    <!-- Configurazione Firebase -->
+    <script>
+        // Configurazione Firebase - INSERISCI I TUOI DATI REALI QUI
+        const firebaseConfig = {
+            apiKey: "AIzaSyCjVygYWtq3FoARPQN_PufBXoUtZy1Z8g",  // SOSTITUISCI CON LA TUA CHIAVE REALE
+            authDomain: "mec-roy-2026.firebaseapp.com",
+            projectId: "mec-roy-2026",
+            storageBucket: "mec-roy-2026.firebasestorage.app",
+            messagingSenderId: "236947448329",
+            appId: "1:236947448329:web:57776a8a00011adb9fced8",
+            measurementId: "G-1WHW3Z3RT6"
+        };
+        
+        // Inizializza Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        // Variabili globali
+        window.db = db;
+        window.currentUser = null;
+        window.cartellaCorrenteId = null;
+        
+        console.log('✅ Firebase inizializzato correttamente');
+    </script>
+    
+    <!-- Script principale -->
+    <script src="script.js"></script>
+</body>
+</html>
