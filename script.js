@@ -1,1446 +1,2046 @@
-// ===== VARIABILI GLOBALI =====
-let currentUser = null;
-let cartellaCorrenteId = null;
+// ============================================
+// CONFIGURAZIONE FIREBASE
+// ============================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCjVygYWWtq3FoARPQN_PufBXoUtZy1Z8g",
+  authDomain: "mec-roy-2026.firebaseapp.com",
+  projectId: "mec-roy-2026",
+  storageBucket: "mec-roy-2026.firebasestorage.app",
+  messagingSenderId: "236947448329",
+  appId: "1:236947448329:web:57776a8a00011adb9fced8",
+  measurementId: "G-1WHW3Z3RT6"
+};
 
-// ===== UTENTI DI DEFAULT =====
-const DEFAULT_USERS = [
-    {
-        email: 'admin@mec-roy.it',
-        password: 'admin123',
-        name: 'Amministratore',
-        type: 'admin',
-        ruolo: 'admin',
-        stato: 'attivo',
-        ritardi: 0,
-        dataCreazione: new Date().toISOString()
-    },
-    {
-        email: 'mario@mec-roy.it',
-        password: '123456',
-        name: 'Mario Rossi',
-        type: 'user',
-        ruolo: 'operaio',
-        stato: 'attivo',
-        ritardi: 0,
-        dataCreazione: new Date().toISOString()
-    },
-    {
-        email: 'luca@mec-roy.it',
-        password: '123456',
-        name: 'Luca Bianchi',
-        type: 'user',
-        ruolo: 'operaio',
-        stato: 'attivo',
-        ritardi: 0,
-        dataCreazione: new Date().toISOString()
-    },
-    {
-        email: 'anna@mec-roy.it',
-        password: '123456',
-        name: 'Anna Verdi',
-        type: 'user',
-        ruolo: 'operaio',
-        stato: 'attivo',
-        ritardi: 0,
-        dataCreazione: new Date().toISOString()
-    }
-];
+// Inizializza Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-// ===== INIZIALIZZAZIONE COMPLETA DEL DATABASE =====
-async function inizializzaDatabaseCompleto() {
-    console.log('🚀 Inizializzazione database in corso...');
-    
-    // Verifica che Firebase sia disponibile
-    if (typeof db === 'undefined') {
-        console.error('❌ Firebase non disponibile');
-        return false;
+// Abilita offline
+db.enablePersistence()
+  .catch((err) => {
+    console.warn('Offline persistence:', err.code);
+  });
+
+// ============================================
+// DATI
+// ============================================
+let dati = {};
+let utenteCorrente = null;
+let prossimoId = 100;
+
+// ============================================
+// FUNZIONI DI CONNESSIONE A FIRESTORE
+// ============================================
+
+// CARICA DATI DA FIRESTORE
+async function caricaDaFirestore() {
+  try {
+    console.log('🔄 Caricamento dati da Firestore...');
+    const snapshot = await db.collection('dati').doc('main').get();
+    if (snapshot.exists) {
+      const datiFirestore = snapshot.data();
+      console.log('✅ Dati caricati da Firestore');
+      return datiFirestore;
+    } else {
+      console.log('⚠️ Nessun dato in Firestore, uso default');
+      return null;
     }
-    
-    try {
-        // 1. CREA COLLEZIONE UTENTI
-        console.log('📝 Creazione utenti...');
-        for (const user of DEFAULT_USERS) {
-            const userRef = db.collection('utenti').doc(user.email);
-            const userDoc = await userRef.get();
-            
-            if (!userDoc.exists) {
-                await userRef.set(user);
-                console.log(`✅ Utente creato: ${user.email}`);
-            } else {
-                console.log(`ℹ️ Utente già esistente: ${user.email}`);
-            }
-        }
-        
-        // 2. CREA COLLEZIONE COMMESSE (esempi)
-        console.log('📝 Creazione commesse esempio...');
-        const commesseEsempio = [
-            {
-                codice: 'CC2024-001',
-                descrizione: 'Progetto A - Nuova linea produzione',
-                dataCreazione: new Date().toLocaleDateString('it-IT'),
-                terminata: false
-            },
-            {
-                codice: 'CC2024-002',
-                descrizione: 'Manutenzione impianti elettrici',
-                dataCreazione: new Date().toLocaleDateString('it-IT'),
-                terminata: false
-            },
-            {
-                codice: 'CC2024-003',
-                descrizione: 'Installazione nuovi macchinari',
-                dataCreazione: new Date().toLocaleDateString('it-IT'),
-                terminata: false
-            }
-        ];
-        
-        const commesseSnapshot = await db.collection('commesse').get();
-        if (commesseSnapshot.empty) {
-            for (const commessa of commesseEsempio) {
-                await db.collection('commesse').add(commessa);
-                console.log(`✅ Commessa creata: ${commessa.codice}`);
-            }
-        } else {
-            console.log(`ℹ️ Già presenti ${commesseSnapshot.size} commesse`);
-        }
-        
-        // 3. CREA COLLEZIONE RICHIESTE (esempi)
-        console.log('📝 Creazione richieste esempio...');
-        const richiesteSnapshot = await db.collection('richieste').get();
-        if (richiesteSnapshot.empty) {
-            const richiesteEsempio = [
-                {
-                    id: Date.now(),
-                    utente: 'Mario Rossi',
-                    utenteEmail: 'mario@mec-roy.it',
-                    tipo: 'Ferie',
-                    dal: '2026-03-15',
-                    al: '2026-03-20',
-                    stato: 'in attesa',
-                    dataRichiesta: new Date().toISOString()
-                },
-                {
-                    id: Date.now() + 1,
-                    utente: 'Luca Bianchi',
-                    utenteEmail: 'luca@mec-roy.it',
-                    tipo: 'Permesso',
-                    dal: '2026-03-10',
-                    al: '2026-03-10',
-                    stato: 'in attesa',
-                    dataRichiesta: new Date().toISOString()
-                }
-            ];
-            
-            for (const richiesta of richiesteEsempio) {
-                await db.collection('richieste').add(richiesta);
-                console.log(`✅ Richiesta creata: ${richiesta.tipo} per ${richiesta.utente}`);
-            }
-        }
-        
-        console.log('✅ Database inizializzato completamente!');
-        return true;
-        
-    } catch (error) {
-        console.error('❌ Errore inizializzazione database:', error);
-        
-        // Se l'errore è di permessi, mostra istruzioni
-        if (error.code === 'permission-denied') {
-            console.error('⚠️ ERRORE DI PERMESSI!');
-            console.error('Devi modificare le regole di Firestore:');
-            console.error('1. Vai su Firebase Console -> Firestore Database -> Regole');
-            console.error('2. Imposta le regole a: allow read, write: if true;');
-            console.error('3. Clicca Pubblica');
-        }
-        
-        return false;
-    }
+  } catch (error) {
+    console.error('❌ Errore caricamento Firestore:', error);
+    return null;
+  }
 }
 
-// ===== LOGIN =====
-async function handleLogin(event) {
-    event.preventDefault();
-    
-    const email = document.getElementById('userEmail').value.trim();
-    const password = document.getElementById('password').value;
-    const errorMsg = document.getElementById('errorMessage');
-    
-    if (!email || !password) {
-        errorMsg.textContent = 'Inserisci email e password';
-        errorMsg.style.display = 'block';
-        return;
-    }
-    
-    try {
-        // Prima verifica che il database sia inizializzato
-        const databasePronto = await inizializzaDatabaseCompleto();
-        
-        if (!databasePronto) {
-            errorMsg.textContent = 'Errore di connessione al database. Verifica le regole di Firestore.';
-            errorMsg.style.display = 'block';
-            return;
-        }
-        
-        // Cerca l'utente
-        const userDoc = await db.collection('utenti').doc(email).get();
-        
-        if (!userDoc.exists) {
-            errorMsg.textContent = 'Utente non trovato. Usa: admin@mec-roy.it / admin123';
-            errorMsg.style.display = 'block';
-            return;
-        }
-        
-        const userData = userDoc.data();
-        
-        if (userData.password === password) {
-            errorMsg.style.display = 'none';
-            
-            currentUser = {
-                id: email,
-                email: email,
-                ...userData
-            };
-            
-            window.currentUser = currentUser;
-            
-            // Inizializza localStorage per l'utente
-            if (!localStorage.getItem(`cartelle_${email}`)) {
-                localStorage.setItem(`cartelle_${email}`, JSON.stringify([]));
-            }
-            
-            caricaTemaSalvato();
-            
-            if (currentUser.type === 'admin') {
-                await caricaPagina('admin-dashboard.html');
-                initAdminDashboard();
-            } else {
-                await caricaPagina('user-dashboard.html');
-                initUserDashboard();
-            }
-        } else {
-            errorMsg.textContent = 'Password errata';
-            errorMsg.style.display = 'block';
-        }
-    } catch (error) {
-        console.error('Errore login:', error);
-        
-        if (error.code === 'permission-denied') {
-            errorMsg.innerHTML = '⚠️ ERRORE PERMESSI FIRESTORE!<br><br>' +
-                'Devi modificare le regole di Firestore:<br>' +
-                '1. Vai su <strong>Firebase Console</strong><br>' +
-                '2. Seleziona <strong>Firestore Database</strong><br>' +
-                '3. Clicca su <strong>Regole</strong><br>' +
-                '4. Sostituisci con:<br>' +
-                '<code style="background:#000; padding:5px; display:block; margin:5px 0;">rules_version = \'2\';<br>' +
-                'service cloud.firestore {<br>' +
-                '&nbsp;&nbsp;match /databases/{database}/documents {<br>' +
-                '&nbsp;&nbsp;&nbsp;&nbsp;match /{document=**} {<br>' +
-                '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if true;<br>' +
-                '&nbsp;&nbsp;&nbsp;&nbsp;}<br>' +
-                '&nbsp;&nbsp;}<br>' +
-                '}</code><br>' +
-                '5. Clicca <strong>Pubblica</strong><br>' +
-                '6. Ricarica la pagina';
-            errorMsg.style.display = 'block';
-        } else {
-            errorMsg.textContent = 'Errore: ' + error.message;
-            errorMsg.style.display = 'block';
-        }
-    }
+// SALVA DATI SU FIRESTORE
+async function salvaSuFirestore(datiDaSalvare) {
+  try {
+    console.log('🔄 Salvataggio su Firestore...');
+    await db.collection('dati').doc('main').set(datiDaSalvare);
+    console.log('✅ Dati salvati su Firestore');
+    return true;
+  } catch (error) {
+    console.error('❌ Errore salvataggio Firestore:', error);
+    return false;
+  }
 }
 
-// ===== LOGOUT =====
+// CARICA DATI (locale + Firestore)
+async function caricaDati() {
+  // Prova a caricare da Firestore
+  const datiFirestore = await caricaDaFirestore();
+  
+  if (datiFirestore) {
+    // Usa i dati di Firestore
+    dati = datiFirestore;
+    return dati;
+  }
+  
+  // Se Firestore è vuoto, usa localStorage o default
+  const saved = localStorage.getItem('datiLavoroV2');
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    if (!parsed.aziende) {
+      parsed.aziende = [{ id: 1, nome: 'MEC-ROY srls' }];
+    }
+    dati = parsed;
+    await salvaSuFirestore(dati);
+    return dati;
+  }
+  
+  // Crea dati di default
+  const defaultData = {
+    utenti: [
+      { username: 'admin', password: 'admin123', nome: 'Admin', cognome: 'Sistema', ruolo: 'admin' }
+    ],
+    commesse: [],
+    registrazioni: [],
+    richieste: [],
+    notifiche: [],
+    aziende: [
+      { id: 1, nome: 'MEC-ROY srls' }
+    ]
+  };
+  
+  dati = defaultData;
+  await salvaSuFirestore(dati);
+  localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
+  return dati;
+}
+
+// SALVA DATI (Firestore + localStorage)
+async function salvaDati() {
+  localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
+  await salvaSuFirestore(dati);
+}
+
+// ============================================
+// CALCOLA ORE GIORNATA
+// ============================================
+function calcolaOreGiornata(username, data) {
+  const registrazioni = dati.registrazioni.filter(r => 
+    r.utente_id === username && 
+    r.data === data && 
+    r.tipo === 'lavoro'
+  );
+  
+  let totaleOre = 0;
+  registrazioni.forEach(r => {
+    if (r.ore) {
+      totaleOre += r.ore;
+    } else if (r.ora_inizio && r.ora_fine) {
+      const [h1, m1] = r.ora_inizio.split(':').map(Number);
+      const [h2, m2] = r.ora_fine.split(':').map(Number);
+      totaleOre += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+    }
+  });
+  return totaleOre;
+}
+
+// ============================================
+// CONTROLLA ORARIO (dopo le 20:00 non si può modificare)
+// ============================================
+function isOltre20() {
+  const ora = new Date();
+  const ore = ora.getHours();
+  return ore >= 20;
+}
+
+// ============================================
+// CARICA DATI ALL'AVVIO
+// ============================================
+async function init() {
+  await caricaDati();
+  document.getElementById('login-page').style.display = 'block';
+  document.getElementById('main-page').style.display = 'none';
+  const anno = new Date().getFullYear();
+  document.getElementById('cal-anno').value = anno;
+}
+
+// ============================================
+// LOGIN / LOGOUT
+// ============================================
+function login() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  
+  const utente = dati.utenti.find(u => u.username === username && u.password === password);
+  
+  if (utente) {
+    utenteCorrente = utente;
+    document.getElementById('login-page').style.display = 'none';
+    document.getElementById('main-page').style.display = 'block';
+    document.getElementById('errore').style.display = 'none';
+    
+    document.getElementById('user-nome').textContent = utente.nome + ' ' + utente.cognome;
+    const ruoloBadge = document.getElementById('user-ruolo');
+    ruoloBadge.textContent = utente.ruolo;
+    ruoloBadge.className = 'badge ' + utente.ruolo;
+    
+    if (utente.ruolo === 'admin') {
+      document.getElementById('tab-registra').style.display = 'none';
+      document.getElementById('tab-richiedi').style.display = 'none';
+      document.getElementById('tab-modifica').style.display = 'inline-block';
+      document.getElementById('tab-richieste').style.display = 'inline-block';
+      document.getElementById('tab-commesse').style.display = 'inline-block';
+      document.getElementById('tab-dipendenti').style.display = 'inline-block';
+      document.getElementById('tab-calendario').style.display = 'inline-block';
+      document.getElementById('cal-filtro-dipendente').style.display = 'block';
+      document.getElementById('btn-password').style.display = 'flex';
+      document.getElementById('azienda-container').style.display = 'inline-block';
+      
+      caricaSelectAziende();
+      caricaSelectAziendeCommesse();
+      caricaSelectDipendentiModifica();
+      caricaSelectDipendentiCalendario();
+      caricaRichiesteAdmin();
+      caricaListaDipendenti();
+      aggiornaBadgeRichieste();
+      
+      showTab('modifica');
+    } else {
+      document.getElementById('tab-registra').style.display = 'inline-block';
+      document.getElementById('tab-richiedi').style.display = 'inline-block';
+      document.getElementById('tab-modifica').style.display = 'none';
+      document.getElementById('tab-richieste').style.display = 'none';
+      document.getElementById('tab-commesse').style.display = 'none';
+      document.getElementById('tab-dipendenti').style.display = 'none';
+      document.getElementById('tab-calendario').style.display = 'inline-block';
+      document.getElementById('cal-filtro-dipendente').style.display = 'none';
+      document.getElementById('btn-password').style.display = 'none';
+      document.getElementById('azienda-container').style.display = 'none';
+      
+      showTab('registra');
+    }
+    
+    document.getElementById('notifiche-container').style.display = 'inline-block';
+    aggiornaBadgeNotifiche();
+    caricaDarkMode();
+    
+    const oggi = new Date().toISOString().split('T')[0];
+    const dataReg = document.getElementById('data-reg');
+    dataReg.value = oggi;
+    dataReg.disabled = true;
+    dataReg.style.backgroundColor = '#f0f0f0';
+    dataReg.style.cursor = 'not-allowed';
+    
+    document.getElementById('richiesta-data-inizio').value = oggi;
+    document.getElementById('richiesta-data-fine').value = oggi;
+    document.getElementById('modifica-data').value = oggi;
+    document.getElementById('recupero-data').value = oggi;
+    
+    caricaSelectRecuperoCommesse();
+    
+    document.getElementById('tipo-richiesta').addEventListener('change', function() {
+      const tipo = this.value;
+      document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
+      document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
+      document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
+    });
+    
+    if (utente.ruolo === 'dipendente') {
+      const oraInizio = document.getElementById('ora-inizio');
+      const oraFine = document.getElementById('ora-fine');
+      
+      const ora = new Date();
+      const oraCorrente = ora.getHours().toString().padStart(2, '0') + ':00';
+      oraInizio.value = oraCorrente;
+      
+      oraInizio.oninput = function() {
+        if (this.value) {
+          const [h, m] = this.value.split(':').map(Number);
+          const hFine = (h + 1).toString().padStart(2, '0');
+          oraFine.value = hFine + ':00';
+          oraFine.focus();
+        }
+      };
+      
+      document.getElementById('straordinario').addEventListener('change', function() {
+        const oraInizio = document.getElementById('ora-inizio');
+        if (this.checked) {
+          oraInizio.disabled = false;
+          oraInizio.style.backgroundColor = 'white';
+          oraInizio.style.cursor = 'text';
+          document.getElementById('info-registrazione').innerHTML = `
+            <div class="info-msg" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;">
+              ⏰ <strong>Modalità Straordinario attivata!</strong> Le ore oltre le 8 verranno segnate come straordinario.
+            </div>
+          `;
+        } else {
+          caricaUltimaRegistrazione();
+        }
+      });
+      
+      caricaUltimaRegistrazione();
+    }
+    
+    caricaSelectCommesse();
+    caricaListaCommesse();
+    caricaRichiesteDipendente();
+    caricaSelectDipendentiModifica();
+    caricaSelectDipendentiCalendario();
+    
+  } else {
+    document.getElementById('errore').style.display = 'block';
+  }
+}
+
 function logout() {
-    currentUser = null;
-    window.currentUser = null;
-    window.location.reload();
+  utenteCorrente = null;
+  document.getElementById('login-page').style.display = 'block';
+  document.getElementById('main-page').style.display = 'none';
+  document.getElementById('username').value = '';
+  document.getElementById('password').value = '';
 }
 
-// ===== NAVIGAZIONE =====
-async function caricaPagina(nomeFile) {
-    try {
-        let html = '';
-        
-        switch(nomeFile) {
-            case 'admin-dashboard.html':
-                html = getAdminDashboardHTML();
-                break;
-            case 'user-dashboard.html':
-                html = getUserDashboardHTML();
-                break;
-            case 'numeri-mancanti.html':
-                html = getNumeriMancantiHTML();
-                break;
-            case 'segna-ore.html':
-                html = getSegnaOreHTML();
-                break;
-            case 'gestione-commesse.html':
-                html = getGestioneCommesseHTML();
-                break;
-            case 'gestione-utenti.html':
-                html = getGestioneUtentiHTML();
-                break;
-            default:
-                html = `<div class="dashboard">
-                    <div class="header">
-                        <div class="header-left">
-                            <button class="back-btn" onclick="tornaIndietro()">← Torna indietro</button>
-                            <h2>📄 ${nomeFile}</h2>
-                        </div>
-                    </div>
-                    <div style="text-align: center; padding: 50px;">
-                        <p>Pagina in costruzione</p>
-                    </div>
-                </div>`;
-        }
-        
-        document.getElementById('container').innerHTML = html;
-        document.getElementById('container').classList.add('wide');
-    } catch (error) {
-        console.error('Errore caricamento pagina:', error);
-    }
-}
-
-// ===== TEMPLATE HTML =====
-function getAdminDashboardHTML() {
-    return `
-        <div class="dashboard">
-            <div class="header">
-                <div class="header-left">
-                    <button class="back-btn" onclick="logout()">🚪 Logout</button>
-                    <h2>👑 Admin Dashboard</h2>
-                </div>
-                <div class="header-right">
-                    <button class="header-btn" onclick="mostraSelettoreTema()">🎨 Tema</button>
-                </div>
-            </div>
-            
-            <div class="admin-grid">
-                <div class="admin-card" onclick="mostraGestioneUtenti()">
-                    <div class="admin-card-icon">👥</div>
-                    <h3>Gestione Utenti</h3>
-                    <p>Aggiungi/modifica dipendenti</p>
-                </div>
-                <div class="admin-card" onclick="mostraNumeriMancanti()">
-                    <div class="admin-card-icon">🔢</div>
-                    <h3>Numeri Mancanti</h3>
-                    <p>Gestione cartelle numeri</p>
-                </div>
-                <div class="admin-card" onclick="mostraSegnaOre()">
-                    <div class="admin-card-icon">⏱️</div>
-                    <h3>Segna Ore</h3>
-                    <p>Registrazione ore lavoro</p>
-                </div>
-                <div class="admin-card" onclick="mostraGestioneCommesse()">
-                    <div class="admin-card-icon">📋</div>
-                    <h3>Commesse</h3>
-                    <p>Gestione progetti</p>
-                </div>
-                <div class="admin-card" onclick="mostraReportOre()">
-                    <div class="admin-card-icon">📊</div>
-                    <h3>Report Ore</h3>
-                    <p>Visualizza statistiche</p>
-                </div>
-            </div>
-            
-            <div id="richiesteList" class="numbers-list" style="margin-top: 20px;"></div>
-        </div>
-    `;
-}
-
-function getUserDashboardHTML() {
-    return `
-        <div class="dashboard">
-            <div class="header">
-                <div class="header-left">
-                    <button class="back-btn" onclick="logout()">🚪 Logout</button>
-                    <h2>👤 ${currentUser?.name || 'Utente'}</h2>
-                </div>
-                <div class="header-right">
-                    <button class="header-btn" onclick="mostraSelettoreTema()">🎨 Tema</button>
-                </div>
-            </div>
-            
-            <div id="ingressoContainer" style="text-align: center;">
-                <div class="info-badge" style="margin: 10px 0; background: var(--card-bg); padding: 10px; border-radius: 8px;">
-                    <span id="ritardiCounter">Ritardi: ${currentUser?.ritardi || 0}</span>
-                </div>
-                <div class="ingresso-btn" id="ingressoBtn" onclick="faiIngresso()">
-                    <span>🕐<br>ENTRA</span>
-                </div>
-                <div class="info-badge" style="background: var(--card-bg); padding: 10px; border-radius: 8px; margin-top: 10px;">
-                    Ultimo ingresso: <span id="ultimoIngresso">${currentUser?.ultimoIngresso || '--:--'}</span>
-                </div>
-            </div>
-            
-            <div class="admin-grid" style="margin-top: 20px;">
-                <div class="admin-card" onclick="mostraNumeriMancanti()">
-                    <div class="admin-card-icon">🔢</div>
-                    <h3>Numeri Mancanti</h3>
-                    <p>Gestione cartelle</p>
-                </div>
-                <div class="admin-card" onclick="mostraSegnaOre()">
-                    <div class="admin-card-icon">⏱️</div>
-                    <h3>Segna Ore</h3>
-                    <p>Registra ore lavoro</p>
-                </div>
-                <div class="admin-card" onclick="mostraRichiesteUtente()">
-                    <div class="admin-card-icon">📝</div>
-                    <h3>Richiedi Permesso</h3>
-                    <p>Ferie/permessi/malattia</p>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function getNumeriMancantiHTML() {
-    return `
-        <div class="dashboard">
-            <div class="header">
-                <div class="header-left">
-                    <button class="back-btn" onclick="tornaIndietro()">← Indietro</button>
-                    <h2>🔢 Numeri Mancanti</h2>
-                </div>
-                <div class="header-right">
-                    <button class="header-btn" onclick="mostraNuovaCartella()">➕ Nuova Cartella</button>
-                    <button class="header-btn" onclick="condividiTutto()">📄 Esporta Tutto</button>
-                </div>
-            </div>
-            <div id="elencoCartelle" class="admin-grid"></div>
-        </div>
-    `;
-}
-
-function getSegnaOreHTML() {
-    return `
-        <div class="dashboard">
-            <div class="header">
-                <div class="header-left">
-                    <button class="back-btn" onclick="tornaIndietro()">← Indietro</button>
-                    <h2>⏱️ Segna Ore</h2>
-                </div>
-            </div>
-            
-            <div class="input-page" style="background: var(--card-bg); padding: 20px; border-radius: 10px;">
-                <div class="input-group">
-                    <label>📅 Data</label>
-                    <input type="date" id="dataOre" value="${new Date().toISOString().split('T')[0]}">
-                </div>
-                <div class="input-group">
-                    <label>🕐 Inizio</label>
-                    <input type="text" id="oreInizio" placeholder="08:00" oninput="mascheraOra(this)" maxlength="5">
-                </div>
-                <div class="input-group">
-                    <label>🕐 Fine</label>
-                    <input type="text" id="oreFine" placeholder="12:00" oninput="mascheraOra(this)" maxlength="5">
-                </div>
-                <div class="input-group">
-                    <label>📋 Commessa</label>
-                    <select id="oreCommessa"></select>
-                </div>
-                <div class="input-group">
-                    <label>📝 Descrizione</label>
-                    <input type="text" id="oreDescrizione" placeholder="Descrizione attività">
-                </div>
-                <button onclick="salvaOre()">💾 Salva Ore</button>
-            </div>
-            
-            <h3 style="margin-top: 20px; color: var(--text-primary);">Ore di oggi</h3>
-            <div id="listaOre" class="numbers-list" style="background: var(--card-bg); padding: 15px; border-radius: 10px;"></div>
-        </div>
-    `;
-}
-
-function getGestioneCommesseHTML() {
-    return `
-        <div class="dashboard">
-            <div class="header">
-                <div class="header-left">
-                    <button class="back-btn" onclick="tornaIndietro()">← Indietro</button>
-                    <h2>📋 Gestione Commesse</h2>
-                </div>
-                <div class="header-right">
-                    <button class="header-btn" onclick="mostraNuovaCommessa()">➕ Nuova Commessa</button>
-                </div>
-            </div>
-            <div id="elencoCommesse"></div>
-        </div>
-    `;
-}
-
-function getGestioneUtentiHTML() {
-    return `
-        <div class="dashboard">
-            <div class="header">
-                <div class="header-left">
-                    <button class="back-btn" onclick="tornaIndietro()">← Indietro</button>
-                    <h2>👥 Gestione Utenti</h2>
-                </div>
-                <div class="header-right">
-                    <button class="header-btn" onclick="mostraNuovoUtente()">➕ Nuovo Utente</button>
-                    <button class="header-btn" onclick="esportaUtenti()">📄 Esporta CSV</button>
-                </div>
-            </div>
-            <div style="overflow-x: auto;">
-                <table class="presenze-table" style="width: 100%;">
-                    <thead>
-                        <tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Stato</th><th>Ritardi</th><th>Azioni</th></tr>
-                    </thead>
-                    <tbody id="utentiTableBody"></tbody>
-                </table>
-            </div>
-        </div>
-    `;
-}
-
-// ===== FUNZIONI ADMIN =====
-function initAdminDashboard() {
-    caricaTemaSalvato();
+// ============================================
+// TAB
+// ============================================
+function showTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  
+  const tabButton = document.querySelector(`.tab[onclick="showTab('${tab}')"]`);
+  if (tabButton) tabButton.classList.add('active');
+  
+  const panel = document.getElementById('panel-' + tab);
+  if (panel) panel.classList.add('active');
+  
+  if (tab === 'modifica') caricaRegistrazioniModifica();
+  if (tab === 'commesse') caricaListaCommesse();
+  if (tab === 'dipendenti') caricaListaDipendenti();
+  if (tab === 'richieste') {
     caricaRichiesteAdmin();
+    aggiornaBadgeRichieste();
+  }
+  if (tab === 'richiedi') caricaRichiesteDipendente();
 }
 
-async function mostraGestioneUtenti() {
-    await caricaPagina('gestione-utenti.html');
-    await caricaTabellaUtenti();
+// ============================================
+// DARK MODE
+// ============================================
+function toggleDarkMode() {
+  const container = document.getElementById('app-container');
+  const body = document.body;
+  
+  container.classList.toggle('dark-mode');
+  body.classList.toggle('dark-mode');
+  
+  const btn = document.getElementById('btn-darkmode');
+  const isDark = container.classList.contains('dark-mode');
+  
+  if (isDark) {
+    btn.innerHTML = '<i class="fas fa-sun"></i>';
+    localStorage.setItem('darkMode_' + (utenteCorrente?.username || 'default'), 'true');
+  } else {
+    btn.innerHTML = '<i class="fas fa-moon"></i>';
+    localStorage.setItem('darkMode_' + (utenteCorrente?.username || 'default'), 'false');
+  }
 }
 
-function mostraNumeriMancanti() {
-    caricaPagina('numeri-mancanti.html').then(() => {
-        caricaElencoCartelle();
+function caricaDarkMode() {
+  if (!utenteCorrente) return;
+  const saved = localStorage.getItem('darkMode_' + utenteCorrente.username);
+  if (saved === 'true') {
+    const container = document.getElementById('app-container');
+    const body = document.body;
+    container.classList.add('dark-mode');
+    body.classList.add('dark-mode');
+    document.getElementById('btn-darkmode').innerHTML = '<i class="fas fa-sun"></i>';
+  }
+}
+
+// ============================================
+// MULTI-AZIENDA
+// ============================================
+function caricaSelectAziende() {
+  const select = document.getElementById('select-azienda');
+  select.innerHTML = '<option value="0">-- Tutte --</option>';
+  if (dati.aziende) {
+    dati.aziende.forEach(a => {
+      select.innerHTML += `<option value="${a.id}">${a.nome}</option>`;
     });
+  }
 }
 
-function mostraSegnaOre() {
-    caricaPagina('segna-ore.html').then(() => {
-        caricaOreSalvate();
-        caricaCommesseInSelect();
+function caricaSelectAziendeCommesse() {
+  const select = document.getElementById('commessa-azienda');
+  select.innerHTML = '<option value="0">-- Seleziona Azienda --</option>';
+  if (dati.aziende) {
+    dati.aziende.forEach(a => {
+      select.innerHTML += `<option value="${a.id}">${a.nome}</option>`;
     });
+  }
 }
 
-function mostraGestioneCommesse() {
-    caricaPagina('gestione-commesse.html').then(() => {
-        caricaElencoCommesse();
-    });
+function caricaSelectRecuperoCommesse() {
+  const select = document.getElementById('recupero-commessa');
+  select.innerHTML = '<option value="">-- Seleziona --</option>';
+  dati.commesse.filter(c => c.attivo).forEach(c => {
+    select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+  });
 }
 
-function mostraReportOre() {
-    caricaPagina('report-ore.html').then(() => {
-        document.getElementById('container').innerHTML = `
-            <div class="dashboard">
-                <div class="header">
-                    <div class="header-left">
-                        <button class="back-btn" onclick="tornaIndietro()">← Indietro</button>
-                        <h2>📊 Report Ore</h2>
-                    </div>
-                </div>
-                <div style="overflow-x: auto;">
-                    <table class="presenze-table" style="width: 100%;">
-                        <thead>
-                            <tr><th>Dipendente</th><th>Data</th><th>Orario</th><th>Ore</th><th>Commessa</th></tr>
-                        </thead>
-                        <tbody id="reportOreBody"></tbody>
-                    </table>
-                </div>
-                <div style="margin-top: 20px; text-align: center; background: var(--card-bg); padding: 15px; border-radius: 10px;">
-                    <strong style="color: var(--text-primary);">Totale Ore: </strong>
-                    <span id="totaleOre">0h</span>
-                </div>
-            </div>
-        `;
-        caricaReportOre();
-    });
+function cambiaAzienda() {
+  const aziendaId = parseInt(document.getElementById('select-azienda').value);
+  caricaDatiFiltrati(aziendaId);
 }
 
-function tornaIndietro() {
-    if (currentUser?.type === 'admin') {
-        caricaPagina('admin-dashboard.html').then(() => initAdminDashboard());
+function caricaDatiFiltrati(aziendaId) {
+  if (aziendaId > 0) {
+    const utentiAzienda = dati.utenti.filter(u => u.azienda_id === aziendaId);
+    const usernames = utentiAzienda.map(u => u.username);
+    caricaListaDipendentiFiltrati(usernames);
+    caricaCalendarioFiltrato(usernames);
+  } else {
+    caricaListaDipendenti();
+    caricaCalendario();
+  }
+}
+
+function caricaListaDipendentiFiltrati(usernames) {
+  caricaListaDipendenti();
+}
+
+function caricaCalendarioFiltrato(usernames) {
+  caricaCalendario();
+}
+
+// ============================================
+// GESTIONE AZIENDE - MODALE
+// ============================================
+function apriModalAziende() {
+  if (utenteCorrente?.ruolo !== 'admin') {
+    alert('Solo gli amministratori possono gestire le aziende');
+    return;
+  }
+  const modal = document.getElementById('modal-aziende');
+  if (modal) {
+    modal.classList.add('active');
+    caricaListaAziende();
+  } else {
+    console.error('❌ Modale aziende non trovato');
+    alert('Errore: modale aziende non trovato');
+  }
+}
+
+function chiudiModalAziende() {
+  const modal = document.getElementById('modal-aziende');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+// ============================================
+// AGGIUNGI / LISTA / ELIMINA AZIENDE
+// ============================================
+function aggiungiAzienda() {
+  const nome = document.getElementById('azienda-nome').value.trim();
+  const msg = document.getElementById('msg-azienda');
+
+  if (!nome) {
+    msg.innerHTML = '<div class="error">❌ Inserisci il nome dell\'azienda</div>';
+    return;
+  }
+
+  if (!dati.aziende) {
+    dati.aziende = [];
+  }
+
+  const maxId = dati.aziende.length > 0 ? dati.aziende.reduce((max, a) => a.id > max ? a.id : max, 0) : 0;
+  dati.aziende.push({ id: maxId + 1, nome: nome });
+  salvaDati();
+
+  document.getElementById('azienda-nome').value = '';
+  msg.innerHTML = '<div class="success">✅ Azienda aggiunta con successo!</div>';
+
+  caricaListaAziende();
+  caricaSelectAziende();
+  caricaSelectAziendeCommesse();
+}
+
+function caricaListaAziende() {
+  const div = document.getElementById('lista-aziende');
+  
+  if (!div) {
+    console.error('❌ Elemento lista-aziende non trovato');
+    return;
+  }
+  
+  if (!dati.aziende || dati.aziende.length === 0) {
+    div.innerHTML = '<p class="text-muted">Nessuna azienda</p>';
+    return;
+  }
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += '<th>ID</th><th>Nome</th><th>Azioni</th>';
+  html += '</tr></thead><tbody>';
+
+  dati.aziende.forEach(a => {
+    const canDelete = dati.aziende.length > 1;
+    html += `<tr>
+      <td>${a.id}</td>
+      <td><strong>${a.nome}</strong></td>
+      <td>
+        ${canDelete ? `<button class="btn-danger" onclick="eliminaAzienda(${a.id})"><i class="fas fa-trash"></i></button>` : '<span style="color:#999;font-size:0.8em;">(ultima)</span>'}
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+}
+
+function eliminaAzienda(id) {
+  if (!confirm('Eliminare questa azienda? Verranno eliminati anche i dipendenti associati.')) return;
+  
+  const utentiAzienda = dati.utenti.filter(u => u.azienda_id === id);
+  const usernames = utentiAzienda.map(u => u.username);
+  
+  dati.utenti = dati.utenti.filter(u => u.azienda_id !== id);
+  dati.registrazioni = dati.registrazioni.filter(r => !usernames.includes(r.utente_id));
+  dati.richieste = dati.richieste.filter(r => !usernames.includes(r.utente_id));
+  dati.notifiche = dati.notifiche.filter(n => !usernames.includes(n.utente_id));
+  
+  dati.aziende = dati.aziende.filter(a => a.id !== id);
+  
+  salvaDati();
+  caricaListaAziende();
+  caricaSelectAziende();
+  caricaSelectAziendeCommesse();
+  caricaListaDipendenti();
+  alert('🗑️ Azienda eliminata');
+}
+
+// ============================================
+// ULTIMA REGISTRAZIONE
+// ============================================
+function caricaUltimaRegistrazione() {
+  if (utenteCorrente?.ruolo === 'admin') return;
+
+  // SBLOCCA SEMPRE L'ORA INIZIO DI DEFAULT
+  document.getElementById('ora-inizio').disabled = false;
+  document.getElementById('ora-inizio').style.backgroundColor = 'white';
+
+  // Se sono passate le 20:00
+  if (isOltre20()) {
+    const infoDiv = document.getElementById('info-registrazione');
+    infoDiv.innerHTML = `
+      <div class="error" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;font-weight:bold;">
+        ⛔ <strong>Ore 20:00 superate!</strong> Non è più possibile registrare ore per oggi.
+        <br><small>Contatta l'amministratore per eventuali recuperi.</small>
+      </div>
+    `;
+    document.getElementById('ora-inizio').disabled = true;
+    document.getElementById('ora-fine').disabled = true;
+    document.getElementById('straordinario').disabled = true;
+    return;
+  }
+
+  const oggi = new Date().toISOString().split('T')[0];
+  const oraCorrente = new Date();
+  const oreCorrente = oraCorrente.getHours();
+
+  const isPomeriggio = oreCorrente >= 12;
+
+  const registrazioniOggi = dati.registrazioni.filter(r => 
+    r.utente_id === utenteCorrente.username && 
+    r.data === oggi &&
+    r.tipo === 'lavoro'
+  );
+
+  const infoDiv = document.getElementById('info-registrazione');
+  const oraInizio = document.getElementById('ora-inizio');
+  const oraFine = document.getElementById('ora-fine');
+  const straordinarioCheck = document.getElementById('straordinario');
+
+  if (straordinarioCheck && straordinarioCheck.checked) {
+    return;
+  }
+
+  let ultima = null;
+  if (registrazioniOggi.length > 0) {
+    ultima = registrazioniOggi.reduce((max, r) => {
+      return r.ora_fine > max.ora_fine ? r : max;
+    }, registrazioniOggi[0]);
+  }
+
+  // ============================================
+  // POMERIGGIO (dopo le 12:00)
+  // ============================================
+  if (isPomeriggio) {
+    oraInizio.disabled = false;
+    oraInizio.style.backgroundColor = 'white';
+    oraFine.disabled = false;
+    oraFine.style.backgroundColor = 'white';
+
+    if (ultima) {
+      const h = parseInt(ultima.ora_fine.split(':')[0]);
+      oraInizio.value = h < 12 ? '13:00' : ultima.ora_fine;
     } else {
-        caricaPagina('user-dashboard.html').then(() => initUserDashboard());
+      oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
     }
+
+    const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
+    oraFine.value = hFine + ':00';
+
+    infoDiv.innerHTML = `<div class="info-msg" style="background:#fff3cd;border-color:#ffc107;color:#856404;">
+      ⏰ <strong>Pomeriggio</strong> - Ora inizio e fine sono modificabili.
+    </div>`;
+    return;
+  }
+
+  // ============================================
+  // MATTINO (prima delle 12:00)
+  // ============================================
+  if (!ultima) {
+    oraInizio.disabled = false;
+    oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
+    oraFine.disabled = false;
+    const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
+    oraFine.value = hFine + ':00';
+    infoDiv.innerHTML = `<div class="info-msg">⏱️ Prima registrazione - Inserisci gli orari.</div>`;
+    return;
+  }
+
+  // Mattino con registrazioni: BLOCCA SOLO ORA INIZIO
+  oraInizio.value = ultima.ora_fine;
+  oraInizio.disabled = true;
+  oraInizio.style.backgroundColor = '#f0f0f0';
+  
+  // ORA FINE SEMPRE LIBERA
+  oraFine.disabled = false;
+  oraFine.style.backgroundColor = 'white';
+  
+  const hFine = (parseInt(ultima.ora_fine.split(':')[0]) + 1).toString().padStart(2, '0');
+  oraFine.value = hFine + ':00';
+
+  infoDiv.innerHTML = `<div class="info-msg">
+    ⏱️ <strong>Ora inizio:</strong> ${ultima.ora_fine} (bloccata) - Puoi modificare l'ora fine.
+  </div>`;
 }
 
-// ===== FUNZIONI UTENTE =====
-function initUserDashboard() {
-    caricaTemaSalvato();
-    const ritardiSpan = document.getElementById('ritardiCounter');
-    if (ritardiSpan) ritardiSpan.innerHTML = `Ritardi: ${currentUser?.ritardi || 0}`;
-    caricaUltimoIngresso();
+// ============================================
+// COMMESSE
+// ============================================
+function caricaSelectCommesse() {
+  const select = document.getElementById('commessa');
+  select.innerHTML = '<option value="">-- Seleziona una commessa --</option>';
+  
+  if (dati.commesse.length === 0) {
+    select.innerHTML = '<option value="">-- Nessuna commessa disponibile --</option>';
+    return;
+  }
+  
+  dati.commesse.filter(c => c.attivo).forEach(c => {
+    select.innerHTML += '<option value="' + c.id + '">' + c.nome + '</option>';
+  });
 }
 
-async function caricaUltimoIngresso() {
-    if (!currentUser) return;
-    
-    try {
-        const oggi = new Date().toISOString().split('T')[0];
-        const ingressi = await caricaIngressiDaFirestore(currentUser.email, oggi);
-        
-        if (ingressi.length > 0) {
-            const ultimo = ingressi[ingressi.length - 1];
-            const ultimoSpan = document.getElementById('ultimoIngresso');
-            if (ultimoSpan) ultimoSpan.textContent = ultimo.ora;
-            
-            const btn = document.getElementById('ingressoBtn');
-            if (btn && ingressi.some(i => i.tipo === 'primo')) {
-                btn.classList.add('disabled');
-            }
-        }
-    } catch (error) {
-        console.error('Errore caricamento ingressi:', error);
-    }
+function aggiungiCommessa() {
+  const nome = document.getElementById('commessa-nome').value.trim();
+  const azienda_id = parseInt(document.getElementById('commessa-azienda').value);
+  const msg = document.getElementById('msg-commessa');
+
+  if (!nome) {
+    msg.innerHTML = '<div class="error">Inserisci il nome della commessa</div>';
+    return;
+  }
+
+  if (!azienda_id || azienda_id === 0) {
+    msg.innerHTML = '<div class="error">Seleziona un\'azienda</div>';
+    return;
+  }
+
+  const maxId = dati.commesse.reduce((max, c) => c.id > max ? c.id : max, 0);
+  
+  dati.commesse.push({
+    id: maxId + 1,
+    nome: nome,
+    azienda_id: azienda_id,
+    attivo: true
+  });
+
+  salvaDati();
+
+  document.getElementById('commessa-nome').value = '';
+  document.getElementById('commessa-azienda').value = '0';
+  msg.innerHTML = '<div class="success">✅ Commessa aggiunta!</div>';
+
+  caricaSelectCommesse();
+  caricaListaCommesse();
+  caricaSelectAziendeCommesse();
+  caricaSelectRecuperoCommesse();
 }
 
-function mostraRichiesteUtente() {
-    const html = `
-        <div class="dashboard">
-            <div class="header">
-                <div class="header-left">
-                    <button class="back-btn" onclick="tornaIndietro()">← Indietro</button>
-                    <h2>📝 Richiedi Permesso</h2>
-                </div>
-            </div>
-            <div class="input-page" style="background: var(--card-bg); padding: 20px; border-radius: 10px;">
-                <div class="input-group">
-                    <label>📋 Tipo</label>
-                    <select id="tipoRichiesta">
-                        <option value="ferie">Ferie</option>
-                        <option value="permesso">Permesso</option>
-                        <option value="malattia">Malattia</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>📅 Dal</label>
-                    <input type="date" id="dataInizio">
-                </div>
-                <div class="input-group">
-                    <label>📅 Al</label>
-                    <input type="date" id="dataFine">
-                </div>
-                <button onclick="inviaRichiesta()">📨 Invia Richiesta</button>
-            </div>
-            <h3 style="margin-top: 20px; color: var(--text-primary);">📋 Le tue richieste</h3>
-            <div id="storicoRichieste" class="numbers-list" style="background: var(--card-bg); padding: 15px; border-radius: 10px;"></div>
-        </div>
+function caricaListaCommesse() {
+  const div = document.getElementById('lista-commesse');
+  
+  if (dati.commesse.length === 0) {
+    div.innerHTML = '<p class="text-muted">📭 Nessuna commessa creata</p>';
+    return;
+  }
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += '<th>Nome</th><th>Azienda</th><th>Stato</th><th>Azioni</th>';
+  html += '</tr></thead><tbody>';
+
+  dati.commesse.forEach(c => {
+    const azienda = dati.aziende.find(a => a.id === c.azienda_id);
+    html += '<tr>';
+    html += '<td><strong>' + c.nome + '</strong></td>';
+    html += '<td>' + (azienda ? azienda.nome : '-') + '</td>';
+    html += '<td>' + (c.attivo ? '✅ Attivo' : '❌ Disattivo') + '</td>';
+    html += '<td><button class="btn-danger" onclick="toggleCommessa(' + c.id + ')">';
+    html += c.attivo ? 'Disattiva' : 'Attiva';
+    html += '</button></td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+}
+
+function toggleCommessa(id) {
+  const commessa = dati.commesse.find(c => c.id === id);
+  if (!commessa) return;
+  
+  commessa.attivo = !commessa.attivo;
+  salvaDati();
+  caricaSelectCommesse();
+  caricaListaCommesse();
+  caricaSelectRecuperoCommesse();
+}
+
+// ============================================
+// REGISTRAZIONE ORE
+// ============================================
+function salvaRegistrazione() {
+  if (utenteCorrente?.ruolo === 'admin') {
+    alert('Gli amministratori non possono registrare ore qui');
+    return;
+  }
+
+  // Controllo ore 20:00
+  if (isOltre20()) {
+    document.getElementById('msg-registra').innerHTML = `
+      <div class="error" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;font-weight:bold;">
+        ⛔ <strong>Ore 20:00 superate!</strong> Non è più possibile registrare ore per oggi.
+        <br><small>Contatta l'amministratore per eventuali recuperi.</small>
+      </div>
     `;
-    
-    document.getElementById('container').innerHTML = html;
-    document.getElementById('container').classList.add('wide');
-    caricaStoricoRichieste();
+    return;
+  }
+
+  const commessa_id = parseInt(document.getElementById('commessa').value);
+  const data = document.getElementById('data-reg').value;
+  const ora_inizio = document.getElementById('ora-inizio').value;
+  const ora_fine = document.getElementById('ora-fine').value;
+  const descrizione = document.getElementById('descrizione').value.trim();
+  const straordinario = document.getElementById('straordinario').checked;
+  const msg = document.getElementById('msg-registra');
+
+  // VALIDAZIONE
+  if (!commessa_id) {
+    msg.innerHTML = '<div class="error">❌ Seleziona una commessa</div>';
+    return;
+  }
+  if (!data) {
+    msg.innerHTML = '<div class="error">❌ Data non valida</div>';
+    return;
+  }
+  if (!ora_inizio) {
+    msg.innerHTML = '<div class="error">❌ Inserisci l\'ora di inizio</div>';
+    return;
+  }
+  if (!ora_fine) {
+    msg.innerHTML = '<div class="error">❌ Inserisci l\'ora di fine</div>';
+    return;
+  }
+  if (!descrizione) {
+    msg.innerHTML = '<div class="error">❌ Inserisci una descrizione del lavoro svolto</div>';
+    return;
+  }
+  if (ora_inizio >= ora_fine) {
+    msg.innerHTML = '<div class="error">L\'ora fine deve essere dopo l\'ora inizio</div>';
+    return;
+  }
+
+  // Controllo orario mattutino (solo se NON straordinario)
+  if (!straordinario) {
+    const oraCorrente = new Date();
+    const oreCorrente = oraCorrente.getHours();
+    const isPomeriggio = oreCorrente >= 12;
+    const oraInizioNum = parseInt(ora_inizio.split(':')[0]);
+
+    if (isPomeriggio && oraInizioNum < 12) {
+      msg.innerHTML = `
+        <div class="error">
+          ❌ Non puoi segnare ore mattutine dopo le 12:00.<br>
+          <small>Se hai dimenticato di segnare le ore, usa <strong>"Richiedi Recupero Ore"</strong> nella sezione Richieste.</small>
+        </div>
+      `;
+      return;
+    }
+  }
+
+  // Controllo sovrapposizioni
+  const esistente = dati.registrazioni.find(r => 
+    r.utente_id === utenteCorrente.username &&
+    r.data === data &&
+    ((ora_inizio >= r.ora_inizio && ora_inizio < r.ora_fine) ||
+     (ora_fine > r.ora_inizio && ora_fine <= r.ora_fine) ||
+     (ora_inizio <= r.ora_inizio && ora_fine >= r.ora_fine))
+  );
+
+  if (esistente) {
+    msg.innerHTML = '<div class="error">❌ Orario in sovrapposizione (' + esistente.ora_inizio + ' - ' + esistente.ora_fine + ')</div>';
+    return;
+  }
+
+  // ============================================
+  // CALCOLO ORE CON ARROTONDAMENTO
+  // ============================================
+  const [h1, m1] = ora_inizio.split(':').map(Number);
+  const [h2, m2] = ora_fine.split(':').map(Number);
+  let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  let isStraordinario = false;
+  const maxOre = 8;
+
+  if (straordinario) {
+    isStraordinario = (oreLavorate > maxOre);
+  } else {
+    if (oreLavorate > maxOre) {
+      oreLavorate = maxOre;
+      isStraordinario = false;
+      msg.innerHTML = `
+        <div class="success">✅ Registrazione salvata!</div>
+        <div class="info-msg" style="background:#fff3cd;border-color:#ffc107;color:#856404;margin-top:10px;">
+          ⚠️ Le ore totali superavano 8h. Sono state arrotondate a 8h (straordinario non pagato).<br>
+          <small>Per segnare straordinario, attiva il flag "Straordinario" prima di salvare.</small>
+        </div>
+      `;
+    } else {
+      isStraordinario = false;
+    }
+  }
+
+  // ============================================
+  // SALVA
+  // ============================================
+  dati.registrazioni.push({
+    id: prossimoId++,
+    utente_id: utenteCorrente.username,
+    commessa_id: commessa_id,
+    data: data,
+    ora_inizio: ora_inizio,
+    ora_fine: ora_fine,
+    descrizione: descrizione + (isStraordinario ? ' (STRAORDINARIO)' : ''),
+    tipo: 'lavoro',
+    straordinario: isStraordinario,
+    ore: oreLavorate
+  });
+
+  salvaDati();
+
+  if (!msg.innerHTML.includes('arrotondate')) {
+    msg.innerHTML = '<div class="success">✅ Registrazione salvata!</div>';
+  }
+  
+  document.getElementById('ora-fine').value = '';
+  document.getElementById('descrizione').value = '';
+  document.getElementById('straordinario').checked = false;
+  
+  // Ricarica ultima registrazione per aggiornare l'ora inizio
+  caricaUltimaRegistrazione();
 }
 
-// ===== FUNZIONI INGRESSO =====
-async function faiIngresso() {
-    if (!currentUser) return;
-    
-    const now = new Date();
-    const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-    const oggi = now.toISOString().split('T')[0];
-    
-    try {
-        let ingressiOggi = await caricaIngressiDaFirestore(currentUser.email, oggi);
-        
-        if (ingressiOggi.some(i => i.tipo === 'primo')) {
-            mostraPopup('Hai già effettuato il primo ingresso oggi', 'errore');
-            return;
-        }
-        
-        const inRitardo = now.getHours() > 8 || (now.getHours() === 8 && now.getMinutes() > 1);
-        
-        if (inRitardo) {
-            currentUser.ritardi = (currentUser.ritardi || 0) + 1;
-            const ritardiSpan = document.getElementById('ritardiCounter');
-            if (ritardiSpan) ritardiSpan.innerHTML = `Ritardi: ${currentUser.ritardi}`;
-            
-            await db.collection('utenti').doc(currentUser.email).update({
-                ritardi: currentUser.ritardi
-            });
-            
-            mostraPopup(`Attenzione: Primo ingresso in ritardo!`, 'ritardo');
-            const btn = document.getElementById('ingressoBtn');
-            if (btn) btn.classList.add('ritardo');
-        } else {
-            mostraPopup(`Primo ingresso registrato alle ${time}`, 'info');
-        }
-        
-        const nuovoIngresso = { ora: time, tipo: 'primo', ritardo: inRitardo };
-        ingressiOggi.push(nuovoIngresso);
-        await salvaIngressiSuFirestore(currentUser.email, oggi, ingressiOggi);
-        
-        const ultimoSpan = document.getElementById('ultimoIngresso');
-        if (ultimoSpan) ultimoSpan.textContent = time;
-        
-        const btn = document.getElementById('ingressoBtn');
-        if (btn) btn.classList.add('disabled');
-        
-    } catch (error) {
-        console.error('Errore registrazione ingresso:', error);
-        mostraPopup('Errore durante la registrazione', 'errore');
-    }
-}
+// ============================================
+// RICHIESTE (DIPENDENTE)
+// ============================================
+function inviaRichiesta() {
+  if (utenteCorrente?.ruolo === 'admin') {
+    alert('Gli amministratori non possono fare richieste');
+    return;
+  }
 
-// ===== FUNZIONI ORE =====
-async function salvaOre() {
-    const data = document.getElementById('dataOre').value;
-    const inizio = document.getElementById('oreInizio').value;
-    const fine = document.getElementById('oreFine').value;
-    const commessa = document.getElementById('oreCommessa').value;
-    const descrizione = document.getElementById('oreDescrizione').value;
-    
-    if (!data || !inizio || !fine || !commessa) {
-        mostraPopup('Compila tutti i campi', 'errore');
-        return;
+  const tipo = document.getElementById('tipo-richiesta').value;
+  const msg = document.getElementById('msg-richiesta');
+
+  if (tipo === 'recupero_ore') {
+    const data = document.getElementById('recupero-data').value;
+    const ora_inizio = document.getElementById('recupero-ora-inizio').value;
+    const ora_fine = document.getElementById('recupero-ora-fine').value;
+    const commessa_id = parseInt(document.getElementById('recupero-commessa').value) || null;
+    const descrizione_lavoro = document.getElementById('recupero-motivo').value.trim();
+
+    if (!data || !ora_inizio || !ora_fine || !descrizione_lavoro) {
+      msg.innerHTML = '<div class="error">Compila tutti i campi obbligatori</div>';
+      return;
     }
-    
-    const oreData = {
-        data: data,
-        inizio: inizio,
-        fine: fine,
-        commessa: commessa,
-        descrizione: descrizione,
-        dataRegistrazione: new Date().toISOString()
+
+    if (ora_inizio >= ora_fine) {
+      msg.innerHTML = '<div class="error">L\'ora fine deve essere dopo l\'ora inizio</div>';
+      return;
+    }
+
+    const oggi = new Date().toISOString().split('T')[0];
+    if (data > oggi) {
+      msg.innerHTML = '<div class="error">Non puoi richiedere recupero per date future</div>';
+      return;
+    }
+
+    const richiesta = {
+      id: prossimoId++,
+      utente_id: utenteCorrente.username,
+      tipo: tipo,
+      data: data,
+      ora_inizio: ora_inizio,
+      ora_fine: ora_fine,
+      commessa_id: commessa_id,
+      descrizione_lavoro: descrizione_lavoro,
+      stato: 'pending',
+      data_richiesta: new Date().toISOString()
     };
+
+    dati.richieste.push(richiesta);
+    salvaDati();
+
+    msg.innerHTML = '<div class="success">✅ Richiesta di recupero ore inviata! Attendi l\'approvazione dell\'admin.</div>';
     
-    try {
-        let oreSalvate = await caricaOreDaFirestore(currentUser.email);
-        oreSalvate.push(oreData);
-        await salvaOreSuFirestore(currentUser.email, oreSalvate);
-        
-        mostraPopup('Ore salvate con successo!', 'info');
-        
-        document.getElementById('oreInizio').value = '';
-        document.getElementById('oreFine').value = '';
-        document.getElementById('oreDescrizione').value = '';
-        
-        caricaOreSalvate();
-    } catch (error) {
-        console.error('Errore salvataggio ore:', error);
-        mostraPopup('Errore durante il salvataggio', 'errore');
-    }
+    document.getElementById('recupero-data').value = '';
+    document.getElementById('recupero-ora-inizio').value = '';
+    document.getElementById('recupero-ora-fine').value = '';
+    document.getElementById('recupero-motivo').value = '';
+    
+    aggiornaBadgeRichieste();
+    return;
+  }
+
+  const data_inizio = document.getElementById('richiesta-data-inizio').value;
+  const data_fine = document.getElementById('richiesta-data-fine').value;
+  const note = document.getElementById('richiesta-note').value.trim();
+  const certificato = document.getElementById('certificato').files[0];
+
+  if (!data_inizio || !data_fine) {
+    msg.innerHTML = '<div class="error">Inserisci le date</div>';
+    return;
+  }
+
+  if (data_inizio > data_fine) {
+    msg.innerHTML = '<div class="error">La data inizio deve essere prima della data fine</div>';
+    return;
+  }
+
+  const richiesta = {
+    id: prossimoId++,
+    utente_id: utenteCorrente.username,
+    tipo: tipo,
+    data_inizio: data_inizio,
+    data_fine: data_fine,
+    note: note,
+    stato: 'pending',
+    data_richiesta: new Date().toISOString()
+  };
+
+  if (certificato) {
+    richiesta.certificato = certificato.name;
+    richiesta.certificato_tipo = certificato.type;
+  }
+
+  dati.richieste.push(richiesta);
+  salvaDati();
+
+  msg.innerHTML = '<div class="success">✅ Richiesta inviata! Attendi la risposta.</div>';
+  
+  document.getElementById('richiesta-note').value = '';
+  document.getElementById('certificato').value = '';
+  
+  caricaRichiesteDipendente();
+  aggiornaBadgeRichieste();
 }
 
-async function caricaOreSalvate() {
-    const container = document.getElementById('listaOre');
-    if (!container || !currentUser) return;
-    
-    try {
-        const oreSalvate = await caricaOreDaFirestore(currentUser.email);
-        const oggi = new Date().toISOString().split('T')[0];
-        const oreOggi = oreSalvate.filter(ore => ore.data === oggi);
-        
-        if (oreOggi.length === 0) {
-            container.innerHTML = '<div style="text-align:center;">Nessuna ora registrata oggi</div>';
-            return;
-        }
-        
-        let html = '';
-        oreOggi.forEach(ore => {
-            html += `
-                <div style="padding: 8px; border-bottom: 1px solid var(--border-color);">
-                    ${ore.inizio} - ${ore.fine} | ${ore.commessa}<br>
-                    <small style="color: var(--text-secondary);">${ore.descrizione}</small>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-    } catch (error) {
-        console.error('Errore caricamento ore:', error);
+function caricaRichiesteDipendente() {
+  const div = document.getElementById('lista-richieste-dipendente');
+  const richieste = dati.richieste.filter(r => r.utente_id === utenteCorrente.username);
+  
+  if (richieste.length === 0) {
+    div.innerHTML = '<p class="text-muted">Nessuna richiesta inviata</p>';
+    return;
+  }
+
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  const statoMap = { 
+    pending: '⏳ In attesa', 
+    approvata: '✅ APPROVATA', 
+    rifiutata: '❌ RIFIUTATA' 
+  };
+  const statoColor = {
+    pending: '#ffc107',
+    approvata: '#28a745',
+    rifiutata: '#dc3545'
+  };
+  
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += '<th>Tipo</th><th>Periodo</th><th>Note</th><th>Stato</th>';
+  html += '</tr></thead><tbody>';
+
+  richieste.forEach(r => {
+    const colore = statoColor[r.stato] || '#666';
+    let periodo = '';
+    if (r.tipo === 'recupero_ore') {
+      periodo = r.data + ' (' + r.ora_inizio + ' - ' + r.ora_fine + ')';
+    } else {
+      periodo = r.data_inizio + ' → ' + r.data_fine;
     }
+    html += '<tr>';
+    html += '<td>' + (emoji[r.tipo] || '📌') + ' ' + r.tipo.replace('_', ' ').charAt(0).toUpperCase() + r.tipo.replace('_', ' ').slice(1) + '</td>';
+    html += '<td>' + periodo + '</td>';
+    html += '<td>' + (r.tipo === 'recupero_ore' ? r.descrizione_lavoro || '-' : (r.note || '-')) + '</td>';
+    html += '<td style="font-weight:bold;color:' + colore + ';">' + (statoMap[r.stato] || r.stato) + '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
 }
 
-async function caricaReportOre() {
-    const container = document.getElementById('reportOreBody');
-    if (!container) return;
-    
-    try {
-        const snapshot = await db.collection('utenti').get();
-        let html = '';
-        let totaleOre = 0;
-        
-        for (const userDoc of snapshot.docs) {
-            const user = userDoc.data();
-            if (user.type === 'admin') continue;
-            
-            const oreSalvate = await caricaOreDaFirestore(user.email);
-            
-            oreSalvate.forEach(ore => {
-                const [h1, m1] = ore.inizio.split(':').map(Number);
-                const [h2, m2] = ore.fine.split(':').map(Number);
-                const oreLavorate = (h2 - h1) + (m2 - m1) / 60;
-                totaleOre += oreLavorate;
-                
-                html += `
-                    <tr>
-                        <td style="padding: 8px;">${user.name}</td>
-                        <td style="padding: 8px;">${ore.data}</td>
-                        <td style="padding: 8px;">${ore.inizio} - ${ore.fine}</td>
-                        <td style="padding: 8px;">${oreLavorate.toFixed(1)}h</td>
-                        <td style="padding: 8px;">${ore.commessa}</td>
-                    </tr>
-                `;
-            });
-        }
-        
-        if (html === '') {
-            html = '<tr><td colspan="5" style="text-align:center;">Nessuna ora registrata</td></tr>';
-        }
-        
-        container.innerHTML = html;
-        const totaleSpan = document.getElementById('totaleOre');
-        if (totaleSpan) totaleSpan.textContent = totaleOre.toFixed(1) + 'h';
-        
-    } catch (error) {
-        console.error('Errore caricamento report:', error);
-    }
-}
+// ============================================
+// RICHIESTE (ADMIN)
+// ============================================
+function caricaRichiesteAdmin() {
+  const div = document.getElementById('lista-richieste-admin');
+  const richieste = dati.richieste.filter(r => r.stato === 'pending');
+  
+  if (richieste.length === 0) {
+    div.innerHTML = '<p class="text-muted">✅ Nessuna richiesta in sospeso</p>';
+    return;
+  }
 
-// ===== FUNZIONI RICHIESTE =====
-async function inviaRichiesta() {
-    const tipo = document.getElementById('tipoRichiesta').value;
-    const dal = document.getElementById('dataInizio').value;
-    const al = document.getElementById('dataFine').value;
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  
+  let html = '';
+  richieste.forEach(r => {
+    const utente = dati.utenti.find(u => u.username === r.utente_id);
+    const nome = utente ? utente.nome + ' ' + utente.cognome : r.utente_id;
     
-    if (!dal || !al) {
-        mostraPopup('Seleziona le date', 'errore');
-        return;
+    let dettagli = '';
+    if (r.tipo === 'recupero_ore') {
+      dettagli = `
+        <small>Data: ${r.data} (${r.ora_inizio} - ${r.ora_fine})</small>
+        <br><small>Lavoro svolto: ${r.descrizione_lavoro || 'N/D'}</small>
+        ${r.commessa_id ? `<br><small>Commessa: ${dati.commesse.find(c => c.id === r.commessa_id)?.nome || '-'}</small>` : ''}
+      `;
+    } else {
+      dettagli = `
+        <small>Dal ${r.data_inizio} al ${r.data_fine}</small>
+        ${r.note ? `<br><small>📝 ${r.note}</small>` : ''}
+        ${r.certificato ? `<br><small>📎 Certificato: ${r.certificato}</small>` : ''}
+      `;
     }
     
-    const nuovaRichiesta = {
-        id: Date.now(),
-        utente: currentUser.name,
-        utenteEmail: currentUser.email,
-        tipo: tipo === 'ferie' ? 'Ferie' : (tipo === 'permesso' ? 'Permesso' : 'Malattia'),
-        dal: dal,
-        al: al,
-        stato: 'in attesa',
-        dataRichiesta: new Date().toISOString()
-    };
+    html += `<div class="richiesta-card pending">
+      <div class="info">
+        <strong>${emoji[r.tipo] || '📌'} ${r.tipo.replace('_', ' ').charAt(0).toUpperCase() + r.tipo.replace('_', ' ').slice(1)} - ${nome}</strong>
+        ${dettagli}
+        <small style="display:block;color:#999;">Richiesto il: ${new Date(r.data_richiesta).toLocaleDateString('it-IT')}</small>
+      </div>
+      <div class="azioni">
+        <button class="btn-approva" onclick="approvaRichiesta(${r.id})"><i class="fas fa-check"></i> Approva</button>
+        <button class="btn-rifiuta" onclick="rifiutaRichiesta(${r.id})"><i class="fas fa-times"></i> Rifiuta</button>
+      </div>
+    </div>`;
+  });
+
+  div.innerHTML = html;
+}
+
+function approvaRichiesta(id) {
+  const richiesta = dati.richieste.find(r => r.id === id);
+  if (!richiesta) {
+    alert('❌ Richiesta non trovata');
+    return;
+  }
+  
+  richiesta.stato = 'approvata';
+  
+  if (richiesta.tipo === 'recupero_ore') {
+    const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
+    const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
+    const oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
     
-    try {
-        await db.collection('richieste').add(nuovaRichiesta);
-        mostraPopup('Richiesta inviata con successo!', 'info');
-        
-        document.getElementById('dataInizio').value = '';
-        document.getElementById('dataFine').value = '';
-        
-        caricaStoricoRichieste();
-        caricaRichiesteAdmin();
-    } catch (error) {
-        console.error('Errore invio richiesta:', error);
-        mostraPopup('Errore durante l\'invio', 'errore');
-    }
-}
-
-async function caricaStoricoRichieste() {
-    const container = document.getElementById('storicoRichieste');
-    if (!container || !currentUser) return;
-    
-    try {
-        const snapshot = await db.collection('richieste')
-            .where('utenteEmail', '==', currentUser.email)
-            .get();
-        
-        if (snapshot.empty) {
-            container.innerHTML = '<div style="text-align:center;">Nessuna richiesta</div>';
-            return;
-        }
-        
-        let html = '';
-        snapshot.forEach(doc => {
-            const r = doc.data();
-            const icona = r.stato === 'approvata' ? '✅' : (r.stato === 'rifiutata' ? '❌' : '⏳');
-            html += `
-                <div style="padding: 10px; border-bottom: 1px solid var(--border-color);">
-                    ${icona} ${r.tipo}: dal ${r.dal} al ${r.al}
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
-    } catch (error) {
-        console.error('Errore caricamento richieste:', error);
-    }
-}
-
-async function caricaRichiesteAdmin() {
-    const container = document.getElementById('richiesteList');
-    if (!container) return;
-    
-    try {
-        const snapshot = await db.collection('richieste')
-            .where('stato', '==', 'in attesa')
-            .get();
-        
-        if (snapshot.empty) {
-            container.innerHTML = '<p style="text-align:center;">Nessuna richiesta in attesa</p>';
-            return;
-        }
-        
-        let html = '';
-        snapshot.forEach(doc => {
-            const r = doc.data();
-            html += `
-                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong style="color: var(--text-primary);">${r.utente}</strong> - ${r.tipo}<br>
-                        <small style="color: var(--text-secondary);">Dal ${r.dal} al ${r.al}</small>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button onclick="approvaRichiesta('${doc.id}')" style="background: var(--success-bg); color: white; border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer;">✓ Approva</button>
-                        <button onclick="rifiutaRichiesta('${doc.id}')" style="background: var(--danger-bg); color: white; border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer;">✗ Rifiuta</button>
-                    </div>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-    } catch (error) {
-        console.error('Errore caricamento richieste admin:', error);
-    }
-}
-
-async function approvaRichiesta(id) {
-    try {
-        await db.collection('richieste').doc(id).update({ stato: 'approvata' });
-        mostraPopup('Richiesta approvata', 'info');
-        caricaRichiesteAdmin();
-    } catch (error) {
-        console.error('Errore approvazione:', error);
-    }
-}
-
-async function rifiutaRichiesta(id) {
-    try {
-        await db.collection('richieste').doc(id).update({ stato: 'rifiutata' });
-        mostraPopup('Richiesta rifiutata', 'info');
-        caricaRichiesteAdmin();
-    } catch (error) {
-        console.error('Errore rifiuto:', error);
-    }
-}
-
-// ===== FUNZIONI UTENTI =====
-async function caricaTabellaUtenti() {
-    const tbody = document.getElementById('utentiTableBody');
-    if (!tbody) return;
-    
-    try {
-        const snapshot = await db.collection('utenti').get();
-        let html = '';
-        
-        snapshot.forEach(doc => {
-            const user = doc.data();
-            if (user.type !== 'admin') {
-                let statoClass = 'presente';
-                if (user.stato === 'ferie') statoClass = 'ferie';
-                else if (user.stato === 'malattia') statoClass = 'malattia';
-                
-                html += `
-                    <tr>
-                        <td style="padding: 8px;">${user.name}</td>
-                        <td style="padding: 8px;">${doc.id}</td>
-                        <td style="padding: 8px;">${user.ruolo || 'Operaio'}</td>
-                        <td style="padding: 8px;"><span class="status ${statoClass}">${user.stato}</span></td>
-                        <td style="padding: 8px;">${user.ritardi || 0}</td>
-                        <td style="padding: 8px;">
-                            <button onclick="eliminaUtente('${doc.id}')" style="background: var(--danger-bg); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">🗑️</button>
-                        </td>
-                    </tr>
-                `;
-            }
-        });
-        
-        tbody.innerHTML = html;
-    } catch (error) {
-        console.error('Errore caricamento utenti:', error);
-    }
-}
-
-async function eliminaUtente(email) {
-    if (confirm('Eliminare questo utente?')) {
-        try {
-            await db.collection('utenti').doc(email).delete();
-            mostraPopup('Utente eliminato', 'info');
-            caricaTabellaUtenti();
-        } catch (error) {
-            console.error('Errore eliminazione:', error);
-        }
-    }
-}
-
-function mostraNuovoUtente() {
-    const popupHtml = `
-        <div class="popup" id="utentePopup" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-container); border: 2px solid var(--border-color); border-radius: 10px; padding: 25px; z-index: 2000; box-shadow: 0 0 30px rgba(0,0,0,0.5); min-width: 350px;">
-            <h3 style="color: var(--text-primary); margin-bottom: 15px;">➕ Nuovo Utente</h3>
-            <div class="input-group">
-                <label>Nome completo</label>
-                <input type="text" id="nuovoNome" placeholder="Mario Rossi" style="width: 100%; padding: 10px;">
-            </div>
-            <div class="input-group">
-                <label>Email</label>
-                <input type="email" id="nuovaEmail" placeholder="nome@mec-roy.it" style="width: 100%; padding: 10px;">
-            </div>
-            <div class="input-group">
-                <label>Password</label>
-                <input type="password" id="nuovaPassword" placeholder="******" style="width: 100%; padding: 10px;">
-            </div>
-            <div class="input-group">
-                <label>Ruolo</label>
-                <select id="nuovoRuolo" style="width: 100%; padding: 10px;">
-                    <option value="user">👷 Operaio</option>
-                    <option value="admin">👑 Amministratore</option>
-                </select>
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button onclick="salvaNuovoUtente()" style="flex: 1;">✅ Salva</button>
-                <button onclick="chiudiPopup()" style="flex: 1; background: var(--error-bg);">❌ Annulla</button>
-            </div>
-        </div>
-        <div id="popupOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1999;"></div>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', popupHtml);
-}
-
-async function salvaNuovoUtente() {
-    const nome = document.getElementById('nuovoNome')?.value;
-    const email = document.getElementById('nuovaEmail')?.value;
-    const password = document.getElementById('nuovaPassword')?.value;
-    const ruolo = document.getElementById('nuovoRuolo')?.value;
-    
-    if (!nome || !email || !password) {
-        alert('Compila tutti i campi');
-        return;
-    }
-    
-    try {
-        await db.collection('utenti').doc(email).set({
-            email: email,
-            password: password,
-            name: nome,
-            type: ruolo,
-            ruolo: ruolo === 'admin' ? 'admin' : 'operaio',
-            stato: 'attivo',
-            ritardi: 0,
-            dataCreazione: new Date().toISOString()
-        });
-        
-        mostraPopup(`✅ Utente ${nome} creato con successo!`, 'info');
-        chiudiPopup();
-        caricaTabellaUtenti();
-    } catch (error) {
-        console.error('Errore creazione utente:', error);
-        mostraPopup('Errore durante la creazione', 'errore');
-    }
-}
-
-function chiudiPopup() {
-    const popup = document.getElementById('utentePopup');
-    const overlay = document.getElementById('popupOverlay');
-    if (popup) popup.remove();
-    if (overlay) overlay.remove();
-}
-
-// ===== FUNZIONI COMMESSE =====
-async function caricaElencoCommesse() {
-    const container = document.getElementById('elencoCommesse');
-    if (!container) return;
-    
-    try {
-        const snapshot = await db.collection('commesse').get();
-        
-        if (snapshot.empty) {
-            container.innerHTML = '<p style="text-align:center;">📭 Nessuna commessa. Clicca "Nuova Commessa" per iniziare.</p>';
-            return;
-        }
-        
-        let html = '';
-        snapshot.forEach(doc => {
-            const commessa = doc.data();
-            html += `
-                <div style="background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong style="color: var(--text-primary); font-size: 18px;">📋 ${commessa.codice}</strong>
-                            ${commessa.terminata ? '<span style="color: var(--error-text); margin-left: 10px;">(Terminata)</span>' : ''}
-                        </div>
-                        <button onclick="eliminaCommessa('${doc.id}')" style="background: var(--danger-bg); color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">🗑️ Elimina</button>
-                    </div>
-                    <p style="color: var(--text-secondary); margin-top: 10px;">${commessa.descrizione}</p>
-                    <small style="color: var(--text-tertiary);">📅 Creata il: ${commessa.dataCreazione || 'Data sconosciuta'}</small>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
-    } catch (error) {
-        console.error('Errore caricamento commesse:', error);
-        container.innerHTML = '<p style="color: var(--error-text);">Errore nel caricamento delle commesse</p>';
-    }
-}
-
-function mostraNuovaCommessa() {
-    const popupHtml = `
-        <div class="popup" id="commessaPopup" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-container); border: 2px solid var(--border-color); border-radius: 10px; padding: 25px; z-index: 2000; box-shadow: 0 0 30px rgba(0,0,0,0.5); min-width: 350px;">
-            <h3 style="color: var(--text-primary); margin-bottom: 15px;">➕ Nuova Commessa</h3>
-            <div class="input-group">
-                <label>Codice Commessa</label>
-                <input type="text" id="codiceCommessa" placeholder="es. CC2024-001" style="width: 100%; padding: 10px;">
-            </div>
-            <div class="input-group">
-                <label>Descrizione</label>
-                <textarea id="descrizioneCommessa" placeholder="Descrizione del progetto..." style="width: 100%; padding: 10px; background: var(--input-bg); color: white; border: 2px solid var(--border-color); border-radius: 8px;" rows="3"></textarea>
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button onclick="salvaNuovaCommessa()" style="flex: 1;">✅ Salva</button>
-                <button onclick="chiudiPopupCommessa()" style="flex: 1; background: var(--error-bg);">❌ Annulla</button>
-            </div>
-        </div>
-        <div id="popupOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1999;"></div>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', popupHtml);
-}
-
-async function salvaNuovaCommessa() {
-    const codice = document.getElementById('codiceCommessa')?.value;
-    const descrizione = document.getElementById('descrizioneCommessa')?.value;
-    
-    if (!codice || !descrizione) {
-        alert('Compila tutti i campi');
-        return;
-    }
-    
-    try {
-        await db.collection('commesse').add({
-            codice: codice,
-            descrizione: descrizione,
-            dataCreazione: new Date().toLocaleDateString('it-IT'),
-            terminata: false
-        });
-        
-        mostraPopup(`✅ Commessa ${codice} creata con successo!`, 'info');
-        chiudiPopupCommessa();
-        caricaElencoCommesse();
-        caricaCommesseInSelect();
-    } catch (error) {
-        console.error('Errore creazione commessa:', error);
-        mostraPopup('Errore durante la creazione', 'errore');
-    }
-}
-
-function chiudiPopupCommessa() {
-    const popup = document.getElementById('commessaPopup');
-    const overlay = document.getElementById('popupOverlay');
-    if (popup) popup.remove();
-    if (overlay) overlay.remove();
-}
-
-async function eliminaCommessa(id) {
-    if (confirm('⚠️ Eliminare questa commessa? Questa azione è irreversibile.')) {
-        try {
-            await db.collection('commesse').doc(id).delete();
-            mostraPopup('Commessa eliminata', 'info');
-            caricaElencoCommesse();
-            caricaCommesseInSelect();
-        } catch (error) {
-            console.error('Errore eliminazione:', error);
-        }
-    }
-}
-
-async function caricaCommesseInSelect() {
-    const select = document.getElementById('oreCommessa');
-    if (!select) return;
-    
-    try {
-        const snapshot = await db.collection('commesse').get();
-        
-        let options = '<option value="">📋 Seleziona commessa...</option>';
-        snapshot.forEach(doc => {
-            const commessa = doc.data();
-            if (!commessa.terminata) {
-                options += `<option value="${commessa.codice}">📌 ${commessa.codice} - ${commessa.descrizione.substring(0, 50)}</option>`;
-            }
-        });
-        
-        select.innerHTML = options;
-    } catch (error) {
-        console.error('Errore caricamento commesse:', error);
-    }
-}
-
-// ===== FUNZIONI CARTELLE NUMERI =====
-function caricaElencoCartelle() {
-    const container = document.getElementById('elencoCartelle');
-    if (!container || !currentUser) return;
-    
-    const cartelle = JSON.parse(localStorage.getItem(`cartelle_${currentUser.email}`)) || [];
-    
-    if (cartelle.length === 0) {
-        container.innerHTML = '<div style="grid-column: span 3; text-align:center; padding: 40px;">📂 Nessuna cartella. Clicca "Nuova Cartella" per iniziare.</div>';
-        return;
-    }
-    
-    let html = '';
-    cartelle.forEach(cartella => {
-        html += `
-            <div class="admin-card" onclick="apriCartella('${cartella.id}')" style="cursor: pointer;">
-                <div class="admin-card-icon">📁</div>
-                <h3>${cartella.nome}</h3>
-                <p>📅 ${cartella.dataCreazione}</p>
-            </div>
-        `;
+    dati.registrazioni.push({
+      id: prossimoId++,
+      utente_id: richiesta.utente_id,
+      commessa_id: richiesta.commessa_id || null,
+      data: richiesta.data,
+      ora_inizio: richiesta.ora_inizio,
+      ora_fine: richiesta.ora_fine,
+      descrizione: richiesta.descrizione_lavoro || 'Recupero ore',
+      tipo: 'lavoro',
+      recupero: true,
+      ore: oreLavorate
     });
     
-    container.innerHTML = html;
-}
-
-function mostraNuovaCartella() {
-    const nome = prompt('📂 Inserisci il nome della nuova cartella:', 'Nuova Cartella');
-    if (!nome) return;
+    aggiungiNotifica(
+      richiesta.utente_id,
+      'recupero_approvato',
+      '✅ Le tue ore del ' + richiesta.data + ' (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + ') sono state APPROVATE e inserite!',
+      '#'
+    );
     
-    const cartelle = JSON.parse(localStorage.getItem(`cartelle_${currentUser?.email}`)) || [];
-    const nuovaCartella = {
-        id: 'cartella_' + Date.now(),
-        nome: nome,
-        dataCreazione: new Date().toLocaleDateString('it-IT')
-    };
-    
-    cartelle.push(nuovaCartella);
-    localStorage.setItem(`cartelle_${currentUser?.email}`, JSON.stringify(cartelle));
-    caricaElencoCartelle();
-    mostraPopup(`✅ Cartella "${nome}" creata con successo!`, 'info');
-}
+    salvaDati();
+    caricaRichiesteAdmin();
+    aggiornaBadgeRichieste();
+    caricaRichiesteDipendente();
+    aggiornaBadgeNotifiche();
+    alert('✅ Recupero ore approvato! Ore inserite nel registro.');
+    return;
+  }
 
-function apriCartella(id) {
-    cartellaCorrenteId = id;
-    mostraPopup(`📁 Apertura cartella: ${id}`, 'info');
-    // Qui puoi implementare la logica per visualizzare i contenuti della cartella
-}
-
-function condividiTutto() {
-    mostraPopup('📄 Funzione esportazione PDF in sviluppo', 'info');
-}
-
-// ===== FUNZIONI FIRESTORE =====
-async function caricaOreDaFirestore(userId) {
-    try {
-        const snapshot = await db.collection('ore').where('userId', '==', userId).get();
-        const ore = [];
-        snapshot.forEach(doc => ore.push(doc.data()));
-        return ore;
-    } catch (error) {
-        console.error('Errore caricamento ore:', error);
-        return [];
+  dati.registrazioni.push({
+    id: prossimoId++,
+    utente_id: richiesta.utente_id,
+    commessa_id: null,
+    data: richiesta.data_inizio,
+    ora_inizio: '00:00',
+    ora_fine: '00:00',
+    descrizione: richiesta.tipo + ' (approvata)',
+    tipo: richiesta.tipo,
+    richiesta_id: richiesta.id
+  });
+  
+  if (richiesta.data_inizio !== richiesta.data_fine) {
+    let dataCorrente = new Date(richiesta.data_inizio);
+    const dataFine = new Date(richiesta.data_fine);
+    while (dataCorrente < dataFine) {
+      dataCorrente.setDate(dataCorrente.getDate() + 1);
+      const dataStr = dataCorrente.toISOString().split('T')[0];
+      dati.registrazioni.push({
+        id: prossimoId++,
+        utente_id: richiesta.utente_id,
+        commessa_id: null,
+        data: dataStr,
+        ora_inizio: '00:00',
+        ora_fine: '00:00',
+        descrizione: richiesta.tipo + ' (approvata)',
+        tipo: richiesta.tipo,
+        richiesta_id: richiesta.id
+      });
     }
+  }
+  
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  aggiungiNotifica(
+    richiesta.utente_id,
+    'approvazione',
+    emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata APPROVATA ✅',
+    '#'
+  );
+  
+  salvaDati();
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  caricaRichiesteDipendente();
+  aggiornaBadgeNotifiche();
+  alert('✅ Richiesta approvata! Notifica inviata al dipendente.');
 }
 
-async function salvaOreSuFirestore(userId, ore) {
-    try {
-        const old = await db.collection('ore').where('userId', '==', userId).get();
-        const batch = db.batch();
-        old.forEach(doc => batch.delete(doc.ref));
-        
-        ore.forEach(oreData => {
-            const docRef = db.collection('ore').doc();
-            batch.set(docRef, { ...oreData, userId });
-        });
-        await batch.commit();
-    } catch (error) {
-        console.error('Errore salvataggio ore:', error);
-    }
+function rifiutaRichiesta(id) {
+  const richiesta = dati.richieste.find(r => r.id === id);
+  if (!richiesta) {
+    alert('❌ Richiesta non trovata');
+    return;
+  }
+  
+  richiesta.stato = 'rifiutata';
+  
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  aggiungiNotifica(
+    richiesta.utente_id,
+    'rifiuto',
+    emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata RIFIUTATA ❌',
+    '#'
+  );
+  
+  salvaDati();
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  caricaRichiesteDipendente();
+  aggiornaBadgeNotifiche();
+  alert('❌ Richiesta rifiutata. Notifica inviata al dipendente.');
 }
 
-async function caricaIngressiDaFirestore(userId, data) {
-    try {
-        const snapshot = await db.collection('ingressi')
-            .where('userId', '==', userId)
-            .where('data', '==', data)
-            .get();
-        const ingressi = [];
-        snapshot.forEach(doc => ingressi.push(doc.data()));
-        return ingressi;
-    } catch (error) {
-        console.error('Errore caricamento ingressi:', error);
-        return [];
-    }
+function aggiornaBadgeRichieste() {
+  const pending = dati.richieste.filter(r => r.stato === 'pending').length;
+  const badge = document.getElementById('badge-richieste');
+  
+  if (pending > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = pending;
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
-async function salvaIngressiSuFirestore(userId, data, ingressi) {
-    try {
-        const old = await db.collection('ingressi')
-            .where('userId', '==', userId)
-            .where('data', '==', data)
-            .get();
-        const batch = db.batch();
-        old.forEach(doc => batch.delete(doc.ref));
-        
-        ingressi.forEach(ing => {
-            const docRef = db.collection('ingressi').doc();
-            batch.set(docRef, { ...ing, userId, data });
-        });
-        await batch.commit();
-    } catch (error) {
-        console.error('Errore salvataggio ingressi:', error);
-    }
+function mostraRichieste() {
+  showTab('richieste');
 }
 
-// ===== FUNZIONI TEMA =====
-function mostraSelettoreTema() {
-    const popupHtml = `
-        <div class="popup" id="selettoreTema" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-container); border: 2px solid var(--border-color); border-radius: 10px; padding: 25px; z-index: 2000; box-shadow: 0 0 30px rgba(0,0,0,0.5); min-width: 250px;">
-            <h3 style="color: var(--text-primary); margin-bottom: 15px;">🎨 Seleziona Tema</h3>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button onclick="applicaTema('verde')" style="background: #1e4a1e; color: white;">🌿 Verde</button>
-                <button onclick="applicaTema('blu')" style="background: #3498db; color: white;">💙 Blu</button>
-                <button onclick="applicaTema('viola')" style="background: #8e44ad; color: white;">💜 Viola</button>
-                <button onclick="applicaTema('scuro')" style="background: #333; color: white;">🖤 Scuro</button>
-                <button onclick="chiudiSelettoreTema()" style="background: var(--error-bg); color: white;">❌ Chiudi</button>
-            </div>
-        </div>
-        <div id="popupOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1999;"></div>
+// ============================================
+// NOTIFICHE
+// ============================================
+function aggiungiNotifica(utente_id, tipo, messaggio, link) {
+  dati.notifiche.push({
+    id: prossimoId++,
+    utente_id: utente_id,
+    tipo: tipo,
+    messaggio: messaggio,
+    link: link || '#',
+    letto: false,
+    data: new Date().toISOString()
+  });
+  salvaDati();
+  aggiornaBadgeNotifiche();
+}
+
+function aggiornaBadgeNotifiche() {
+  if (!utenteCorrente) return;
+  
+  const nonLette = dati.notifiche.filter(n => 
+    n.utente_id === utenteCorrente.username && !n.letto
+  ).length;
+  
+  const badge = document.getElementById('badge-notifiche');
+  if (nonLette > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = nonLette;
+    document.getElementById('btn-notifica').style.color = '#dc3545';
+    document.getElementById('notifiche-container').style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+    document.getElementById('btn-notifica').style.color = '#555';
+  }
+}
+
+function mostraNotifiche() {
+  const modal = document.getElementById('modal-notifiche');
+  modal.classList.add('active');
+  
+  const div = document.getElementById('notifiche-lista');
+  const notifiche = dati.notifiche
+    .filter(n => n.utente_id === utenteCorrente.username)
+    .sort((a, b) => new Date(b.data) - new Date(a.data));
+  
+  if (notifiche.length === 0) {
+    div.innerHTML = '<p class="text-muted">Nessuna notifica</p>';
+    return;
+  }
+  
+  let html = '';
+  notifiche.forEach(n => {
+    const data = new Date(n.data).toLocaleDateString('it-IT') + ' ' + new Date(n.data).toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+    const classe = n.letto ? 'notifica-item letto' : 'notifica-item non-letto';
+    html += `
+      <div class="${classe}" onclick="segnaLetta(${n.id})">
+        <span class="notifica-testo">${n.messaggio}</span>
+        <span class="notifica-data">${data}</span>
+      </div>
     `;
-    
-    document.body.insertAdjacentHTML('beforeend', popupHtml);
+  });
+  
+  div.innerHTML = html;
 }
 
-function chiudiSelettoreTema() {
-    const selettore = document.getElementById('selettoreTema');
-    const overlay = document.getElementById('popupOverlay');
-    if (selettore) selettore.remove();
-    if (overlay) overlay.remove();
+function segnaLetta(id) {
+  const notifica = dati.notifiche.find(n => n.id === id);
+  if (notifica) {
+    notifica.letto = true;
+    salvaDati();
+    aggiornaBadgeNotifiche();
+    mostraNotifiche();
+  }
 }
 
-function applicaTema(tema) {
-    const root = document.documentElement;
-    
-    const temi = {
-        verde: {
-            '--bg-body': '#0a1f0a',
-            '--bg-container': '#1a3a1a',
-            '--text-primary': '#90ee90',
-            '--text-secondary': '#adebad',
-            '--button-bg': '#1e4a1e',
-            '--border-color': '#2a5a2a'
-        },
-        blu: {
-            '--bg-body': '#1a2639',
-            '--bg-container': '#2c3e50',
-            '--text-primary': '#ecf0f1',
-            '--text-secondary': '#b0c4de',
-            '--button-bg': '#3498db',
-            '--border-color': '#4a6a8a'
-        },
-        viola: {
-            '--bg-body': '#2a0a2a',
-            '--bg-container': '#3a1a3a',
-            '--text-primary': '#e07ee0',
-            '--text-secondary': '#c0a0c0',
-            '--button-bg': '#4a2a4a',
-            '--border-color': '#6a3a6a'
-        },
-        scuro: {
-            '--bg-body': '#121212',
-            '--bg-container': '#1e1e1e',
-            '--text-primary': '#ffffff',
-            '--text-secondary': '#cccccc',
-            '--button-bg': '#333333',
-            '--border-color': '#444444'
+function chiudiNotifiche() {
+  document.getElementById('modal-notifiche').classList.remove('active');
+}
+
+// ============================================
+// CAMBIA PASSWORD (ADMIN)
+// ============================================
+function apriModificaPassword() {
+  if (utenteCorrente?.ruolo !== 'admin') {
+    alert('Solo gli amministratori possono cambiare la password');
+    return;
+  }
+  document.getElementById('modal-password').classList.add('active');
+  document.getElementById('nuova-password').value = '';
+  document.getElementById('conferma-password').value = '';
+  document.getElementById('msg-password').innerHTML = '';
+}
+
+function chiudiModificaPassword() {
+  document.getElementById('modal-password').classList.remove('active');
+}
+
+function salvaNuovaPassword() {
+  const nuova = document.getElementById('nuova-password').value.trim();
+  const conferma = document.getElementById('conferma-password').value.trim();
+  const msg = document.getElementById('msg-password');
+
+  if (!nuova || nuova.length < 4) {
+    msg.innerHTML = '<div class="error">La password deve essere almeno di 4 caratteri</div>';
+    return;
+  }
+
+  if (nuova !== conferma) {
+    msg.innerHTML = '<div class="error">Le password non coincidono</div>';
+    return;
+  }
+
+  const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
+  if (!utente) return;
+
+  utente.password = nuova;
+  salvaDati();
+
+  msg.innerHTML = '<div class="success">✅ Password cambiata con successo!</div>';
+  
+  setTimeout(() => {
+    chiudiModificaPassword();
+  }, 1500);
+}
+
+// ============================================
+// ESPORTA ORE MESE
+// ============================================
+function esportaOreMese() {
+  if (utenteCorrente?.ruolo !== 'admin') {
+    alert('Solo gli amministratori possono esportare');
+    return;
+  }
+
+  const mese = prompt('Inserisci il mese (1-12):', new Date().getMonth() + 1);
+  if (!mese) return;
+  const meseNum = parseInt(mese);
+  if (meseNum < 1 || meseNum > 12) {
+    alert('Mese non valido');
+    return;
+  }
+
+  const anno = prompt('Inserisci l\'anno (es. 2026):', new Date().getFullYear());
+  if (!anno) return;
+  const annoNum = parseInt(anno);
+  if (annoNum < 2000 || annoNum > 2100) {
+    alert('Anno non valido');
+    return;
+  }
+
+  const giorniMese = new Date(annoNum, meseNum, 0).getDate();
+  const dipendenti = dati.utenti.filter(u => u.ruolo === 'dipendente');
+  
+  if (dipendenti.length === 0) {
+    alert('Nessun dipendente trovato');
+    return;
+  }
+
+  let header = 'DIPENDENTE';
+  for (let g = 1; g <= giorniMese; g++) {
+    const data = `${annoNum}-${String(meseNum).padStart(2,'0')}-${String(g).padStart(2,'0')}`;
+    const giornoSett = new Date(annoNum, meseNum - 1, g).getDay();
+    const giornoNome = ['DOM','LUN','MAR','MER','GIO','VEN','SAB'][giornoSett];
+    header += `;${g} (${giornoNome})`;
+  }
+  header += ';TOTALE ORE';
+
+  let csv = `MESE: ${mese}/${annoNum}\n`;
+  csv += `DATA ESPORTAZIONE: ${new Date().toLocaleDateString('it-IT')}\n\n`;
+  csv += header + '\n';
+
+  dipendenti.forEach(dip => {
+    let riga = dip.nome + ' ' + dip.cognome;
+    let totaleOre = 0;
+
+    for (let g = 1; g <= giorniMese; g++) {
+      const data = `${annoNum}-${String(meseNum).padStart(2,'0')}-${String(g).padStart(2,'0')}`;
+      const giornoSett = new Date(annoNum, meseNum - 1, g).getDay();
+      const isWeekend = giornoSett === 0 || giornoSett === 6;
+
+      const registrazioni = dati.registrazioni.filter(r => 
+        r.utente_id === dip.username && r.data === data
+      );
+
+      let simbolo = '';
+      let oreGiorno = 0;
+
+      if (registrazioni.length > 0) {
+        const haFerie = registrazioni.some(r => r.tipo === 'ferie');
+        const haPermesso = registrazioni.some(r => r.tipo === 'permesso');
+        const haMalattia = registrazioni.some(r => r.tipo === 'malattia');
+        const haLavoro = registrazioni.some(r => r.tipo === 'lavoro');
+
+        if (haFerie) {
+          simbolo = 'F';
+        } else if (haPermesso) {
+          simbolo = 'P';
+        } else if (haMalattia) {
+          simbolo = 'M';
+        } else if (haLavoro) {
+          registrazioni.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              oreGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+          simbolo = oreGiorno.toFixed(2).replace('.', ',');
         }
-    };
-    
-    const t = temi[tema];
-    if (t) {
-        for (let [prop, valore] of Object.entries(t)) {
-            root.style.setProperty(prop, valore);
-        }
-    }
-    
-    localStorage.setItem('tema_app', tema);
-    chiudiSelettoreTema();
-    mostraPopup(`🎨 Tema ${tema} applicato!`, 'info');
-}
-
-function caricaTemaSalvato() {
-    const temaSalvato = localStorage.getItem('tema_app');
-    if (temaSalvato) {
-        applicaTema(temaSalvato);
-    } else {
-        applicaTema('verde');
-    }
-}
-
-// ===== FUNZIONI UTILITY =====
-function mascheraOra(input) {
-    let valore = input.value.replace(/\D/g, '');
-    if (valore.length > 2) {
-        valore = valore.substring(0, 2) + ':' + valore.substring(2, 4);
-    }
-    input.value = valore;
-}
-
-function mostraPopup(messaggio, tipo = 'info') {
-    const popup = document.createElement('div');
-    popup.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: var(--bg-container);
-        border: 2px solid var(--border-color);
-        border-radius: 10px;
-        padding: 25px;
-        z-index: 2000;
-        box-shadow: 0 0 30px rgba(0,0,0,0.5);
-        min-width: 300px;
-        text-align: center;
-    `;
-    
-    let colore = 'var(--text-primary)';
-    let icona = 'ℹ️';
-    if (tipo === 'errore') {
-        colore = 'var(--error-text)';
-        icona = '❌';
-    } else if (tipo === 'ritardo') {
-        colore = 'var(--warning-text)';
-        icona = '⚠️';
-    } else if (tipo === 'successo') {
-        colore = 'var(--success-bg)';
-        icona = '✅';
-    }
-    
-    popup.innerHTML = `
-        <h3 style="color: ${colore}; margin-bottom: 15px;">${icona} ${tipo === 'info' ? 'Info' : tipo === 'errore' ? 'Errore' : tipo === 'ritardo' ? 'Attenzione' : 'Successo'}</h3>
-        <p style="color: var(--text-secondary); margin-bottom: 20px;">${messaggio}</p>
-        <button onclick="this.parentElement.remove()" style="background: var(--button-bg); color: var(--text-primary); border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer;">OK</button>
-    `;
-    
-    document.body.appendChild(popup);
-    
-    setTimeout(() => {
-        if (document.body.contains(popup)) popup.remove();
-    }, 5000);
-}
-
-function esportaUtenti() {
-    mostraPopup('📄 Funzione esportazione CSV in sviluppo', 'info');
-}
-
-// ===== INIZIALIZZAZIONE =====
-document.addEventListener('DOMContentLoaded', async function() {
-    console.log('🚀 Avvio applicazione MEC-ROY...');
-    
-    // Attacca il gestore del login
-    const loginForm = document.getElementById('loginFormElement');
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
-        console.log('✅ Form di login inizializzato');
-    }
-    
-    // Piccolo delay per assicurarsi che Firebase sia pronto
-    setTimeout(() => {
-        if (typeof db !== 'undefined') {
-            console.log('✅ Firebase disponibile');
+      } else {
+        if (isWeekend) {
+          simbolo = '/';
         } else {
-            console.warn('⚠️ Firebase non disponibile - verifica la configurazione');
+          const haRichiestaApprovata = dati.richieste.some(r => 
+            r.utente_id === dip.username && 
+            r.stato === 'approvata' &&
+            r.data_inizio <= data && r.data_fine >= data
+          );
+          if (haRichiestaApprovata) {
+            const richiesta = dati.richieste.find(r => 
+              r.utente_id === dip.username && 
+              r.stato === 'approvata' &&
+              r.data_inizio <= data && r.data_fine >= data
+            );
+            if (richiesta) {
+              if (richiesta.tipo === 'ferie') simbolo = 'F';
+              else if (richiesta.tipo === 'permesso') simbolo = 'P';
+              else if (richiesta.tipo === 'malattia') simbolo = 'M';
+            }
+          } else {
+            simbolo = 'A';
+          }
         }
-    }, 500);
+      }
+
+      totaleOre += oreGiorno;
+      riga += ';' + simbolo;
+    }
+
+    riga += ';' + totaleOre.toFixed(2).replace('.', ',');
+    csv += riga + '\n';
+  });
+
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][meseNum - 1];
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `ORE_${meseNome}_${annoNum}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+
+  alert('✅ File esportato con successo!');
+}
+
+// ============================================
+// ESPORTA PDF
+// ============================================
+function esportaPDF() {
+  const output = document.getElementById('calendario-output');
+  const content = output.innerHTML;
+  
+  if (!content || content.includes('Seleziona mese/anno') || content.includes('Nessun dipendente trovato')) {
+    alert('⚠️ Prima genera il report nel calendario!\n\nVai su "Calendario" → seleziona mese/anno → clicca "Visualizza"');
+    return;
+  }
+
+  const printWindow = window.open('', '_blank', 'width=1200,height=800');
+  
+  if (!printWindow) {
+    alert('❌ Impossibile aprire la finestra di stampa. Consentire i popup per questo sito.');
+    return;
+  }
+
+  const logoHTML = document.querySelector('.logo-small') ? 
+    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
+
+  const style = `
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+      th { background: #00695C; color: white; font-weight: bold; }
+      tr:nth-child(even) { background: #f9f9f9; }
+      .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
+      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
+      h2 { color: #00695C; margin: 5px 0; }
+      .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .logo-small-img { max-height: 40px; }
+      .azienda-small { font-weight: 700; color: #00695C; font-size: 18px; }
+      .badge { display: none; }
+      .btn { display: none; }
+      .ore-straordinario { background-color: #ffebee !important; }
+      .totale-oltre8 { color: #d32f2f !important; font-weight: bold; }
+    </style>
+  `;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Report Ore Mensile</title>
+      ${style}
+    </head>
+    <body>
+      <div class="header">
+        ${logoHTML}
+        <h2>Report Ore Mensile</h2>
+        <p style="color:#888;font-size:14px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
+      </div>
+      
+      <div style="margin-top:10px;">
+        ${content}
+      </div>
+      
+      <div class="footer">
+        MEC-ROY srls - Sistema di Gestione Lavoro<br>
+        Documento generato automaticamente
+      </div>
+      
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 500);
+        };
+      <\/script>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+// ============================================
+// GESTIONE DIPENDENTI
+// ============================================
+function aggiungiDipendente() {
+  const nome = document.getElementById('dip-nome').value.trim();
+  const cognome = document.getElementById('dip-cognome').value.trim();
+  const username = document.getElementById('dip-username').value.trim();
+  const password = document.getElementById('dip-password').value.trim();
+  const ruolo = document.getElementById('dip-ruolo').value;
+  const msg = document.getElementById('msg-dipendente');
+
+  if (!nome || !cognome || !username || !password) {
+    msg.innerHTML = '<div class="error">Compila tutti i campi obbligatori</div>';
+    return;
+  }
+
+  if (dati.utenti.some(u => u.username === username)) {
+    msg.innerHTML = '<div class="error">❌ Username già esistente</div>';
+    return;
+  }
+
+  dati.utenti.push({
+    username: username,
+    password: password,
+    nome: nome,
+    cognome: cognome,
+    ruolo: ruolo
+  });
+
+  salvaDati();
+
+  document.getElementById('dip-nome').value = '';
+  document.getElementById('dip-cognome').value = '';
+  document.getElementById('dip-username').value = '';
+  document.getElementById('dip-password').value = '';
+  msg.innerHTML = '<div class="success">✅ Dipendente aggiunto con successo!</div>';
+
+  caricaListaDipendenti();
+  caricaSelectDipendentiModifica();
+  caricaSelectDipendentiCalendario();
+}
+
+function caricaListaDipendenti() {
+  const div = document.getElementById('lista-dipendenti');
+  
+  if (dati.utenti.length === 0) {
+    div.innerHTML = '<p class="text-muted">📭 Nessun dipendente</p>';
+    return;
+  }
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += '<th>Username</th><th>Nome</th><th>Cognome</th><th>Ruolo</th><th>Azioni</th>';
+  html += '</tr></thead><tbody>';
+
+  dati.utenti.forEach(u => {
+    const isSelf = u.username === utenteCorrente.username;
+    html += '<tr id="row-' + u.username + '">';
+    html += '<td><strong>' + u.username + '</strong></td>';
+    html += '<td>' + u.nome + '</td>';
+    html += '<td>' + u.cognome + '</td>';
+    html += '<td><span class="badge ' + u.ruolo + '">' + u.ruolo + '</span></td>';
+    html += '<td>';
+    if (!isSelf) {
+      html += '<button class="btn-warning" onclick="apriModificaDipendente(\'' + u.username + '\')" style="margin-right:5px;" title="Modifica"><i class="fas fa-edit"></i></button>';
+      html += '<button class="btn-danger" onclick="eliminaDipendente(\'' + u.username + '\')" title="Elimina"><i class="fas fa-trash"></i></button>';
+    } else {
+      html += '<span style="color:#999;font-size:0.8em;">(tu)</span>';
+    }
+    html += '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+}
+
+function apriModificaDipendente(username) {
+  const utente = dati.utenti.find(u => u.username === username);
+  if (!utente) return;
+  
+  const row = document.getElementById('row-' + username);
+  if (!row) return;
+  
+  row.innerHTML = `
+    <td><input type="text" id="edit-username-${username}" value="${utente.username}" class="edit-input" /></td>
+    <td><input type="text" id="edit-nome-${username}" value="${utente.nome}" class="edit-input" /></td>
+    <td><input type="text" id="edit-cognome-${username}" value="${utente.cognome}" class="edit-input" /></td>
+    <td>
+      <select id="edit-ruolo-${username}" class="edit-input">
+        <option value="dipendente" ${utente.ruolo === 'dipendente' ? 'selected' : ''}>Dipendente</option>
+        <option value="admin" ${utente.ruolo === 'admin' ? 'selected' : ''}>Admin</option>
+      </select>
+    </td>
+    <td>
+      <button class="btn-success" onclick="salvaModificaDipendente('${username}')" style="margin-right:5px;" title="Salva"><i class="fas fa-save"></i></button>
+      <button class="btn-danger" onclick="annullaModificaDipendente('${username}')" title="Annulla"><i class="fas fa-times"></i></button>
+    </td>
+  `;
+}
+
+function salvaModificaDipendente(oldUsername) {
+  const nuovoUsername = document.getElementById('edit-username-' + oldUsername).value.trim();
+  const nome = document.getElementById('edit-nome-' + oldUsername).value.trim();
+  const cognome = document.getElementById('edit-cognome-' + oldUsername).value.trim();
+  const ruolo = document.getElementById('edit-ruolo-' + oldUsername).value;
+  
+  if (!nuovoUsername || !nome || !cognome) {
+    alert('Compila tutti i campi');
+    return;
+  }
+  
+  if (nuovoUsername !== oldUsername && dati.utenti.some(u => u.username === nuovoUsername)) {
+    alert('❌ Username già esistente');
+    return;
+  }
+  
+  const utente = dati.utenti.find(u => u.username === oldUsername);
+  if (!utente) return;
+  
+  utente.username = nuovoUsername;
+  utente.nome = nome;
+  utente.cognome = cognome;
+  utente.ruolo = ruolo;
+  
+  if (nuovoUsername !== oldUsername) {
+    dati.registrazioni.forEach(r => {
+      if (r.utente_id === oldUsername) r.utente_id = nuovoUsername;
+    });
+    dati.richieste.forEach(r => {
+      if (r.utente_id === oldUsername) r.utente_id = nuovoUsername;
+    });
+    dati.notifiche.forEach(n => {
+      if (n.utente_id === oldUsername) n.utente_id = nuovoUsername;
+    });
+  }
+  
+  salvaDati();
+  caricaListaDipendenti();
+  caricaSelectDipendentiModifica();
+  caricaSelectDipendentiCalendario();
+  alert('✅ Dipendente modificato con successo!');
+}
+
+function annullaModificaDipendente(username) {
+  caricaListaDipendenti();
+}
+
+function eliminaDipendente(username) {
+  const registrazioniCount = dati.registrazioni.filter(r => r.utente_id === username).length;
+  const richiesteCount = dati.richieste.filter(r => r.utente_id === username).length;
+  
+  let msg = '⚠️ Eliminare il dipendente "' + username + '"?\n\n';
+  if (registrazioniCount > 0 || richiesteCount > 0) {
+    msg += '⚠️ ATTENZIONE: Questo dipendente ha:\n';
+    if (registrazioniCount > 0) msg += '  - ' + registrazioniCount + ' registrazioni ore\n';
+    if (richiesteCount > 0) msg += '  - ' + richiesteCount + ' richieste\n';
+    msg += '\nEliminando il dipendente, TUTTI questi dati verranno PERDUTI.\n';
+  }
+  msg += '\nSei sicuro di voler procedere?';
+  
+  if (!confirm(msg)) return;
+  
+  dati.utenti = dati.utenti.filter(u => u.username !== username);
+  dati.registrazioni = dati.registrazioni.filter(r => r.utente_id !== username);
+  dati.richieste = dati.richieste.filter(r => r.utente_id !== username);
+  dati.notifiche = dati.notifiche.filter(n => n.utente_id !== username);
+  
+  salvaDati();
+  caricaListaDipendenti();
+  caricaSelectDipendentiModifica();
+  caricaSelectDipendentiCalendario();
+  alert('🗑️ Dipendente eliminato');
+}
+
+// ============================================
+// MODIFICA ORE (ADMIN)
+// ============================================
+function caricaSelectDipendentiModifica() {
+  const select = document.getElementById('modifica-dipendente');
+  select.innerHTML = '<option value="">-- Seleziona --</option>';
+  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
+    select.innerHTML += '<option value="' + u.username + '">' + u.nome + ' ' + u.cognome + '</option>';
+  });
+}
+
+function caricaRegistrazioniModifica() {
+  const username = document.getElementById('modifica-dipendente').value;
+  const data = document.getElementById('modifica-data').value;
+  const div = document.getElementById('modifica-lista');
+
+  if (!username || !data) {
+    div.innerHTML = '<p class="text-muted">Seleziona dipendente e data</p>';
+    return;
+  }
+
+  const registrazioni = dati.registrazioni.filter(r => 
+    r.utente_id === username && r.data === data && r.tipo === 'lavoro'
+  );
+
+  if (registrazioni.length === 0) {
+    div.innerHTML = '<p class="text-muted">Nessuna registrazione per questo dipendente in questa data</p>';
+    return;
+  }
+
+  const totaleGiornata = calcolaOreGiornata(username, data);
+  const isOltre8 = totaleGiornata > 8;
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += '<th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th><th>Azioni</th>';
+  html += '</tr></thead><tbody>';
+
+  registrazioni.forEach(r => {
+    const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+    const [h1, m1] = r.ora_inizio.split(':').map(Number);
+    const [h2, m2] = r.ora_fine.split(':').map(Number);
+    const ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+    const isStraordinario = r.straordinario || false;
+
+    html += '<tr' + (isOltre8 ? ' class="ore-straordinario"' : '') + '>';
+    html += '<td><strong>' + (commessa?.nome || 'N/A') + '</strong></td>';
+    html += '<td><input type="time" id="mod-inizio-' + r.id + '" value="' + r.ora_inizio + '" class="edit-input" /></td>';
+    html += '<td><input type="time" id="mod-fine-' + r.id + '" value="' + r.ora_fine + '" class="edit-input" /></td>';
+    html += '<td>' + ore.toFixed(2) + 'h' + (isStraordinario ? ' ⭐' : '') + '</td>';
+    html += '<td><input type="text" id="mod-desc-' + r.id + '" value="' + (r.descrizione || '') + '" class="edit-input" /></td>';
+    html += '<td>';
+    html += '<button class="btn-warning" onclick="salvaModifica(' + r.id + ')"><i class="fas fa-save"></i></button>';
+    html += '<button class="btn-danger" onclick="eliminaRegistrazione(' + r.id + ')"><i class="fas fa-trash"></i></button>';
+    html += '</td>';
+    html += '</tr>';
+  });
+
+  // Totale giornata con indicazione straordinario (ROSSO se > 8)
+  const bgColor = isOltre8 ? '#ffebee' : '#e8f5e9';
+  const textColor = isOltre8 ? '#d32f2f' : '#2e7d32';
+  html += `
+    <tr style="font-weight:bold;">
+      <td colspan="3" style="text-align:right;background:${bgColor};color:${textColor};">TOTALE GIORNATA:</td>
+      <td colspan="3" style="background:${bgColor};color:${textColor};">
+        ${totaleGiornata.toFixed(2)}h ${isOltre8 ? '⚠️ STRAORDINARIO (> 8h)' : ''}
+      </td>
+    </tr>
+  `;
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+}
+
+function salvaModifica(id) {
+  const nuovaInizio = document.getElementById('mod-inizio-' + id).value;
+  const nuovaFine = document.getElementById('mod-fine-' + id).value;
+  const nuovaDesc = document.getElementById('mod-desc-' + id).value.trim();
+
+  const registro = dati.registrazioni.find(r => r.id === id);
+  if (!registro) return;
+
+  if (nuovaInizio >= nuovaFine) {
+    alert('L\'ora fine deve essere dopo l\'ora inizio');
+    return;
+  }
+
+  registro.ora_inizio = nuovaInizio;
+  registro.ora_fine = nuovaFine;
+  registro.descrizione = nuovaDesc;
+  
+  const [h1, m1] = nuovaInizio.split(':').map(Number);
+  const [h2, m2] = nuovaFine.split(':').map(Number);
+  registro.ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+
+  salvaDati();
+  caricaRegistrazioniModifica();
+  alert('✅ Registrazione modificata!');
+}
+
+function eliminaRegistrazione(id) {
+  if (!confirm('Eliminare questa registrazione?')) return;
+  
+  dati.registrazioni = dati.registrazioni.filter(r => r.id !== id);
+  salvaDati();
+  caricaRegistrazioniModifica();
+  alert('🗑️ Registrazione eliminata');
+}
+
+// ============================================
+// CALENDARIO
+// ============================================
+function caricaSelectDipendentiCalendario() {
+  const select = document.getElementById('cal-dipendente');
+  select.innerHTML = '<option value="">-- Tutti --</option>';
+  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
+    select.innerHTML += '<option value="' + u.username + '">' + u.nome + ' ' + u.cognome + '</option>';
+  });
+}
+
+function caricaCalendario() {
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+  const output = document.getElementById('calendario-output');
+
+  if (!anno) {
+    output.innerHTML = '<p class="text-muted">Inserisci un anno valido</p>';
+    return;
+  }
+
+  const isAdmin = utenteCorrente.ruolo === 'admin';
+  let utenteFilter = utenteCorrente.username;
+  if (isAdmin) {
+    utenteFilter = document.getElementById('cal-dipendente').value;
+  }
+
+  const giorniMese = new Date(anno, mese, 0).getDate();
+
+  let dipendentiDaMostrare = [];
+  if (isAdmin) {
+    if (utenteFilter) {
+      dipendentiDaMostrare = dati.utenti.filter(u => u.username === utenteFilter);
+    } else {
+      dipendentiDaMostrare = dati.utenti.filter(u => u.ruolo === 'dipendente');
+    }
+  } else {
+    dipendentiDaMostrare = dati.utenti.filter(u => u.username === utenteCorrente.username);
+  }
+
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+
+  let html = `<h4 style="margin-bottom:15px;color:#333;">${meseNome} ${anno}</h4>`;
+
+  html += `
+    <div style="margin-bottom:15px;padding:10px 15px;background:#f8f9fa;border-radius:8px;border:1px solid #ddd;display:flex;gap:15px;flex-wrap:wrap;font-size:0.85em;">
+      <span><span style="display:inline-block;width:16px;height:16px;background:#E8F5E9;border:1px solid #4CAF50;border-radius:3px;"></span> Lavorato</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#E3F2FD;border:1px solid #2196F3;border-radius:3px;"></span> Ferie</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#FFF3E0;border:1px solid #FF9800;border-radius:3px;"></span> Permesso</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#FFEBEE;border:1px solid #f44336;border-radius:3px;"></span> Malattia</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:3px;"></span> Recupero</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#ffebee;border:1px solid #d32f2f;border-radius:3px;"></span> Straordinario</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#f5f5f5;border:1px solid #999;border-radius:3px;border-style:dashed;"></span> Assente</span>
+    </div>
+  `;
+
+  if (dipendentiDaMostrare.length === 0) {
+    html += '<p class="text-muted">Nessun dipendente trovato</p>';
+    output.innerHTML = html;
+    return;
+  }
+
+  html += '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:0.85em;">';
+  html += '<thead><tr><th style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:120px;">Dipendente</th>';
+  
+  const giorniSett = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  for (let g = 1; g <= giorniMese; g++) {
+    const giornoSett = new Date(anno, mese - 1, g).getDay();
+    const isWeekend = giornoSett === 0 || giornoSett === 6;
+    const bgColor = isWeekend ? '#f5f5f5' : 'white';
+    html += `<th style="padding:6px;border:1px solid #ddd;text-align:center;background:${bgColor};min-width:35px;font-size:0.75em;">${g}<br><span style="font-weight:normal;font-size:0.7em;color:#888;">${giorniSett[giornoSett]}</span></th>`;
+  }
+  html += '<th style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;">Totale</th>';
+  html += '</tr></thead><tbody>';
+
+  dipendentiDaMostrare.forEach(dip => {
+    html += `<tr>`;
+    html += `<td style="padding:6px 10px;border:1px solid #ddd;font-weight:600;background:#f8f9fa;"><strong>${dip.nome} ${dip.cognome}</strong></td>`;
+
+    let totaleOre = 0;
+
+    for (let g = 1; g <= giorniMese; g++) {
+      const data = `${anno}-${String(mese).padStart(2,'0')}-${String(g).padStart(2,'0')}`;
+      const giornoSett = new Date(anno, mese - 1, g).getDay();
+      const isWeekend = giornoSett === 0 || giornoSett === 6;
+
+      const registrazioni = dati.registrazioni.filter(r => 
+        r.utente_id === dip.username && r.data === data
+      );
+
+      let cella = '';
+      let bgColor = 'white';
+
+      if (registrazioni.length > 0) {
+        const haFerie = registrazioni.some(r => r.tipo === 'ferie');
+        const haPermesso = registrazioni.some(r => r.tipo === 'permesso');
+        const haMalattia = registrazioni.some(r => r.tipo === 'malattia');
+        const haRecupero = registrazioni.some(r => r.recupero === true);
+        const haStraordinario = registrazioni.some(r => r.straordinario === true);
+        const haLavoro = registrazioni.some(r => r.tipo === 'lavoro');
+
+        if (haFerie) {
+          cella = 'F';
+          bgColor = '#E3F2FD';
+        } else if (haPermesso) {
+          cella = 'P';
+          bgColor = '#FFF3E0';
+        } else if (haMalattia) {
+          cella = 'M';
+          bgColor = '#FFEBEE';
+        } else if (haRecupero) {
+          let oreGiorno = 0;
+          registrazioni.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              oreGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+          cella = oreGiorno.toFixed(1) + 'h';
+          bgColor = '#fff3cd';
+          totaleOre += oreGiorno;
+        } else if (haLavoro) {
+          let oreGiorno = 0;
+          registrazioni.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              oreGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+          
+          if (haStraordinario) {
+            cella = oreGiorno.toFixed(1) + 'h ⭐';
+            bgColor = '#ffebee';
+          } else {
+            cella = oreGiorno.toFixed(1) + 'h';
+            bgColor = '#E8F5E9';
+          }
+          totaleOre += oreGiorno;
+        }
+      } else {
+        if (isWeekend) {
+          cella = '/';
+          bgColor = '#f5f5f5';
+        } else {
+          const haRichiestaApprovata = dati.richieste.some(r => 
+            r.utente_id === dip.username && 
+            r.stato === 'approvata' &&
+            r.data_inizio <= data && r.data_fine >= data
+          );
+          if (haRichiestaApprovata) {
+            const richiesta = dati.richieste.find(r => 
+              r.utente_id === dip.username && 
+              r.stato === 'approvata' &&
+              r.data_inizio <= data && r.data_fine >= data
+            );
+            if (richiesta) {
+              if (richiesta.tipo === 'ferie') { cella = 'F'; bgColor = '#E3F2FD'; }
+              else if (richiesta.tipo === 'permesso') { cella = 'P'; bgColor = '#FFF3E0'; }
+              else if (richiesta.tipo === 'malattia') { cella = 'M'; bgColor = '#FFEBEE'; }
+              else if (richiesta.tipo === 'recupero_ore') { 
+                const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
+                const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
+                const oreRecupero = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+                cella = oreRecupero.toFixed(1) + 'h';
+                bgColor = '#fff3cd';
+              }
+            }
+          } else {
+            cella = 'A';
+            bgColor = '#f5f5f5';
+          }
+        }
+      }
+
+      if (isWeekend && cella === '') {
+        cella = '/';
+        bgColor = '#f5f5f5';
+      }
+
+      let borderStyle = '1px solid #ddd';
+      if (cella === 'A') {
+        borderStyle = '2px dashed #999';
+      }
+
+      html += `<td style="padding:6px;border:${borderStyle};text-align:center;background:${bgColor};font-weight:${cella === 'A' ? 'bold' : 'normal'};color:${cella === 'A' ? '#d32f2f' : '#333'};">${cella}</td>`;
+    }
+
+    // TOTALE GIORNATA - ROSSO SE > 8 ORE
+    const isOltre8 = totaleOre > 8;
+    const bgTotal = isOltre8 ? '#ffebee' : '#e8f5e9';
+    const colorTotal = isOltre8 ? '#d32f2f' : '#2e7d32';
+    html += `<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-weight:bold;background:${bgTotal};color:${colorTotal};">${totaleOre.toFixed(1)}h${isOltre8 ? ' ⚠️' : ''}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  output.innerHTML = html;
+}
+
+// ============================================
+// AVVIO
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+  // Carica i dati prima di mostrare la pagina
+  caricaDati().then(() => {
+    document.getElementById('login-page').style.display = 'block';
+    document.getElementById('main-page').style.display = 'none';
+    const anno = new Date().getFullYear();
+    document.getElementById('cal-anno').value = anno;
+  }).catch((err) => {
+    console.error('❌ Errore caricamento dati:', err);
+    document.getElementById('login-page').style.display = 'block';
+    document.getElementById('main-page').style.display = 'none';
+  });
+});
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-notifiche');
+  if (e.target === modal) {
+    chiudiNotifiche();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-password');
+  if (e.target === modal) {
+    chiudiModificaPassword();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-aziende');
+  if (e.target === modal) {
+    chiudiModalAziende();
+  }
 });
