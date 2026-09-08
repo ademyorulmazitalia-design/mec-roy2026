@@ -1080,6 +1080,12 @@ function approvaRichiesta(id) {
     return;
   }
   
+  // 🛑 IMPEDISCI DOPPIO CLICK: se è già approvata, esci subito
+  if (richiesta.stato !== 'pending') {
+    alert('⚠️ Questa richiesta è già stata processata.');
+    return;
+  }
+  
   richiesta.stato = 'approvata';
 
   // ✅ Usa SEMPRE l'utente della richiesta
@@ -1088,8 +1094,14 @@ function approvaRichiesta(id) {
   if (richiesta.tipo === 'recupero_ore') {
     const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
     const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
-    const oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+    let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
     
+    // 🛑 CONTROLLO MATEMATICO: se il calcolo è negativo o supera le 12 ore, l'errore è nei dati. Blocca tutto.
+    if (oreLavorate <= 0 || oreLavorate > 12) {
+      alert('❌ ERRORE DATI: Orario non valido per la richiesta di recupero. Controlla le ore inserite.');
+      return;
+    }
+
     dati.registrazioni.push({
       id: prossimoId++,
       utente_id: utenteIdCorretto,
@@ -1152,14 +1164,16 @@ function approvaRichiesta(id) {
     );
   }
   
+  // Salva su Firestore
   salvaDati();
   
-  // Rimuovi fisicamente la richiesta dallo schermo senza ricaricare la pagina
+  // 🛑 RIMUOVI LA CARD DALLO SCHERMO SENZA RICARICARE LA PAGINA
   const card = document.querySelector('.richiesta-card');
   if (card) {
     card.remove();
   }
   
+  // Aggiorna la lista e il badge
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
