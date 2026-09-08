@@ -17,11 +17,19 @@ firebase.initializeApp(firebaseConfig);
 // ============================================
 // NUOVA CONFIGURAZIONE FIRESTORE (PERSISTENTE)
 // ============================================
-const db = firebase.initializeFirestore(firebase.app(), {
-  localCache: firebase.firestore.persistentLocalCache({
-    tabManager: firebase.firestore.persistentSingleTabManager({})
-  })
-});
+const db = firebase.firestore();
+
+// Abilita la cache offline nel modo corretto per la versione 8
+db.enablePersistence()
+  .catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn('⚠️ Persistenza non abilitata: app aperta in più schede.');
+    } else if (err.code === 'unimplemented') {
+      console.warn('⚠️ Persistenza non supportata da questo browser.');
+    } else {
+      console.warn('Offline persistence:', err.code);
+    }
+  });
 
 // ============================================
 // DATI
