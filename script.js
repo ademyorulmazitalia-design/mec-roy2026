@@ -540,7 +540,7 @@ function caricaUltimaRegistrazione() {
   const oraCorrente = new Date();
   const oreCorrente = oraCorrente.getHours();
 
-  const isPomeriggio = oreCorrente >= 12;
+  const isPomeriggio = oreCorrente >= 13;
 
   const registrazioniOggi = dati.registrazioni.filter(r => 
     r.utente_id === utenteCorrente.username && 
