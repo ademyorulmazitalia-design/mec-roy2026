@@ -13,13 +13,15 @@ const firebaseConfig = {
 
 // Inizializza Firebase
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
 
-// Abilita offline
-db.enablePersistence()
-  .catch((err) => {
-    console.warn('Offline persistence:', err.code);
-  });
+// ============================================
+// NUOVA CONFIGURAZIONE FIRESTORE (PERSISTENTE)
+// ============================================
+const db = firebase.initializeFirestore(firebase.app(), {
+  localCache: firebase.firestore.persistentLocalCache({
+    tabManager: firebase.firestore.persistentSingleTabManager({})
+  })
+});
 
 // ============================================
 // DATI
