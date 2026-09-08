@@ -36,7 +36,7 @@ db.enablePersistence()
 // ============================================
 let dati = {};
 let utenteCorrente = null;
-let prossimoId = 100;
+let prossimoId = 1; // Verrà aggiornato automaticamente da caricaDati()
 
 // ============================================
 // FUNZIONI DI CONNESSIONE A FIRESTORE
@@ -80,6 +80,14 @@ async function caricaDati() {
   
   if (datiFirestore) {
     dati = datiFirestore;
+    
+    // 🛑 CALCOLA AUTOMATICAMENTE L'ID PIÙ ALTO PER EVITARE DUPLICATI
+    let maxIdTrovato = 0;
+    dati.richieste.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
+    dati.registrazioni.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
+    dati.notifiche.forEach(n => { if (n.id > maxIdTrovato) maxIdTrovato = n.id; });
+    prossimoId = maxIdTrovato + 1;
+    
     return dati;
   }
   
@@ -1073,7 +1081,10 @@ function approvaRichiesta(id) {
   }
   
   richiesta.stato = 'approvata';
-  
+
+  // ✅ Usa SEMPRE l'utente della richiesta
+  const utenteIdCorretto = richiesta.utente_id;
+
   if (richiesta.tipo === 'recupero_ore') {
     const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
     const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
@@ -1081,7 +1092,7 @@ function approvaRichiesta(id) {
     
     dati.registrazioni.push({
       id: prossimoId++,
-      utente_id: richiesta.utente_id,
+      utente_id: utenteIdCorretto,
       commessa_id: richiesta.commessa_id || null,
       data: richiesta.data,
       ora_inizio: richiesta.ora_inizio,
@@ -1093,7 +1104,7 @@ function approvaRichiesta(id) {
     });
     
     aggiungiNotifica(
-      richiesta.utente_id,
+      utenteIdCorretto,
       'recupero_approvato',
       '✅ Le tue ore del ' + richiesta.data + ' (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + ') sono state APPROVATE e inserite!',
       '#'
@@ -1102,7 +1113,7 @@ function approvaRichiesta(id) {
   } else {
     dati.registrazioni.push({
       id: prossimoId++,
-      utente_id: richiesta.utente_id,
+      utente_id: utenteIdCorretto,
       commessa_id: null,
       data: richiesta.data_inizio,
       ora_inizio: '00:00',
@@ -1120,7 +1131,7 @@ function approvaRichiesta(id) {
         const dataStr = dataCorrente.toISOString().split('T')[0];
         dati.registrazioni.push({
           id: prossimoId++,
-          utente_id: richiesta.utente_id,
+          utente_id: utenteIdCorretto,
           commessa_id: null,
           data: dataStr,
           ora_inizio: '00:00',
@@ -1134,23 +1145,21 @@ function approvaRichiesta(id) {
     
     const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
     aggiungiNotifica(
-      richiesta.utente_id,
+      utenteIdCorretto,
       'approvazione',
       emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata APPROVATA ✅',
       '#'
     );
   }
   
-  // Salva su Firestore
   salvaDati();
   
-  // 🛑 RIMUOVI FISICAMENTE LA RICHIESTA DALLO SCHERMO SUBITO
-  const card = event.target.closest('.richiesta-card');
+  // Rimuovi fisicamente la richiesta dallo schermo senza ricaricare la pagina
+  const card = document.querySelector('.richiesta-card');
   if (card) {
     card.remove();
   }
   
-  // Aggiorna la lista e il badge
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
@@ -1178,8 +1187,8 @@ function rifiutaRichiesta(id) {
   
   salvaDati();
   
-  // 🛑 RIMUOVI FISICAMENTE LA RICHIESTA DALLO SCHERMO SUBITO
-  const card = event.target.closest('.richiesta-card');
+  // Rimuovi fisicamente la richiesta dallo schermo senza ricaricare la pagina
+  const card = document.querySelector('.richiesta-card');
   if (card) {
     card.remove();
   }
