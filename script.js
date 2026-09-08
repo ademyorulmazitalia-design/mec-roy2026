@@ -1144,7 +1144,13 @@ function approvaRichiesta(id) {
   // Salva su Firestore
   salvaDati();
   
-  // Aggiorna la lista e il badge immediatamente (la richiesta sparisce)
+  // 🛑 RIMUOVI FISICAMENTE LA RICHIESTA DALLO SCHERMO SUBITO
+  const card = event.target.closest('.richiesta-card');
+  if (card) {
+    card.remove();
+  }
+  
+  // Aggiorna la lista e il badge
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
@@ -1171,6 +1177,13 @@ function rifiutaRichiesta(id) {
   );
   
   salvaDati();
+  
+  // 🛑 RIMUOVI FISICAMENTE LA RICHIESTA DALLO SCHERMO SUBITO
+  const card = event.target.closest('.richiesta-card');
+  if (card) {
+    card.remove();
+  }
+  
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
