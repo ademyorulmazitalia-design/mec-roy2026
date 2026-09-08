@@ -592,16 +592,24 @@ function caricaUltimaRegistrazione() {
     oraFine.disabled = false;
     oraFine.style.backgroundColor = 'white';
 
-    if (ultima) {
+        if (ultima) {
       const h = parseInt(ultima.ora_fine.split(':')[0]);
-      oraInizio.value = h < 12 ? '13:00' : ultima.ora_fine;
+      oraInizio.value = h < 13 ? '13:00' : ultima.ora_fine;
     } else {
-      oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
+      // 🛑 Imposta l'ora ATTUALE, MAI oltre l'ora attuale se siamo pomeriggio
+      const oreOra = oreCorrente.toString().padStart(2, '0') + ':00';
+      oraInizio.value = (oreCorrente <= 23) ? oreOra : '13:00';
+    }
+    
+    // 🛑 Controlla che l'ora di fine non sia nel futuro
+    const oraCorrenteMinuti = oraCorrente * 60;
+    const inizioMinuti = parseInt(oraInizio.value.split(':')[0]) * 60 + parseInt(oraInizio.value.split(':')[1] || 0);
+    if (inizioMinuti > oraCorrenteMinuti) {
+        oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
     }
 
     const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
     oraFine.value = hFine + ':00';
-
     infoDiv.innerHTML = `<div class="info-msg" style="background:#fff3cd;border-color:#ffc107;color:#856404;">
       ⏰ <strong>Pomeriggio</strong> - Ora inizio e fine sono modificabili.
     </div>`;
@@ -779,11 +787,20 @@ function salvaRegistrazione() {
     msg.innerHTML = '<div class="error">❌ Inserisci una descrizione del lavoro svolto</div>';
     return;
   }
-  if (ora_inizio >= ora_fine) {
+   if (ora_inizio >= ora_fine) {
     msg.innerHTML = '<div class="error">L\'ora fine deve essere dopo l\'ora inizio</div>';
     return;
   }
 
+  // 🛑 NUOVO CONTROLLO: L'ORA DI INIZIO NON PUÒ ESSERE NEL FUTURO
+  const adesso = new Date();
+  const minutiAdesso = adesso.getHours() * 60 + adesso.getMinutes();
+  const minutiInizio = parseInt(ora_inizio.split(':')[0]) * 60 + parseInt(ora_inizio.split(':')[1] || 0);
+  
+  if (minutiInizio > minutiAdesso) {
+    msg.innerHTML = `<div class="error">❌ Non puoi segnare un orario nel futuro! L'ora attuale è ${adesso.getHours()}:${String(adesso.getMinutes()).padStart(2, '0')}.</div>`;
+    return;
+  }
   // Controllo orario mattutino (solo se NON straordinario)
   if (!straordinario) {
     const oraCorrente = new Date();
