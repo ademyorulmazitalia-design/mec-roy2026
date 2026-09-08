@@ -76,16 +76,13 @@ async function salvaSuFirestore(datiDaSalvare) {
 
 // CARICA DATI (locale + Firestore)
 async function caricaDati() {
-  // Prova a caricare da Firestore
   const datiFirestore = await caricaDaFirestore();
   
   if (datiFirestore) {
-    // Usa i dati di Firestore
     dati = datiFirestore;
     return dati;
   }
   
-  // Se Firestore è vuoto, usa localStorage o default
   const saved = localStorage.getItem('datiLavoroV2');
   if (saved) {
     const parsed = JSON.parse(saved);
@@ -97,7 +94,6 @@ async function caricaDati() {
     return dati;
   }
   
-  // Crea dati di default
   const defaultData = {
     utenti: [
       { username: 'admin', password: 'admin123', nome: 'Admin', cognome: 'Sistema', ruolo: 'admin' }
@@ -119,7 +115,12 @@ async function caricaDati() {
 
 // SALVA DATI (Firestore + localStorage)
 async function salvaDati() {
-  localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
+  // Protezione per browser che bloccano localStorage
+  try {
+    localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
+  } catch (e) {
+    console.warn('⚠️ Salvataggio locale bloccato, salvo solo su Cloud.');
+  }
   await salvaSuFirestore(dati);
 }
 
@@ -1098,60 +1099,57 @@ function approvaRichiesta(id) {
       '#'
     );
     
-    salvaDati();
-    caricaRichiesteAdmin();
-    aggiornaBadgeRichieste();
-    caricaRichiesteDipendente();
-    aggiornaBadgeNotifiche();
-    alert('✅ Recupero ore approvato! Ore inserite nel registro.');
-    return;
-  }
-
-  dati.registrazioni.push({
-    id: prossimoId++,
-    utente_id: richiesta.utente_id,
-    commessa_id: null,
-    data: richiesta.data_inizio,
-    ora_inizio: '00:00',
-    ora_fine: '00:00',
-    descrizione: richiesta.tipo + ' (approvata)',
-    tipo: richiesta.tipo,
-    richiesta_id: richiesta.id
-  });
-  
-  if (richiesta.data_inizio !== richiesta.data_fine) {
-    let dataCorrente = new Date(richiesta.data_inizio);
-    const dataFine = new Date(richiesta.data_fine);
-    while (dataCorrente < dataFine) {
-      dataCorrente.setDate(dataCorrente.getDate() + 1);
-      const dataStr = dataCorrente.toISOString().split('T')[0];
-      dati.registrazioni.push({
-        id: prossimoId++,
-        utente_id: richiesta.utente_id,
-        commessa_id: null,
-        data: dataStr,
-        ora_inizio: '00:00',
-        ora_fine: '00:00',
-        descrizione: richiesta.tipo + ' (approvata)',
-        tipo: richiesta.tipo,
-        richiesta_id: richiesta.id
-      });
+  } else {
+    dati.registrazioni.push({
+      id: prossimoId++,
+      utente_id: richiesta.utente_id,
+      commessa_id: null,
+      data: richiesta.data_inizio,
+      ora_inizio: '00:00',
+      ora_fine: '00:00',
+      descrizione: richiesta.tipo + ' (approvata)',
+      tipo: richiesta.tipo,
+      richiesta_id: richiesta.id
+    });
+    
+    if (richiesta.data_inizio !== richiesta.data_fine) {
+      let dataCorrente = new Date(richiesta.data_inizio);
+      const dataFine = new Date(richiesta.data_fine);
+      while (dataCorrente < dataFine) {
+        dataCorrente.setDate(dataCorrente.getDate() + 1);
+        const dataStr = dataCorrente.toISOString().split('T')[0];
+        dati.registrazioni.push({
+          id: prossimoId++,
+          utente_id: richiesta.utente_id,
+          commessa_id: null,
+          data: dataStr,
+          ora_inizio: '00:00',
+          ora_fine: '00:00',
+          descrizione: richiesta.tipo + ' (approvata)',
+          tipo: richiesta.tipo,
+          richiesta_id: richiesta.id
+        });
+      }
     }
+    
+    const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+    aggiungiNotifica(
+      richiesta.utente_id,
+      'approvazione',
+      emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata APPROVATA ✅',
+      '#'
+    );
   }
   
-  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-  aggiungiNotifica(
-    richiesta.utente_id,
-    'approvazione',
-    emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata APPROVATA ✅',
-    '#'
-  );
-  
+  // Salva su Firestore
   salvaDati();
+  
+  // Aggiorna la lista e il badge immediatamente (la richiesta sparisce)
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
   aggiornaBadgeNotifiche();
+  
   alert('✅ Richiesta approvata! Notifica inviata al dipendente.');
 }
 
