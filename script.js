@@ -14,12 +14,8 @@ const firebaseConfig = {
 // Inizializza Firebase
 firebase.initializeApp(firebaseConfig);
 
-// ============================================
-// NUOVA CONFIGURAZIONE FIRESTORE (PERSISTENTE)
-// ============================================
 const db = firebase.firestore();
 
-// Abilita la cache offline nel modo corretto per la versione 8
 db.enablePersistence()
   .catch((err) => {
     if (err.code === 'failed-precondition') {
@@ -31,18 +27,10 @@ db.enablePersistence()
     }
   });
 
-// ============================================
-// DATI
-// ============================================
 let dati = {};
 let utenteCorrente = null;
-let prossimoId = 1; // Verrà aggiornato automaticamente da caricaDati()
+let prossimoId = 1; 
 
-// ============================================
-// FUNZIONI DI CONNESSIONE A FIRESTORE
-// ============================================
-
-// CARICA DATI DA FIRESTORE
 async function caricaDaFirestore() {
   try {
     console.log('🔄 Caricamento dati da Firestore...');
@@ -61,7 +49,6 @@ async function caricaDaFirestore() {
   }
 }
 
-// SALVA DATI SU FIRESTORE
 async function salvaSuFirestore(datiDaSalvare) {
   try {
     console.log('🔄 Salvataggio su Firestore...');
@@ -74,14 +61,12 @@ async function salvaSuFirestore(datiDaSalvare) {
   }
 }
 
-// CARICA DATI (locale + Firestore)
 async function caricaDati() {
   const datiFirestore = await caricaDaFirestore();
   
   if (datiFirestore) {
     dati = datiFirestore;
     
-    // 🛑 CALCOLA AUTOMATICAMENTE L'ID PIÙ ALTO PER EVITARE DUPLICATI
     let maxIdTrovato = 0;
     dati.richieste.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
     dati.registrazioni.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
@@ -121,9 +106,7 @@ async function caricaDati() {
   return dati;
 }
 
-// SALVA DATI (Firestore + localStorage)
 async function salvaDati() {
-  // Protezione per browser che bloccano localStorage
   try {
     localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
   } catch (e) {
@@ -132,9 +115,6 @@ async function salvaDati() {
   await salvaSuFirestore(dati);
 }
 
-// ============================================
-// CALCOLA ORE GIORNATA
-// ============================================
 function calcolaOreGiornata(username, data) {
   const registrazioni = dati.registrazioni.filter(r => 
     r.utente_id === username && 
@@ -155,18 +135,12 @@ function calcolaOreGiornata(username, data) {
   return totaleOre;
 }
 
-// ============================================
-// CONTROLLA ORARIO (dopo le 20:00 non si può modificare)
-// ============================================
 function isOltre20() {
   const ora = new Date();
   const ore = ora.getHours();
   return ore >= 20;
 }
 
-// ============================================
-// CARICA DATI ALL'AVVIO
-// ============================================
 async function init() {
   await caricaDati();
   document.getElementById('login-page').style.display = 'block';
@@ -175,9 +149,6 @@ async function init() {
   document.getElementById('cal-anno').value = anno;
 }
 
-// ============================================
-// LOGIN / LOGOUT
-// ============================================
 function login() {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
@@ -311,9 +282,6 @@ function logout() {
   document.getElementById('password').value = '';
 }
 
-// ============================================
-// TAB
-// ============================================
 function showTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -334,9 +302,6 @@ function showTab(tab) {
   if (tab === 'richiedi') caricaRichiesteDipendente();
 }
 
-// ============================================
-// DARK MODE
-// ============================================
 function toggleDarkMode() {
   const container = document.getElementById('app-container');
   const body = document.body;
@@ -368,9 +333,6 @@ function caricaDarkMode() {
   }
 }
 
-// ============================================
-// MULTI-AZIENDA
-// ============================================
 function caricaSelectAziende() {
   const select = document.getElementById('select-azienda');
   select.innerHTML = '<option value="0">-- Tutte --</option>';
@@ -394,7 +356,7 @@ function caricaSelectAziendeCommesse() {
 function caricaSelectRecuperoCommesse() {
   const select = document.getElementById('recupero-commessa');
   select.innerHTML = '<option value="">-- Seleziona --</option>';
-  dati.commesse.filter(c => c.attivo).forEach(c => {
+  dati.commesse.forEach(c => {
     select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
   });
 }
@@ -424,9 +386,6 @@ function caricaCalendarioFiltrato(usernames) {
   caricaCalendario();
 }
 
-// ============================================
-// GESTIONE AZIENDE - MODALE
-// ============================================
 function apriModalAziende() {
   if (utenteCorrente?.ruolo !== 'admin') {
     alert('Solo gli amministratori possono gestire le aziende');
@@ -449,9 +408,6 @@ function chiudiModalAziende() {
   }
 }
 
-// ============================================
-// AGGIUNGI / LISTA / ELIMINA AZIENDE
-// ============================================
 function aggiungiAzienda() {
   const nome = document.getElementById('azienda-nome').value.trim();
   const msg = document.getElementById('msg-azienda');
@@ -530,17 +486,12 @@ function eliminaAzienda(id) {
   alert('🗑️ Azienda eliminata');
 }
 
-// ============================================
-// ULTIMA REGISTRAZIONE
-// ============================================
 function caricaUltimaRegistrazione() {
   if (utenteCorrente?.ruolo === 'admin') return;
 
-  // SBLOCCA SEMPRE L'ORA INIZIO DI DEFAULT
   document.getElementById('ora-inizio').disabled = false;
   document.getElementById('ora-inizio').style.backgroundColor = 'white';
 
-  // Se sono passate le 20:00
   if (isOltre20()) {
     const infoDiv = document.getElementById('info-registrazione');
     infoDiv.innerHTML = `
@@ -583,9 +534,6 @@ function caricaUltimaRegistrazione() {
     }, registrazioniOggi[0]);
   }
 
-  // ============================================
-  // POMERIGGIO (dopo le 13:00)
-  // ============================================
   if (isPomeriggio) {
     oraInizio.disabled = false;
     oraInizio.style.backgroundColor = 'white';
@@ -596,12 +544,10 @@ function caricaUltimaRegistrazione() {
       const h = parseInt(ultima.ora_fine.split(':')[0]);
       oraInizio.value = h < 13 ? '13:00' : ultima.ora_fine;
     } else {
-      // 🛑 Imposta l'ora ATTUALE, MAI oltre l'ora attuale se siamo pomeriggio
       const oreOra = oreCorrente.toString().padStart(2, '0') + ':00';
       oraInizio.value = (oreCorrente <= 23) ? oreOra : '13:00';
     }
     
-    // 🛑 Controlla che l'ora di fine non sia nel futuro
     const oraCorrenteMinuti = oraCorrente * 60;
     const inizioMinuti = parseInt(oraInizio.value.split(':')[0]) * 60 + parseInt(oraInizio.value.split(':')[1] || 0);
     if (inizioMinuti > oraCorrenteMinuti) {
@@ -616,9 +562,6 @@ function caricaUltimaRegistrazione() {
     return;
   }
 
-  // ============================================
-  // MATTINO (prima delle 13:00)
-  // ============================================
   if (!ultima) {
     oraInizio.disabled = false;
     oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
@@ -629,12 +572,10 @@ function caricaUltimaRegistrazione() {
     return;
   }
 
-  // Mattino con registrazioni: BLOCCA SOLO ORA INIZIO
   oraInizio.value = ultima.ora_fine;
   oraInizio.disabled = true;
   oraInizio.style.backgroundColor = '#f0f0f0';
   
-  // ORA FINE SEMPRE LIBERA
   oraFine.disabled = false;
   oraFine.style.backgroundColor = 'white';
   
@@ -646,9 +587,6 @@ function caricaUltimaRegistrazione() {
   </div>`;
 }
 
-// ============================================
-// COMMESSE
-// ============================================
 function caricaSelectCommesse() {
   const select = document.getElementById('commessa');
   select.innerHTML = '<option value="">-- Seleziona una commessa --</option>';
@@ -713,17 +651,9 @@ function caricaListaCommesse() {
 
   dati.commesse.forEach(c => {
     const azienda = dati.aziende.find(a => a.id === c.azienda_id);
-    
-    // Calcola il totale ore per questa commessa
-    let totaleOreCommessa = 0;
-    dati.registrazioni.filter(r => r.commessa_id === c.id).forEach(r => {
-      totaleOreCommessa += r.ore || 0;
-    });
-
     html += '<tr>';
     html += '<td><strong>' + c.nome + '</strong></td>';
     html += '<td>' + (azienda ? azienda.nome : '-') + '</td>';
-    html += '<td>' + totaleOreCommessa.toFixed(2) + 'h</td>';
     html += '<td>';
     html += '<button class="btn-warning" onclick="apriModificaCommessa(' + c.id + ')" style="margin-right:5px;" title="Modifica"><i class="fas fa-edit"></i></button>';
     html += '<button class="btn-danger" onclick="eliminaCommessa(' + c.id + ')" title="Elimina"><i class="fas fa-trash"></i></button>';
@@ -762,16 +692,12 @@ function eliminaCommessa(id) {
   alert('🗑️ Commessa eliminata');
 }
 
-// ============================================
-// REGISTRAZIONE ORE
-// ============================================
 function salvaRegistrazione() {
   if (utenteCorrente?.ruolo === 'admin') {
     alert('Gli amministratori non possono registrare ore qui');
     return;
   }
 
-  // Controllo ore 20:00
   if (isOltre20()) {
     document.getElementById('msg-registra').innerHTML = `
       <div class="error" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;font-weight:bold;">
@@ -790,7 +716,6 @@ function salvaRegistrazione() {
   const straordinario = document.getElementById('straordinario').checked;
   const msg = document.getElementById('msg-registra');
 
-  // VALIDAZIONE
   if (!commessa_id) {
     msg.innerHTML = '<div class="error">❌ Seleziona una commessa</div>';
     return;
@@ -816,7 +741,6 @@ function salvaRegistrazione() {
     return;
   }
 
-  // 🛑 NUOVO CONTROLLO: L'ORA DI INIZIO NON PUÒ ESSERE NEL FUTURO
   const adesso = new Date();
   const minutiAdesso = adesso.getHours() * 60 + adesso.getMinutes();
   const minutiInizio = parseInt(ora_inizio.split(':')[0]) * 60 + parseInt(ora_inizio.split(':')[1] || 0);
@@ -826,7 +750,6 @@ function salvaRegistrazione() {
     return;
   }
 
-  // Controllo orario mattutino (solo se NON straordinario) - SOGLIA 13:00
   if (!straordinario) {
     const oraCorrente = new Date();
     const oreCorrente = oraCorrente.getHours();
@@ -844,7 +767,6 @@ function salvaRegistrazione() {
     }
   }
 
-  // Controllo sovrapposizioni
   const esistente = dati.registrazioni.find(r => 
     r.utente_id === utenteCorrente.username &&
     r.data === data &&
@@ -858,9 +780,6 @@ function salvaRegistrazione() {
     return;
   }
 
-  // ============================================
-  // CALCOLO ORE CON ARROTONDAMENTO
-  // ============================================
   const [h1, m1] = ora_inizio.split(':').map(Number);
   const [h2, m2] = ora_fine.split(':').map(Number);
   let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
@@ -885,9 +804,6 @@ function salvaRegistrazione() {
     }
   }
 
-  // ============================================
-  // SALVA
-  // ============================================
   dati.registrazioni.push({
     id: prossimoId++,
     utente_id: utenteCorrente.username,
@@ -911,13 +827,9 @@ function salvaRegistrazione() {
   document.getElementById('descrizione').value = '';
   document.getElementById('straordinario').checked = false;
   
-  // Ricarica ultima registrazione per aggiornare l'ora inizio
   caricaUltimaRegistrazione();
 }
 
-// ============================================
-// RICHIESTE (DIPENDENTE)
-// ============================================
 function inviaRichiesta() {
   if (utenteCorrente?.ruolo === 'admin') {
     alert('Gli amministratori non possono fare richieste');
@@ -1065,13 +977,9 @@ function caricaRichiesteDipendente() {
   div.innerHTML = html;
 }
 
-// ============================================
-// RICHIESTE (ADMIN)
-// ============================================
 function caricaRichiesteAdmin() {
   const div = document.getElementById('lista-richieste-admin');
   
-  // 🛑 ELIMINA LE RICHIESTE GIÀ PROCESSATE
   dati.richieste = dati.richieste.filter(r => r.stato === 'pending');
   
   const richieste = dati.richieste;
@@ -1126,7 +1034,6 @@ function approvaRichiesta(id) {
     return;
   }
   
-  // 🛑 IMPEDISCI DOPPIO CLICK: se è già approvata, esci subito
   if (richiesta.stato !== 'pending') {
     alert('⚠️ Questa richiesta è già stata processata.');
     return;
@@ -1134,7 +1041,6 @@ function approvaRichiesta(id) {
   
   richiesta.stato = 'approvata';
 
-  // ✅ Usa SEMPRE l'utente della richiesta
   const utenteIdCorretto = richiesta.utente_id;
 
   if (richiesta.tipo === 'recupero_ore') {
@@ -1142,7 +1048,6 @@ function approvaRichiesta(id) {
     const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
     let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
     
-    // 🛑 CONTROLLO MATEMATICO: se il calcolo è negativo o supera le 12 ore, l'errore è nei dati. Blocca tutto.
     if (oreLavorate <= 0 || oreLavorate > 12) {
       alert('❌ ERRORE DATI: Orario non valido per la richiesta di recupero. Controlla le ore inserite.');
       return;
@@ -1210,16 +1115,13 @@ function approvaRichiesta(id) {
     );
   }
   
-  // Salva su Firestore
   salvaDati();
   
-  // 🛑 RIMUOVI LA CARD DALLO SCHERMO SENZA RICARICARE LA PAGINA
   const card = document.querySelector('.richiesta-card');
   if (card) {
     card.remove();
   }
   
-  // Aggiorna la lista e il badge
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
@@ -1247,7 +1149,6 @@ function rifiutaRichiesta(id) {
   
   salvaDati();
   
-  // Rimuovi fisicamente la richiesta dallo schermo senza ricaricare la pagina
   const card = document.querySelector('.richiesta-card');
   if (card) {
     card.remove();
@@ -1276,9 +1177,6 @@ function mostraRichieste() {
   showTab('richieste');
 }
 
-// ============================================
-// NOTIFICHE
-// ============================================
 function aggiungiNotifica(utente_id, tipo, messaggio, link) {
   dati.notifiche.push({
     id: prossimoId++,
@@ -1355,9 +1253,6 @@ function chiudiNotifiche() {
   document.getElementById('modal-notifiche').classList.remove('active');
 }
 
-// ============================================
-// CAMBIA PASSWORD (ADMIN)
-// ============================================
 function apriModificaPassword() {
   if (utenteCorrente?.ruolo !== 'admin') {
     alert('Solo gli amministratori possono cambiare la password');
@@ -1401,9 +1296,6 @@ function salvaNuovaPassword() {
   }, 1500);
 }
 
-// ============================================
-// ESPORTA ORE MESE
-// ============================================
 function esportaOreMese() {
   if (utenteCorrente?.ruolo !== 'admin') {
     alert('Solo gli amministratori possono esportare');
@@ -1532,9 +1424,6 @@ function esportaOreMese() {
   alert('✅ File esportato con successo!');
 }
 
-// ============================================
-// ESPORTA PDF
-// ============================================
 function esportaPDF() {
   const output = document.getElementById('calendario-output');
   const content = output.innerHTML;
@@ -1612,9 +1501,6 @@ function esportaPDF() {
   printWindow.document.close();
 }
 
-// ============================================
-// GESTIONE DIPENDENTI
-// ============================================
 function aggiungiDipendente() {
   const nome = document.getElementById('dip-nome').value.trim();
   const cognome = document.getElementById('dip-cognome').value.trim();
@@ -1786,9 +1672,6 @@ function eliminaDipendente(username) {
   alert('🗑️ Dipendente eliminato');
 }
 
-// ============================================
-// MODIFICA ORE (ADMIN)
-// ============================================
 function caricaSelectDipendentiModifica() {
   const select = document.getElementById('modifica-dipendente');
   select.innerHTML = '<option value="">-- Seleziona --</option>';
@@ -1843,7 +1726,6 @@ function caricaRegistrazioniModifica() {
     html += '</tr>';
   });
 
-  // Totale giornata con indicazione straordinario (ROSSO se > 8)
   const bgColor = isOltre8 ? '#ffebee' : '#e8f5e9';
   const textColor = isOltre8 ? '#d32f2f' : '#2e7d32';
   html += `
@@ -1894,9 +1776,6 @@ function eliminaRegistrazione(id) {
   alert('🗑️ Registrazione eliminata');
 }
 
-// ============================================
-// CALENDARIO
-// ============================================
 function caricaSelectDipendentiCalendario() {
   const select = document.getElementById('cal-dipendente');
   select.innerHTML = '<option value="">-- Tutti --</option>';
@@ -2085,7 +1964,6 @@ function caricaCalendario() {
       html += `<td style="padding:6px;border:${borderStyle};text-align:center;background:${bgColor};font-weight:${cella === 'A' ? 'bold' : 'normal'};color:${cella === 'A' ? '#d32f2f' : '#333'};">${cella}</td>`;
     }
 
-    // TOTALE GIORNATA - ROSSO SE > 8 ORE
     const isOltre8 = totaleOre > 8;
     const bgTotal = isOltre8 ? '#ffebee' : '#e8f5e9';
     const colorTotal = isOltre8 ? '#d32f2f' : '#2e7d32';
@@ -2097,11 +1975,7 @@ function caricaCalendario() {
   output.innerHTML = html;
 }
 
-// ============================================
-// AVVIO
-// ============================================
 document.addEventListener('DOMContentLoaded', function() {
-  // Carica i dati prima di mostrare la pagina
   caricaDati().then(() => {
     document.getElementById('login-page').style.display = 'block';
     document.getElementById('main-page').style.display = 'none';
@@ -2134,6 +2008,7 @@ document.addEventListener('click', function(e) {
     chiudiModalAziende();
   }
 });
+
 // ============================================
 // NUOVA GESTIONE COMMESSE (MENU E ANALISI)
 // ============================================
@@ -2149,7 +2024,6 @@ function mostraAnalizzaCommessa() {
   document.getElementById('commesse-aggiungi').style.display = 'none';
   document.getElementById('commesse-analizza').style.display = 'block';
   
-  // Carica le commesse nel menu a tendina
   const select = document.getElementById('analizza-commessa-select');
   select.innerHTML = '<option value="">-- Seleziona --</option>';
   dati.commesse.forEach(c => {
@@ -2173,7 +2047,6 @@ function caricaAnalisiCommessa() {
   const registrazioni = dati.registrazioni.filter(r => r.commessa_id === id);
   let totaleOre = 0;
 
-  // Raggruppa per data
   const dateUniche = [...new Set(registrazioni.map(r => r.data))].sort();
 
   let html = '<div style="margin-top:20px;padding:15px;background:#f8f9fa;border-radius:8px;border:1px solid #ddd;">';
@@ -2209,3 +2082,61 @@ function caricaAnalisiCommessa() {
   html += '</div>';
   document.getElementById('analisi-commessa-output').innerHTML = html;
 }
+
+// ============================================
+// 🎁 SORPRESA: FUNZIONE TOTALE ORE MESE (ADMIN)
+// Mostra il totale ore per mese in cima al Calendario
+// ============================================
+function mostraTotaliMese() {
+  if (!utenteCorrente) return;
+  
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+  if (!mese || !anno) return;
+  
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+  
+  let totaleGenerale = 0;
+  let totaleDipendenti = 0;
+  
+  dati.registrazioni.forEach(r => {
+    if (r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+      totaleGenerale += r.ore || 0;
+    }
+  });
+  
+  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
+    let oreDipendente = 0;
+    dati.registrazioni.forEach(r => {
+      if (r.utente_id === u.username && r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+        oreDipendente += r.ore || 0;
+      }
+    });
+    totaleDipendenti += oreDipendente;
+  });
+  
+  const container = document.getElementById('calendario-output');
+  if (container) {
+    const totaliHTML = `
+      <div style="background:#e8f5e9;border:2px solid #4CAF50;border-radius:10px;padding:15px;margin-bottom:20px;text-align:center;">
+        <h4 style="color:#2e7d32;margin:0;">📊 TOTALE MESE: ${meseNome} ${anno}</h4>
+        <p style="margin:5px 0;font-size:1.2em;"><strong>${totaleGenerale.toFixed(2)} ore</strong> lavorate totali</p>
+        <small style="color:#666;">Dipendenti attivi: ${dati.utenti.filter(u => u.ruolo === 'dipendente').length}</small>
+      </div>
+    `;
+    container.innerHTML = totaliHTML + container.innerHTML;
+  }
+}
+
+// Chiama la sorpresa quando si apre il calendario
+const originalCaricaCalendario = caricaCalendario;
+caricaCalendario = function() {
+  originalCaricaCalendario();
+  setTimeout(() => {
+    const output = document.getElementById('calendario-output');
+    if (output && !output.innerHTML.includes('📊 TOTALE MESE')) {
+      mostraTotaliMese();
+    }
+  }, 100);
+};
