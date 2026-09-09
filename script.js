@@ -2140,3 +2140,20 @@ caricaCalendario = function() {
     }
   }, 100);
 };
+// 🛠️ PULSANTE AGGIORNA RICHIESTE
+function aggiornaRichiesteManuale() {
+  // Ricarica i dati dal database
+  caricaDati().then(() => {
+    // Se sei admin, aggiorna la lista
+    if (utenteCorrente && utenteCorrente.ruolo === 'admin') {
+      caricaRichiesteAdmin();
+      aggiornaBadgeRichieste();
+      alert('✅ Richieste aggiornate!');
+    } else {
+      alert('⚠️ Non sei autorizzato a vedere le richieste.');
+    }
+  }).catch((err) => {
+    console.error('❌ Errore aggiornamento:', err);
+    alert('❌ Errore: ' + err.message);
+  });
+}
