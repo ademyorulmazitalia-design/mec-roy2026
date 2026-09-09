@@ -2134,3 +2134,78 @@ document.addEventListener('click', function(e) {
     chiudiModalAziende();
   }
 });
+// ============================================
+// NUOVA GESTIONE COMMESSE (MENU E ANALISI)
+// ============================================
+function mostraAggiungiCommessa() {
+  document.getElementById('commesse-menu').style.display = 'none';
+  document.getElementById('commesse-aggiungi').style.display = 'block';
+  document.getElementById('commesse-analizza').style.display = 'none';
+  caricaListaCommesse();
+}
+
+function mostraAnalizzaCommessa() {
+  document.getElementById('commesse-menu').style.display = 'none';
+  document.getElementById('commesse-aggiungi').style.display = 'none';
+  document.getElementById('commesse-analizza').style.display = 'block';
+  
+  // Carica le commesse nel menu a tendina
+  const select = document.getElementById('analizza-commessa-select');
+  select.innerHTML = '<option value="">-- Seleziona --</option>';
+  dati.commesse.forEach(c => {
+    select.innerHTML += '<option value="' + c.id + '">' + c.nome + '</option>';
+  });
+}
+
+function tornaMenuCommesse() {
+  document.getElementById('commesse-menu').style.display = 'block';
+  document.getElementById('commesse-aggiungi').style.display = 'none';
+  document.getElementById('commesse-analizza').style.display = 'none';
+}
+
+function caricaAnalisiCommessa() {
+  const id = parseInt(document.getElementById('analizza-commessa-select').value);
+  if (!id) return;
+
+  const commessa = dati.commesse.find(c => c.id === id);
+  if (!commessa) return;
+
+  const registrazioni = dati.registrazioni.filter(r => r.commessa_id === id);
+  let totaleOre = 0;
+
+  // Raggruppa per data
+  const dateUniche = [...new Set(registrazioni.map(r => r.data))].sort();
+
+  let html = '<div style="margin-top:20px;padding:15px;background:#f8f9fa;border-radius:8px;border:1px solid #ddd;">';
+  html += '<h3><i class="fas fa-folder-open"></i> ' + commessa.nome + '</h3>';
+  html += '<p><strong>Totale Ore Lavorate:</strong> ' + registrazioni.reduce((sum, r) => sum + (r.ore || 0), 0).toFixed(2) + 'h</p>';
+  html += '<hr>';
+
+  if (dateUniche.length === 0) {
+    html += '<p class="text-muted">Nessuna ora registrata su questa commessa.</p>';
+  } else {
+    dateUniche.forEach(data => {
+      html += '<div style="margin-bottom:20px;">';
+      html += '<h4 style="background:#00695C;color:white;padding:8px;border-radius:5px;"><i class="fas fa-calendar-day"></i> ' + data + '</h4>';
+      html += '<table style="width:100%;border-collapse:collapse;">';
+      html += '<thead><tr><th style="border:1px solid #ddd;padding:8px;">Dipendente</th><th style="border:1px solid #ddd;padding:8px;">Ore</th><th style="border:1px solid #ddd;padding:8px;">Descrizione</th></tr></thead>';
+      html += '<tbody>';
+
+      registrazioni.filter(r => r.data === data).forEach(r => {
+        const utente = dati.utenti.find(u => u.username === r.utente_id);
+        const nomeDipendente = utente ? utente.nome + ' ' + utente.cognome : r.utente_id;
+        
+        html += '<tr>';
+        html += '<td style="border:1px solid #ddd;padding:8px;">' + nomeDipendente + '</td>';
+        html += '<td style="border:1px solid #ddd;padding:8px;">' + (r.ore ? r.ore.toFixed(2) : '-') + 'h</td>';
+        html += '<td style="border:1px solid #ddd;padding:8px;">' + (r.descrizione || '-') + '</td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div>';
+    });
+  }
+
+  html += '</div>';
+  document.getElementById('analisi-commessa-output').innerHTML = html;
+}
