@@ -584,7 +584,7 @@ function caricaUltimaRegistrazione() {
   }
 
   // ============================================
-  // POMERIGGIO (dopo le 12:00)
+  // POMERIGGIO (dopo le 13:00)
   // ============================================
   if (isPomeriggio) {
     oraInizio.disabled = false;
@@ -592,7 +592,7 @@ function caricaUltimaRegistrazione() {
     oraFine.disabled = false;
     oraFine.style.backgroundColor = 'white';
 
-        if (ultima) {
+    if (ultima) {
       const h = parseInt(ultima.ora_fine.split(':')[0]);
       oraInizio.value = h < 13 ? '13:00' : ultima.ora_fine;
     } else {
@@ -617,7 +617,7 @@ function caricaUltimaRegistrazione() {
   }
 
   // ============================================
-  // MATTINO (prima delle 12:00)
+  // MATTINO (prima delle 13:00)
   // ============================================
   if (!ultima) {
     oraInizio.disabled = false;
@@ -708,7 +708,7 @@ function caricaListaCommesse() {
   }
 
   let html = '<div class="table-wrapper"><table><thead><tr>';
-  html += '<th>Nome</th><th>Azienda</th><th>Stato</th><th>Azioni</th>';
+  html += '<th>Nome</th><th>Azienda</th><th>Azioni</th>';
   html += '</tr></thead><tbody>';
 
   dati.commesse.forEach(c => {
@@ -716,15 +716,42 @@ function caricaListaCommesse() {
     html += '<tr>';
     html += '<td><strong>' + c.nome + '</strong></td>';
     html += '<td>' + (azienda ? azienda.nome : '-') + '</td>';
-    html += '<td>' + (c.attivo ? '✅ Attivo' : '❌ Disattivo') + '</td>';
-    html += '<td><button class="btn-danger" onclick="toggleCommessa(' + c.id + ')">';
-    html += c.attivo ? 'Disattiva' : 'Attiva';
-    html += '</button></td>';
+    html += '<td>';
+    html += '<button class="btn-warning" onclick="apriModificaCommessa(' + c.id + ')" style="margin-right:5px;" title="Modifica"><i class="fas fa-edit"></i></button>';
+    html += '<button class="btn-danger" onclick="eliminaCommessa(' + c.id + ')" title="Elimina"><i class="fas fa-trash"></i></button>';
+    html += '</td>';
     html += '</tr>';
   });
 
   html += '</tbody></table></div>';
   div.innerHTML = html;
+}
+
+function apriModificaCommessa(id) {
+  const commessa = dati.commesse.find(c => c.id === id);
+  if (!commessa) return;
+  
+  const nuovoNome = prompt('Inserisci il nuovo nome della commessa:', commessa.nome);
+  if (nuovoNome && nuovoNome.trim() !== '') {
+    commessa.nome = nuovoNome.trim();
+    salvaDati();
+    caricaListaCommesse();
+    caricaSelectCommesse();
+    alert('✅ Commessa modificata con successo!');
+  }
+}
+
+function eliminaCommessa(id) {
+  if (!confirm('Eliminare questa commessa? Verranno eliminate anche tutte le ore registrate su di essa.')) return;
+  
+  dati.commesse = dati.commesse.filter(c => c.id !== id);
+  dati.registrazioni = dati.registrazioni.filter(r => r.commessa_id !== id);
+  
+  salvaDati();
+  caricaListaCommesse();
+  caricaSelectCommesse();
+  caricaSelectRecuperoCommesse();
+  alert('🗑️ Commessa eliminata');
 }
 
 function toggleCommessa(id) {
@@ -787,7 +814,7 @@ function salvaRegistrazione() {
     msg.innerHTML = '<div class="error">❌ Inserisci una descrizione del lavoro svolto</div>';
     return;
   }
-   if (ora_inizio >= ora_fine) {
+  if (ora_inizio >= ora_fine) {
     msg.innerHTML = '<div class="error">L\'ora fine deve essere dopo l\'ora inizio</div>';
     return;
   }
@@ -801,17 +828,18 @@ function salvaRegistrazione() {
     msg.innerHTML = `<div class="error">❌ Non puoi segnare un orario nel futuro! L'ora attuale è ${adesso.getHours()}:${String(adesso.getMinutes()).padStart(2, '0')}.</div>`;
     return;
   }
-  // Controllo orario mattutino (solo se NON straordinario)
+
+  // Controllo orario mattutino (solo se NON straordinario) - SOGLIA 13:00
   if (!straordinario) {
     const oraCorrente = new Date();
     const oreCorrente = oraCorrente.getHours();
-    const isPomeriggio = oreCorrente >= 12;
+    const isPomeriggio = oreCorrente >= 13;
     const oraInizioNum = parseInt(ora_inizio.split(':')[0]);
 
-    if (isPomeriggio && oraInizioNum < 12) {
+    if (isPomeriggio && oraInizioNum < 13) {
       msg.innerHTML = `
         <div class="error">
-          ❌ Non puoi segnare ore mattutine dopo le 12:00.<br>
+          ❌ Non puoi segnare ore mattutine dopo le 13:00.<br>
           <small>Se hai dimenticato di segnare le ore, usa <strong>"Richiedi Recupero Ore"</strong> nella sezione Richieste.</small>
         </div>
       `;
