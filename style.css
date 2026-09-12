@@ -197,6 +197,22 @@ header {
   font-size: 1em;
 }
 
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 0.95em;
+}
+.btn-secondary:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+}
+
 thead {
   background: #00695C;
   color: white;
@@ -639,6 +655,196 @@ input[disabled] {
 }
 
 /* ============================================
+   MODALE DETTAGLIO COMMESSA
+   ============================================ */
+.modal-dettaglio-commessa-content {
+  max-width: 1200px !important;
+  width: 95% !important;
+  max-height: 90vh !important;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.modal-logo {
+  max-height: 50px;
+  max-width: 50px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.modal-header-left h2 {
+  margin: 0;
+  color: #00695C;
+  font-size: 1.4em;
+}
+
+.modal-header-left small {
+  color: #888;
+  font-size: 0.85em;
+}
+
+/* FILTRI */
+.filtri-commessa {
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.filtri-row {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.filtro-group {
+  flex: 1;
+  min-width: 180px;
+}
+
+.filtro-group label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+.filtro-group label i {
+  color: #00695C;
+  width: 18px;
+}
+
+.filtro-group input[type="date"],
+.filtro-group input[type="text"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9em;
+  transition: border-color 0.3s;
+}
+
+.filtro-group input:focus {
+  outline: none;
+  border-color: #00695C;
+  box-shadow: 0 0 0 3px rgba(0,105,92,0.1);
+}
+
+.filtri-dipendenti-group {
+  flex: 100%;
+}
+
+.filtro-dipendenti-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 10px;
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+}
+
+.filtro-dipendente-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 2px solid #ddd;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9em;
+  user-select: none;
+}
+
+.filtro-dipendente-item:hover {
+  background: #e8f5e9;
+  border-color: #00695C;
+}
+
+.filtro-dipendente-item.attivo {
+  background: #00695C;
+  color: white;
+  border-color: #00695C;
+}
+
+.filtro-dipendente-item input[type="checkbox"] {
+  display: none;
+}
+
+.filtri-azioni {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.contatore-registrazioni {
+  color: #00695C;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* OUTPUT DETTAGLIO */
+.dettaglio-output {
+  margin-top: 20px;
+}
+
+.gruppo-dipendente {
+  margin-bottom: 25px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+}
+
+.gruppo-dipendente-header {
+  background: linear-gradient(135deg, #00695C 0%, #004D40 100%);
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gruppo-dipendente-header h4 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.gruppo-dipendente-header .subtotale {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.totale-generale {
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  border-radius: 10px;
+  padding: 15px 20px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1em;
+  color: #856404;
+  margin-top: 20px;
+}
+
+/* ============================================
    LOGIN
    ============================================ */
 .login-box {
@@ -928,6 +1134,63 @@ body.dark-mode::before {
   border-color: #2a2a5a;
 }
 
+/* DARK MODE - MODALE DETTAGLIO COMMESSA */
+.dark-mode .filtri-commessa {
+  background: #1a1a3e;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .filtro-group label {
+  color: #e0e0e0;
+}
+
+.dark-mode .filtro-group input {
+  background: #0f3460;
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .filtro-dipendenti-list {
+  background: #0f3460;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .filtro-dipendente-item {
+  background: #1a1a3e;
+  border-color: #2a2a5a;
+  color: #e0e0e0;
+}
+
+.dark-mode .filtro-dipendente-item:hover {
+  background: #00695C;
+  border-color: #00695C;
+}
+
+.dark-mode .filtro-dipendente-item.attivo {
+  background: #00695C;
+  border-color: #00695C;
+  color: white;
+}
+
+.dark-mode .gruppo-dipendente {
+  background: #1a1a3e;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .totale-generale {
+  background: #3a2a1a;
+  border-color: #ffc107;
+  color: #ffc107;
+}
+
+.dark-mode .modal-header-left h2 {
+  color: #4db6ac;
+}
+
+.dark-mode .modal-header-left small {
+  color: #aaa;
+}
+
 /* ============================================
    RESPONSIVE
    ============================================ */
@@ -951,9 +1214,73 @@ body.dark-mode::before {
   .richiesta-card .azioni { justify-content: center; }
   .login-box { padding: 15px; }
   #select-azienda { width: 100%; }
+
+  /* MODALE DETTAGLIO COMMESSA - RESPONSIVE */
+  .modal-dettaglio-commessa-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+
+  .modal-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .modal-logo {
+    max-height: 40px;
+    max-width: 40px;
+  }
+
+  .modal-header-left h2 {
+    font-size: 1.1em;
+  }
+
+  .filtri-row {
+    flex-direction: column;
+  }
+
+  .filtro-group {
+    min-width: 100%;
+  }
+
+  .filtri-azioni {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filtri-azioni button {
+    width: 100%;
+  }
+
+  .contatore-registrazioni {
+    text-align: center;
+    margin-top: 10px;
+  }
+
+  .filtro-dipendenti-list {
+    max-height: 120px;
+  }
+
+  .gruppo-dipendente-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 
 @media (max-width: 480px) {
   .tab { font-size: 0.7em; padding: 6px 8px; }
   .calendario-giorno { min-height: 30px; padding: 3px 1px; font-size: 0.6em; }
+
+  .dettaglio-output table {
+    font-size: 0.8em;
+  }
+
+  .dettaglio-output th,
+  .dettaglio-output td {
+    padding: 6px 4px;
+  }
 }
