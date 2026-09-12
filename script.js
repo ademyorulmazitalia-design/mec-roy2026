@@ -30,6 +30,13 @@ db.enablePersistence()
 let dati = {};
 let utenteCorrente = null;
 let prossimoId = 1; 
+let commessaCorrenteDettaglio = null;
+let filtriCommessa = {
+  dataInizio: '',
+  dataFine: '',
+  ricerca: '',
+  dipendenti: []
+};
 
 async function caricaDaFirestore() {
   try {
@@ -67,6 +74,15 @@ async function caricaDati() {
   if (datiFirestore) {
     dati = datiFirestore;
     
+    // Aggiungi data_creazione alle commesse che non ce l'hanno
+    if (dati.commesse) {
+      dati.commesse.forEach(c => {
+        if (!c.data_creazione) {
+          c.data_creazione = new Date().toISOString();
+        }
+      });
+    }
+    
     let maxIdTrovato = 0;
     dati.richieste.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
     dati.registrazioni.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
@@ -82,6 +98,14 @@ async function caricaDati() {
     if (!parsed.aziende) {
       parsed.aziende = [{ id: 1, nome: 'MEC-ROY srls' }];
     }
+    if (!parsed.commesse) {
+      parsed.commesse = [];
+    }
+    parsed.commesse.forEach(c => {
+      if (!c.data_creazione) {
+        c.data_creazione = new Date().toISOString();
+      }
+    });
     dati = parsed;
     await salvaSuFirestore(dati);
     return dati;
@@ -622,7 +646,8 @@ function aggiungiCommessa() {
     id: maxId + 1,
     nome: nome,
     azienda_id: azienda_id,
-    attivo: true
+    attivo: true,
+    data_creazione: new Date().toISOString()
   });
 
   salvaDati();
@@ -1227,7 +1252,7 @@ function mostraNotifiche() {
   let html = '';
   notifiche.forEach(n => {
     const data = new Date(n.data).toLocaleDateString('it-IT') + ' ' + new Date(n.data).toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
-    const classe = n.letto ? 'notifica-item letto' : 'notifica-item non-letto';
+    const classe = n.letto ? 'notifica-item letto' : 'notifica-item non letto';
     html += `
       <div class="${classe}" onclick="segnaLetta(${n.id})">
         <span class="notifica-testo">${n.messaggio}</span>
@@ -1945,8 +1970,17 @@ function caricaCalendario() {
               }
             }
           } else {
-            cella = 'A';
-            bgColor = '#f5f5f5';
+            const oggi = new Date();
+            oggi.setHours(0, 0, 0, 0);
+            const dataGiorno = new Date(data + 'T00:00:00');
+            
+            if (dataGiorno > oggi) {
+              cella = '';
+              bgColor = 'white';
+            } else {
+              cella = 'A';
+              bgColor = '#f5f5f5';
+            }
           }
         }
       }
@@ -1975,42 +2009,8 @@ function caricaCalendario() {
   output.innerHTML = html;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  caricaDati().then(() => {
-    document.getElementById('login-page').style.display = 'block';
-    document.getElementById('main-page').style.display = 'none';
-    const anno = new Date().getFullYear();
-    document.getElementById('cal-anno').value = anno;
-  }).catch((err) => {
-    console.error('❌ Errore caricamento dati:', err);
-    document.getElementById('login-page').style.display = 'block';
-    document.getElementById('main-page').style.display = 'none';
-  });
-});
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-notifiche');
-  if (e.target === modal) {
-    chiudiNotifiche();
-  }
-});
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-password');
-  if (e.target === modal) {
-    chiudiModificaPassword();
-  }
-});
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-aziende');
-  if (e.target === modal) {
-    chiudiModalAziende();
-  }
-});
-
 // ============================================
-// NUOVA GESTIONE COMMESSE (MENU E ANALISI)
+// GESTIONE COMMESSE - MENU
 // ============================================
 function mostraAggiungiCommessa() {
   document.getElementById('commesse-menu').style.display = 'none';
@@ -2084,8 +2084,361 @@ function caricaAnalisiCommessa() {
 }
 
 // ============================================
-// 🎁 SORPRESA: FUNZIONE TOTALE ORE MESE (ADMIN)
-// Mostra il totale ore per mese in cima al Calendario
+// NUOVA MODALE DETTAGLIO COMMESSA
+// ============================================
+function apriDettaglioCommessa(id) {
+  const commessa = dati.commesse.find(c => c.id === id);
+  if (!commessa) {
+    alert('❌ Commessa non trovata');
+    return;
+  }
+  
+  commessaCorrenteDettaglio = id;
+  
+  // Reset filtri
+  filtriCommessa = {
+    dataInizio: '',
+    dataFine: '',
+    ricerca: '',
+    dipendenti: []
+  };
+  
+  // Popola header
+  document.getElementById('dettaglio-commessa-nome').textContent = commessa.nome;
+  const dataCreazione = commessa.data_creazione ? 
+    new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 
+    'N/D';
+  document.getElementById('dettaglio-commessa-data').textContent = 'Creata il ' + dataCreazione;
+  
+  // Reset input filtri
+  document.getElementById('filtro-data-inizio').value = '';
+  document.getElementById('filtro-data-fine').value = '';
+  document.getElementById('filtro-ricerca').value = '';
+  
+  // Popola lista dipendenti con checkbox
+  popolaFiltroDipendenti();
+  
+  // Mostra modale
+  document.getElementById('modal-dettaglio-commessa').classList.add('active');
+  
+  // Carica dati
+  applicaFiltriCommessa();
+}
+
+function popolaFiltroDipendenti() {
+  const container = document.getElementById('filtro-dipendenti');
+  container.innerHTML = '';
+  
+  // Solo i dipendenti che hanno registrazioni su questa commessa
+  const utentiConRegistrazioni = [...new Set(
+    dati.registrazioni
+      .filter(r => r.commessa_id === commessaCorrenteDettaglio)
+      .map(r => r.utente_id)
+  )];
+  
+  if (utentiConRegistrazioni.length === 0) {
+    container.innerHTML = '<p class="text-muted" style="margin:0;">Nessun dipendente con registrazioni</p>';
+    return;
+  }
+  
+  utentiConRegistrazioni.forEach(username => {
+    const utente = dati.utenti.find(u => u.username === username);
+    if (!utente) return;
+    
+    const item = document.createElement('div');
+    item.className = 'filtro-dipendente-item';
+    item.dataset.username = username;
+    item.innerHTML = `
+      <i class="fas fa-user"></i>
+      <span>${utente.nome} ${utente.cognome}</span>
+    `;
+    item.onclick = function() {
+      const idx = filtriCommessa.dipendenti.indexOf(username);
+      if (idx > -1) {
+        filtriCommessa.dipendenti.splice(idx, 1);
+        this.classList.remove('attivo');
+      } else {
+        filtriCommessa.dipendenti.push(username);
+        this.classList.add('attivo');
+      }
+      applicaFiltriCommessa();
+    };
+    container.appendChild(item);
+  });
+}
+
+function applicaFiltriCommessa() {
+  if (!commessaCorrenteDettaglio) return;
+  
+  filtriCommessa.dataInizio = document.getElementById('filtro-data-inizio').value;
+  filtriCommessa.dataFine = document.getElementById('filtro-data-fine').value;
+  filtriCommessa.ricerca = document.getElementById('filtro-ricerca').value.toLowerCase().trim();
+  
+  let registrazioni = dati.registrazioni.filter(r => 
+    r.commessa_id === commessaCorrenteDettaglio && r.tipo === 'lavoro'
+  );
+  
+  // Filtro data inizio
+  if (filtriCommessa.dataInizio) {
+    registrazioni = registrazioni.filter(r => r.data >= filtriCommessa.dataInizio);
+  }
+  
+  // Filtro data fine
+  if (filtriCommessa.dataFine) {
+    registrazioni = registrazioni.filter(r => r.data <= filtriCommessa.dataFine);
+  }
+  
+  // Filtro dipendenti (multiplo)
+  if (filtriCommessa.dipendenti.length > 0) {
+    registrazioni = registrazioni.filter(r => 
+      filtriCommessa.dipendenti.includes(r.utente_id)
+    );
+  }
+  
+  // Filtro ricerca testuale
+  if (filtriCommessa.ricerca) {
+    registrazioni = registrazioni.filter(r => {
+      const utente = dati.utenti.find(u => u.username === r.utente_id);
+      const nome = utente ? (utente.nome + ' ' + utente.cognome).toLowerCase() : '';
+      const descrizione = (r.descrizione || '').toLowerCase();
+      const data = r.data || '';
+      return nome.includes(filtriCommessa.ricerca) || 
+             descrizione.includes(filtriCommessa.ricerca) ||
+             data.includes(filtriCommessa.ricerca);
+    });
+  }
+  
+  // Ordina per data
+  registrazioni.sort((a, b) => b.data.localeCompare(a.data));
+  
+  // Aggiorna contatore
+  document.getElementById('dettaglio-contatore').textContent = 
+    `📊 ${registrazioni.length} registrazioni visualizzate`;
+  
+  // Raggruppa per dipendente
+  const perDipendente = {};
+  registrazioni.forEach(r => {
+    if (!perDipendente[r.utente_id]) {
+      perDipendente[r.utente_id] = [];
+    }
+    perDipendente[r.utente_id].push(r);
+  });
+  
+  // Genera HTML
+  const output = document.getElementById('dettaglio-commessa-output');
+  
+  if (registrazioni.length === 0) {
+    output.innerHTML = '<p class="text-muted">Nessuna registrazione trovata con i filtri applicati.</p>';
+    return;
+  }
+  
+  let html = '';
+  let totaleGenerale = 0;
+  
+  Object.keys(perDipendente).forEach(username => {
+    const utente = dati.utenti.find(u => u.username === username);
+    const nomeDipendente = utente ? utente.nome + ' ' + utente.cognome : username;
+    
+    let totaleDipendente = 0;
+    
+    html += `<div class="gruppo-dipendente">`;
+    html += `<div class="gruppo-dipendente-header">`;
+    html += `<h4><i class="fas fa-user"></i> ${nomeDipendente}</h4>`;
+    
+    // Calcola subtotale
+    perDipendente[username].forEach(r => {
+      totaleDipendente += r.ore || 0;
+    });
+    
+    html += `<span class="subtotale">${totaleDipendente.toFixed(2)}h</span>`;
+    html += `</div>`;
+    
+    html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+    html += `<table>`;
+    html += `<thead><tr>
+      <th>Data</th>
+      <th>Commessa</th>
+      <th>Inizio</th>
+      <th>Fine</th>
+      <th>Ore</th>
+      <th>Descrizione</th>
+    </tr></thead>`;
+    html += `<tbody>`;
+    
+    perDipendente[username].forEach(r => {
+      const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+      const [h1, m1] = r.ora_inizio.split(':').map(Number);
+      const [h2, m2] = r.ora_fine.split(':').map(Number);
+      const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+      
+      const isStraordinario = r.straordinario ? ' ⭐' : '';
+      const isRecupero = r.recupero ? ' ⏰' : '';
+      
+      html += `<tr>`;
+      html += `<td>${r.data}</td>`;
+      html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
+      html += `<td>${r.ora_inizio}</td>`;
+      html += `<td>${r.ora_fine}</td>`;
+      html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
+      html += `<td>${r.descrizione || '-'}</td>`;
+      html += `</tr>`;
+    });
+    
+    html += `</tbody></table></div>`;
+    html += `</div>`;
+    
+    totaleGenerale += totaleDipendente;
+  });
+  
+  html += `<div class="totale-generale">
+    <i class="fas fa-calculator"></i> TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h
+  </div>`;
+  
+  output.innerHTML = html;
+}
+
+function resetFiltriCommessa() {
+  filtriCommessa = {
+    dataInizio: '',
+    dataFine: '',
+    ricerca: '',
+    dipendenti: []
+  };
+  
+  document.getElementById('filtro-data-inizio').value = '';
+  document.getElementById('filtro-data-fine').value = '';
+  document.getElementById('filtro-ricerca').value = '';
+  
+  // Rimuovi active da tutti i dipendenti
+  document.querySelectorAll('.filtro-dipendente-item').forEach(item => {
+    item.classList.remove('attivo');
+  });
+  
+  applicaFiltriCommessa();
+}
+
+function chiudiDettaglioCommessa() {
+  document.getElementById('modal-dettaglio-commessa').classList.remove('active');
+  commessaCorrenteDettaglio = null;
+}
+
+function esportaPDFCommessa() {
+  if (!commessaCorrenteDettaglio) {
+    alert('❌ Nessuna commessa selezionata');
+    return;
+  }
+  
+  const commessa = dati.commesse.find(c => c.id === commessaCorrenteDettaglio);
+  if (!commessa) return;
+  
+  const content = document.getElementById('dettaglio-commessa-output').innerHTML;
+  
+  if (!content || content.includes('Nessuna registrazione')) {
+    alert('⚠️ Nessuna registrazione da esportare');
+    return;
+  }
+  
+  const printWindow = window.open('', '_blank', 'width=1200,height=800');
+  
+  if (!printWindow) {
+    alert('❌ Impossibile aprire la finestra di stampa. Consentire i popup per questo sito.');
+    return;
+  }
+  
+  // Costruisci info filtri
+  let infoFiltri = '';
+  if (filtriCommessa.dataInizio || filtriCommessa.dataFine) {
+    infoFiltri += `<p><strong>Periodo:</strong> `;
+    if (filtriCommessa.dataInizio) infoFiltri += `dal ${filtriCommessa.dataInizio} `;
+    if (filtriCommessa.dataFine) infoFiltri += `al ${filtriCommessa.dataFine}`;
+    infoFiltri += `</p>`;
+  }
+  if (filtriCommessa.dipendenti.length > 0) {
+    const nomiDip = filtriCommessa.dipendenti.map(u => {
+      const ut = dati.utenti.find(x => x.username === u);
+      return ut ? ut.nome + ' ' + ut.cognome : u;
+    }).join(', ');
+    infoFiltri += `<p><strong>Dipendenti:</strong> ${nomiDip}</p>`;
+  }
+  if (filtriCommessa.ricerca) {
+    infoFiltri += `<p><strong>Ricerca:</strong> "${filtriCommessa.ricerca}"</p>`;
+  }
+  
+  const logoHTML = document.querySelector('.logo-small') ? 
+    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
+  
+  const dataCreazione = commessa.data_creazione ? 
+    new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 
+    'N/D';
+  
+  const style = `
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+      th { background: #00695C; color: white; font-weight: bold; }
+      tr:nth-child(even) { background: #f9f9f9; }
+      .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
+      .header h2 { color: #00695C; margin: 5px 0; }
+      .header h3 { color: #333; margin: 5px 0; }
+      .info-filtri { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 12px; }
+      .info-filtri p { margin: 4px 0; }
+      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
+      .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+      .logo-small-img { max-height: 50px; }
+      .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
+      .gruppo-dipendente { margin-bottom: 20px; page-break-inside: avoid; }
+      .gruppo-dipendente-header { background: #00695C; color: white; padding: 8px 12px; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; }
+      .gruppo-dipendente-header h4 { margin: 0; color: white; }
+      .subtotale { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+      .totale-generale { background: #fff3cd; border: 2px solid #ffc107; padding: 12px; text-align: center; font-weight: bold; font-size: 14px; border-radius: 8px; color: #856404; }
+    </style>
+  `;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Report Commessa - ${commessa.nome}</title>
+      ${style}
+    </head>
+    <body>
+      <div class="header">
+        ${logoHTML}
+        <h2>REPORT COMMESSA</h2>
+        <h3>${commessa.nome}</h3>
+        <p style="color:#888;font-size:12px;margin:5px 0;">Data creazione: ${dataCreazione}</p>
+        <p style="color:#888;font-size:12px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
+      </div>
+      
+      ${infoFiltri ? `<div class="info-filtri"><strong>🔍 Filtri applicati:</strong>${infoFiltri}</div>` : ''}
+      
+      <div style="margin-top:10px;">
+        ${content}
+      </div>
+      
+      <div class="footer">
+        MEC-ROY srls - Sistema di Gestione Lavoro<br>
+        Documento generato automaticamente
+      </div>
+      
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 500);
+        };
+      <\/script>
+    </body>
+    </html>
+  `;
+  
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+// ============================================
+// FUNZIONI EXTRA
 // ============================================
 function mostraTotaliMese() {
   if (!utenteCorrente) return;
@@ -2098,22 +2451,11 @@ function mostraTotaliMese() {
     'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
   
   let totaleGenerale = 0;
-  let totaleDipendenti = 0;
   
   dati.registrazioni.forEach(r => {
     if (r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
       totaleGenerale += r.ore || 0;
     }
-  });
-  
-  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
-    let oreDipendente = 0;
-    dati.registrazioni.forEach(r => {
-      if (r.utente_id === u.username && r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
-        oreDipendente += r.ore || 0;
-      }
-    });
-    totaleDipendenti += oreDipendente;
   });
   
   const container = document.getElementById('calendario-output');
@@ -2129,7 +2471,6 @@ function mostraTotaliMese() {
   }
 }
 
-// Chiama la sorpresa quando si apre il calendario
 const originalCaricaCalendario = caricaCalendario;
 caricaCalendario = function() {
   originalCaricaCalendario();
@@ -2140,11 +2481,9 @@ caricaCalendario = function() {
     }
   }, 100);
 };
-// 🛠️ PULSANTE AGGIORNA RICHIESTE
+
 function aggiornaRichiesteManuale() {
-  // Ricarica i dati dal database
   caricaDati().then(() => {
-    // Se sei admin, aggiorna la lista
     if (utenteCorrente && utenteCorrente.ruolo === 'admin') {
       caricaRichiesteAdmin();
       aggiornaBadgeRichieste();
@@ -2157,3 +2496,47 @@ function aggiornaRichiesteManuale() {
     alert('❌ Errore: ' + err.message);
   });
 }
+
+// ============================================
+// AVVIO
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+  caricaDati().then(() => {
+    document.getElementById('login-page').style.display = 'block';
+    document.getElementById('main-page').style.display = 'none';
+    const anno = new Date().getFullYear();
+    document.getElementById('cal-anno').value = anno;
+  }).catch((err) => {
+    console.error('❌ Errore caricamento dati:', err);
+    document.getElementById('login-page').style.display = 'block';
+    document.getElementById('main-page').style.display = 'none';
+  });
+});
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-notifiche');
+  if (e.target === modal) {
+    chiudiNotifiche();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-password');
+  if (e.target === modal) {
+    chiudiModificaPassword();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-aziende');
+  if (e.target === modal) {
+    chiudiModalAziende();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-dettaglio-commessa');
+  if (e.target === modal) {
+    chiudiDettaglioCommessa();
+  }
+});
