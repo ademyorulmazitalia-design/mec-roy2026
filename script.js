@@ -1447,81 +1447,63 @@ function esportaOreMese() {
   alert('✅ File esportato con successo!');
 }
 
-function esportaPDF() {
+async function esportaPDF() {
   const output = document.getElementById('calendario-output');
   const content = output.innerHTML;
   
-  if (!content || content.includes('Seleziona mese/anno') || content.includes('Nessun dipendente trovato')) {
-    alert('⚠️ Prima genera il report nel calendario!\n\nVai su "Calendario" → seleziona mese/anno → clicca "Visualizza"');
+  if (!content || content.includes('Seleziona mese/anno')) {
+    alert('⚠️ Prima genera il report nel calendario');
     return;
   }
 
-  const printWindow = window.open('', '_blank', 'width=1200,height=800');
-  
-  if (!printWindow) {
-    alert('❌ Impossibile aprire la finestra di stampa. Consentire i popup per questo sito.');
-    return;
-  }
-
+  // 1. Genera l'HTML completo (come già fai)
   const logoHTML = document.querySelector('.logo-small') ? 
-    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
-
-  const style = `
-    <style>
-      body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
-      th { background: #00695C; color: white; font-weight: bold; }
-      tr:nth-child(even) { background: #f9f9f9; }
-      .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
-      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
-      h2 { color: #00695C; margin: 5px 0; }
-      .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; }
-      .logo-small-img { max-height: 40px; }
-      .azienda-small { font-weight: 700; color: #00695C; font-size: 18px; }
-      .badge { display: none; }
-      .btn { display: none; }
-      .ore-straordinario { background-color: #ffebee !important; }
-      .totale-oltre8 { color: #d32f2f !important; font-weight: bold; }
-    </style>
-  `;
-
-  const html = `
+    document.querySelector('.logo-small').outerHTML : '<h2>MEC-ROY srls</h2>';
+  
+  const fullHTML = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Report Ore Mensile</title>
-      ${style}
+      <meta charset="utf-8">
+      <style>/* ... i tuoi stili per il PDF ... */</style>
     </head>
     <body>
-      <div class="header">
-        ${logoHTML}
-        <h2>Report Ore Mensile</h2>
-        <p style="color:#888;font-size:14px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
+      <div style="text-align:center;padding:20px;">${logoHTML}</div>
+      <h2 style="text-align:center;">Report Ore Mensile</h2>
+      ${content}
+      <div style="text-align:center;padding:10px;font-size:11px;color:#888;">
+        MEC-ROY srls - Generato il ${new Date().toLocaleDateString('it-IT')}
       </div>
-      
-      <div style="margin-top:10px;">
-        ${content}
-      </div>
-      
-      <div class="footer">
-        MEC-ROY srls - Sistema di Gestione Lavoro<br>
-        Documento generato automaticamente
-      </div>
-      
-      <script>
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-          }, 500);
-        };
-      <\/script>
     </body>
     </html>
   `;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  // 2. Converti l'HTML in un file (Blob)
+  const blob = new Blob([fullHTML], { type: 'text/html' });
+  const file = new File([blob], 'Report_MEC-ROY.html', { type: 'text/html' });
+
+  // 3. Controlla se il telefono supporta la condivisione di file
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: 'Report Ore MEC-ROY',
+        text: 'In allegato il report ore.'
+      });
+      return; // Se ha condiviso, abbiamo finito
+    } catch (error) {
+      if (error.name === 'AbortError') return; // L'utente ha annullato
+      console.warn('Errore condivisione, provo download...', error);
+    }
+  }
+
+  // 4. Fallback: Se il telefono non supporta la condivisione, prova il download normale
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Report_MEC-ROY.html';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function aggiungiDipendente() {
