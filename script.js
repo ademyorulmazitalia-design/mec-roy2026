@@ -74,15 +74,6 @@ async function caricaDati() {
   if (datiFirestore) {
     dati = datiFirestore;
     
-    // Aggiungi data_creazione alle commesse che non ce l'hanno
-    if (dati.commesse) {
-      dati.commesse.forEach(c => {
-        if (!c.data_creazione) {
-          c.data_creazione = new Date().toISOString();
-        }
-      });
-    }
-    
     let maxIdTrovato = 0;
     dati.richieste.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
     dati.registrazioni.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
@@ -101,11 +92,6 @@ async function caricaDati() {
     if (!parsed.commesse) {
       parsed.commesse = [];
     }
-    parsed.commesse.forEach(c => {
-      if (!c.data_creazione) {
-        c.data_creazione = new Date().toISOString();
-      }
-    });
     dati = parsed;
     await salvaSuFirestore(dati);
     return dati;
@@ -202,6 +188,9 @@ function login() {
       document.getElementById('btn-password').style.display = 'flex';
       document.getElementById('azienda-container').style.display = 'inline-block';
       
+      // Nascondi il selettore vista per l'admin
+      document.getElementById('cal-vista-selector').style.display = 'none';
+      
       caricaSelectAziende();
       caricaSelectAziendeCommesse();
       caricaSelectDipendentiModifica();
@@ -222,6 +211,9 @@ function login() {
       document.getElementById('cal-filtro-dipendente').style.display = 'none';
       document.getElementById('btn-password').style.display = 'none';
       document.getElementById('azienda-container').style.display = 'none';
+      
+      // Mostra il selettore vista solo per i dipendenti
+      document.getElementById('cal-vista-selector').style.display = 'flex';
       
       showTab('registra');
     }
@@ -1579,15 +1571,15 @@ function caricaListaDipendenti() {
 
   dati.utenti.forEach(u => {
     const isSelf = u.username === utenteCorrente.username;
-    html += '<tr id="row-' + u.username + '">';
+    html += '<tr id="row-' + u.username + '" style="cursor:pointer;" onclick="apriDettaglioDipendente(\'' + u.username + '\')" title="Clicca per vedere il dettaglio">';
     html += '<td><strong>' + u.username + '</strong></td>';
     html += '<td>' + u.nome + '</td>';
     html += '<td>' + u.cognome + '</td>';
     html += '<td><span class="badge ' + u.ruolo + '">' + u.ruolo + '</span></td>';
     html += '<td>';
     if (!isSelf) {
-      html += '<button class="btn-warning" onclick="apriModificaDipendente(\'' + u.username + '\')" style="margin-right:5px;" title="Modifica"><i class="fas fa-edit"></i></button>';
-      html += '<button class="btn-danger" onclick="eliminaDipendente(\'' + u.username + '\')" title="Elimina"><i class="fas fa-trash"></i></button>';
+      html += '<button class="btn-warning" onclick="event.stopPropagation(); apriModificaDipendente(\'' + u.username + '\')" style="margin-right:5px;" title="Modifica"><i class="fas fa-edit"></i></button>';
+      html += '<button class="btn-danger" onclick="event.stopPropagation(); eliminaDipendente(\'' + u.username + '\')" title="Elimina"><i class="fas fa-trash"></i></button>';
     } else {
       html += '<span style="color:#999;font-size:0.8em;">(tu)</span>';
     }
@@ -1598,7 +1590,6 @@ function caricaListaDipendenti() {
   html += '</tbody></table></div>';
   div.innerHTML = html;
 }
-
 function apriModificaDipendente(username) {
   const utente = dati.utenti.find(u => u.username === username);
   if (!utente) return;
@@ -1819,6 +1810,16 @@ function caricaCalendario() {
     return;
   }
 
+  // Se è dipendente e ha scelto vista "dettagliato"
+  if (utenteCorrente.ruolo === 'dipendente') {
+    const vistaScelta = document.querySelector('input[name="cal-vista"]:checked');
+    if (vistaScelta && vistaScelta.value === 'dettagliato') {
+      caricaCalendarioDettagliato();
+      return;
+    }
+  }
+
+  // Altrimenti usa la vista mensile (attuale)
   const isAdmin = utenteCorrente.ruolo === 'admin';
   let utenteFilter = utenteCorrente.username;
   if (isAdmin) {
@@ -2040,47 +2041,8 @@ function tornaMenuCommesse() {
 function caricaAnalisiCommessa() {
   const id = parseInt(document.getElementById('analizza-commessa-select').value);
   if (!id) return;
-
-  const commessa = dati.commesse.find(c => c.id === id);
-  if (!commessa) return;
-
-  const registrazioni = dati.registrazioni.filter(r => r.commessa_id === id);
-  let totaleOre = 0;
-
-  const dateUniche = [...new Set(registrazioni.map(r => r.data))].sort();
-
-  let html = '<div style="margin-top:20px;padding:15px;background:#f8f9fa;border-radius:8px;border:1px solid #ddd;">';
-  html += '<h3><i class="fas fa-folder-open"></i> ' + commessa.nome + '</h3>';
-  html += '<p><strong>Totale Ore Lavorate:</strong> ' + registrazioni.reduce((sum, r) => sum + (r.ore || 0), 0).toFixed(2) + 'h</p>';
-  html += '<hr>';
-
-  if (dateUniche.length === 0) {
-    html += '<p class="text-muted">Nessuna ora registrata su questa commessa.</p>';
-  } else {
-    dateUniche.forEach(data => {
-      html += '<div style="margin-bottom:20px;">';
-      html += '<h4 style="background:#00695C;color:white;padding:8px;border-radius:5px;"><i class="fas fa-calendar-day"></i> ' + data + '</h4>';
-      html += '<table style="width:100%;border-collapse:collapse;">';
-      html += '<thead><tr><th style="border:1px solid #ddd;padding:8px;">Dipendente</th><th style="border:1px solid #ddd;padding:8px;">Ore</th><th style="border:1px solid #ddd;padding:8px;">Descrizione</th></tr></thead>';
-      html += '<tbody>';
-
-      registrazioni.filter(r => r.data === data).forEach(r => {
-        const utente = dati.utenti.find(u => u.username === r.utente_id);
-        const nomeDipendente = utente ? utente.nome + ' ' + utente.cognome : r.utente_id;
-        
-        html += '<tr>';
-        html += '<td style="border:1px solid #ddd;padding:8px;">' + nomeDipendente + '</td>';
-        html += '<td style="border:1px solid #ddd;padding:8px;">' + (r.ore ? r.ore.toFixed(2) : '-') + 'h</td>';
-        html += '<td style="border:1px solid #ddd;padding:8px;">' + (r.descrizione || '-') + '</td>';
-        html += '</tr>';
-      });
-
-      html += '</tbody></table></div>';
-    });
-  }
-
-  html += '</div>';
-  document.getElementById('analisi-commessa-output').innerHTML = html;
+  
+  apriDettaglioCommessa(id);
 }
 
 // ============================================
@@ -2540,3 +2502,669 @@ document.addEventListener('click', function(e) {
     chiudiDettaglioCommessa();
   }
 });
+// ============================================
+// MODALE DETTAGLIO DIPENDENTE
+// ============================================
+let dipendenteCorrenteDettaglio = null;
+let filtriDipendente = {
+  vista: 'mese',
+  giorno: '',
+  mese: new Date().getMonth() + 1,
+  anno: new Date().getFullYear()
+};
+
+function apriDettaglioDipendente(username) {
+  const utente = dati.utenti.find(u => u.username === username);
+  if (!utente) {
+    alert('❌ Dipendente non trovato');
+    return;
+  }
+  
+  dipendenteCorrenteDettaglio = username;
+  
+  // Reset filtri
+  const oggi = new Date();
+  filtriDipendente = {
+    vista: 'mese',
+    giorno: oggi.toISOString().split('T')[0],
+    mese: oggi.getMonth() + 1,
+    anno: oggi.getFullYear()
+  };
+  
+  // Popola header
+  document.getElementById('dettaglio-dipendente-nome').textContent = utente.nome + ' ' + utente.cognome;
+  document.getElementById('dettaglio-dipendente-ruolo').textContent = 'Ruolo: ' + utente.ruolo + ' | Username: ' + utente.username;
+  
+  // Reset input filtri
+  document.getElementById('filtro-vista-dipendente').value = 'mese';
+  document.getElementById('filtro-giorno').value = filtriDipendente.giorno;
+  document.getElementById('filtro-mese').value = filtriDipendente.mese;
+  document.getElementById('filtro-anno').value = filtriDipendente.anno;
+  
+  // Imposta vista iniziale
+  cambiaVistaDipendente();
+  
+  // Mostra modale
+  document.getElementById('modal-dettaglio-dipendente').classList.add('active');
+  
+  // Carica dati
+  applicaFiltriDipendente();
+}
+
+function cambiaVistaDipendente() {
+  const vista = document.getElementById('filtro-vista-dipendente').value;
+  filtriDipendente.vista = vista;
+  
+  if (vista === 'giorno') {
+    document.getElementById('gruppo-filtro-giorno').style.display = 'block';
+    document.getElementById('gruppo-filtro-mese').style.display = 'none';
+    document.getElementById('gruppo-filtro-anno').style.display = 'none';
+  } else {
+    document.getElementById('gruppo-filtro-giorno').style.display = 'none';
+    document.getElementById('gruppo-filtro-mese').style.display = 'block';
+    document.getElementById('gruppo-filtro-anno').style.display = 'block';
+  }
+  
+  applicaFiltriDipendente();
+}
+
+function applicaFiltriDipendente() {
+  if (!dipendenteCorrenteDettaglio) return;
+  
+  const vista = document.getElementById('filtro-vista-dipendente').value;
+  filtriDipendente.vista = vista;
+  
+  const output = document.getElementById('dettaglio-dipendente-output');
+  
+  if (vista === 'giorno') {
+    // VISTA GIORNO
+    const giorno = document.getElementById('filtro-giorno').value;
+    filtriDipendente.giorno = giorno;
+    
+    if (!giorno) {
+      output.innerHTML = '<p class="text-muted">Seleziona un giorno</p>';
+      return;
+    }
+    
+    // Trova registrazioni del giorno
+    const registrazioni = dati.registrazioni.filter(r => 
+      r.utente_id === dipendenteCorrenteDettaglio && 
+      r.data === giorno
+    );
+    
+    // Controlla se c'è richiesta approvata (ferie/permesso/malattia)
+    const richiesta = dati.richieste.find(r => 
+      r.utente_id === dipendenteCorrenteDettaglio && 
+      r.stato === 'approvata' &&
+      r.data_inizio <= giorno && r.data_fine >= giorno
+    );
+    
+    // Aggiorna contatore
+    document.getElementById('dettaglio-dipendente-contatore').textContent = 
+      `📊 ${registrazioni.length} registrazioni`;
+    
+    if (registrazioni.length === 0 && !richiesta) {
+      output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo giorno.</p>';
+      return;
+    }
+    
+    const dataFormattata = new Date(giorno + 'T00:00:00').toLocaleDateString('it-IT', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    
+    let html = '';
+    let totaleGiorno = 0;
+    
+    // Header giorno
+    html += `<div class="gruppo-giorno">`;
+    html += `<div class="gruppo-giorno-header">`;
+    html += `<h4><i class="fas fa-calendar-day"></i> ${dataFormattata}</h4>`;
+    
+    // Se c'è una richiesta approvata (ferie/permesso/malattia)
+    if (richiesta) {
+      const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
+      const tipo = richiesta.tipo.toUpperCase();
+      html += `<span class="subtotale-giorno">${emoji[richiesta.tipo] || '📌'} ${tipo}</span>`;
+      html += `</div>`;
+      html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+      html += `<table>`;
+      html += `<tbody>`;
+      html += `<tr class="riga-speciale ${richiesta.tipo}">`;
+      html += `<td><span class="icona-tipo">${emoji[richiesta.tipo] || '📌'}</span> <strong>${tipo}</strong>`;
+      if (richiesta.note) {
+        html += ` - ${richiesta.note}`;
+      }
+      html += `</td>`;
+      html += `</tr>`;
+      html += `</tbody></table></div>`;
+      html += `</div>`;
+      output.innerHTML = html;
+      return;
+    }
+    
+    // Calcola totale
+    registrazioni.forEach(r => {
+      if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+        const [h1, m1] = r.ora_inizio.split(':').map(Number);
+        const [h2, m2] = r.ora_fine.split(':').map(Number);
+        totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+      }
+    });
+    
+    html += `<span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span>`;
+    html += `</div>`;
+    
+    html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+    html += `<table>`;
+    html += `<thead><tr>
+      <th>Commessa</th>
+      <th>Inizio</th>
+      <th>Fine</th>
+      <th>Ore</th>
+      <th>Descrizione</th>
+    </tr></thead>`;
+    html += `<tbody>`;
+    
+    registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+    
+    registrazioni.forEach(r => {
+      const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+      const [h1, m1] = r.ora_inizio.split(':').map(Number);
+      const [h2, m2] = r.ora_fine.split(':').map(Number);
+      const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+      
+      const isStraordinario = r.straordinario ? ' ⭐' : '';
+      const isRecupero = r.recupero ? ' ⏰' : '';
+      
+      html += `<tr>`;
+      html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
+      html += `<td>${r.ora_inizio || '-'}</td>`;
+      html += `<td>${r.ora_fine || '-'}</td>`;
+      html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
+      html += `<td>${r.descrizione || '-'}</td>`;
+      html += `</tr>`;
+    });
+    
+    html += `</tbody></table></div>`;
+    html += `</div>`;
+    
+    output.innerHTML = html;
+    
+  } else {
+    // VISTA MESE
+    const mese = parseInt(document.getElementById('filtro-mese').value);
+    const anno = parseInt(document.getElementById('filtro-anno').value);
+    
+    filtriDipendente.mese = mese;
+    filtriDipendente.anno = anno;
+    
+    if (!mese || !anno) {
+      output.innerHTML = '<p class="text-muted">Seleziona mese e anno</p>';
+      return;
+    }
+    
+    const giorniMese = new Date(anno, mese, 0).getDate();
+    const mesePadded = String(mese).padStart(2, '0');
+    const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+      'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+    
+    let html = '';
+    let totaleMese = 0;
+    let registrazioniTotali = 0;
+    
+    // Per ogni giorno del mese
+    for (let g = 1; g <= giorniMese; g++) {
+      const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
+      const dataObj = new Date(data + 'T00:00:00');
+      const giornoSett = dataObj.getDay();
+      const isWeekend = giornoSett === 0 || giornoSett === 6;
+      
+      // Registrazioni del giorno
+      const registrazioni = dati.registrazioni.filter(r => 
+        r.utente_id === dipendenteCorrenteDettaglio && 
+        r.data === data
+      );
+      
+      // Richiesta approvata (ferie/permesso/malattia)
+      const richiesta = dati.richieste.find(r => 
+        r.utente_id === dipendenteCorrenteDettaglio && 
+        r.stato === 'approvata' &&
+        r.data_inizio <= data && r.data_fine >= data
+    );
+      
+      // Se weekend e nessuna registrazione
+      if (isWeekend && registrazioni.length === 0 && !richiesta) {
+        continue; // Salta i weekend vuoti
+      }
+      
+      // Se nessuna registrazione e nessuna richiesta e non weekend
+      if (registrazioni.length === 0 && !richiesta && !isWeekend) {
+        // Giorno passato senza registrazioni → ASSENTE
+        const oggi = new Date();
+        oggi.setHours(0, 0, 0, 0);
+        
+        if (dataObj < oggi) {
+          html += `<div class="gruppo-giorno">`;
+          html += `<div class="gruppo-giorno-header">`;
+          html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+          html += `<span class="subtotale-giorno">⬜ ASSENTE</span>`;
+          html += `</div>`;
+          html += `</div>`;
+        }
+        continue;
+      }
+      
+      // Giorno con richiesta (ferie/permesso/malattia)
+      if (richiesta && registrazioni.length === 0) {
+        const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+        const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
+        const emojiChar = emoji[richiesta.tipo] || '📌';
+        
+        html += `<div class="gruppo-giorno">`;
+        html += `<div class="gruppo-giorno-header">`;
+        html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+        html += `<span class="subtotale-giorno">${emojiChar} ${tipo}</span>`;
+        html += `</div>`;
+        html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+        html += `<table><tbody>`;
+        html += `<tr class="riga-speciale ${richiesta.tipo}">`;
+        html += `<td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>`;
+        if (richiesta.note) html += ` - ${richiesta.note}`;
+        html += `</td></tr>`;
+        html += `</tbody></table></div>`;
+        html += `</div>`;
+        continue;
+      }
+      
+      // Giorno con registrazioni di lavoro
+      let totaleGiorno = 0;
+      registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+      
+      registrazioni.forEach(r => {
+        if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+          const [h1, m1] = r.ora_inizio.split(':').map(Number);
+          const [h2, m2] = r.ora_fine.split(':').map(Number);
+          totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+        }
+      });
+      
+      registrazioniTotali += registrazioni.length;
+      totaleMese += totaleGiorno;
+      
+      html += `<div class="gruppo-giorno">`;
+      html += `<div class="gruppo-giorno-header">`;
+      html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+      html += `<span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span>`;
+      html += `</div>`;
+      
+      html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+      html += `<table>`;
+      html += `<thead><tr>
+        <th>Commessa</th>
+        <th>Inizio</th>
+        <th>Fine</th>
+        <th>Ore</th>
+        <th>Descrizione</th>
+      </tr></thead>`;
+      html += `<tbody>`;
+      
+      registrazioni.forEach(r => {
+        const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+        const [h1, m1] = r.ora_inizio.split(':').map(Number);
+        const [h2, m2] = r.ora_fine.split(':').map(Number);
+        const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+        
+        const isStraordinario = r.straordinario ? ' ⭐' : '';
+        const isRecupero = r.recupero ? ' ⏰' : '';
+        
+        html += `<tr>`;
+        html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
+        html += `<td>${r.ora_inizio || '-'}</td>`;
+        html += `<td>${r.ora_fine || '-'}</td>`;
+        html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
+        html += `<td>${r.descrizione || '-'}</td>`;
+        html += `</tr>`;
+      });
+      
+      html += `</tbody></table></div>`;
+      html += `</div>`;
+    }
+    
+    // Aggiorna contatore
+    document.getElementById('dettaglio-dipendente-contatore').textContent = 
+      `📊 ${registrazioniTotali} registrazioni nel mese`;
+    
+    if (html === '') {
+      output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
+      return;
+    }
+    
+    // Totale generale in cima
+    const headerHTML = `
+      <div class="dipendente-info-box">
+        <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
+        <div class="info-dettagli">
+          <span>📊 ${registrazioniTotali} registrazioni</span>
+          <span>⏱️ Totale: ${totaleMese.toFixed(2)}h</span>
+        </div>
+      </div>
+    `;
+    
+    output.innerHTML = headerHTML + html;
+  }
+}
+
+function resetFiltriDipendente() {
+  const oggi = new Date();
+  filtriDipendente = {
+    vista: 'mese',
+    giorno: oggi.toISOString().split('T')[0],
+    mese: oggi.getMonth() + 1,
+    anno: oggi.getFullYear()
+  };
+  
+  document.getElementById('filtro-vista-dipendente').value = 'mese';
+  document.getElementById('filtro-giorno').value = filtriDipendente.giorno;
+  document.getElementById('filtro-mese').value = filtriDipendente.mese;
+  document.getElementById('filtro-anno').value = filtriDipendente.anno;
+  
+  cambiaVistaDipendente();
+}
+
+function chiudiDettaglioDipendente() {
+  document.getElementById('modal-dettaglio-dipendente').classList.remove('active');
+  dipendenteCorrenteDettaglio = null;
+}
+
+function esportaPDFDipendente() {
+  if (!dipendenteCorrenteDettaglio) {
+    alert('❌ Nessun dipendente selezionato');
+    return;
+  }
+  
+  const utente = dati.utenti.find(u => u.username === dipendenteCorrenteDettaglio);
+  if (!utente) return;
+  
+  const content = document.getElementById('dettaglio-dipendente-output').innerHTML;
+  
+  if (!content || content.includes('Nessuna registrazione')) {
+    alert('⚠️ Nessuna registrazione da esportare');
+    return;
+  }
+  
+  const printWindow = window.open('', '_blank', 'width=1200,height=800');
+  
+  if (!printWindow) {
+    alert('❌ Impossibile aprire la finestra di stampa. Consentire i popup per questo sito.');
+    return;
+  }
+  
+  const logoHTML = document.querySelector('.logo-small') ? 
+    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
+  
+  const vista = filtriDipendente.vista;
+  let periodo = '';
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][filtriDipendente.mese - 1];
+  
+  if (vista === 'giorno') {
+    periodo = new Date(filtriDipendente.giorno + 'T00:00:00').toLocaleDateString('it-IT', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+  } else {
+    periodo = `${meseNome} ${filtriDipendente.anno}`;
+  }
+  
+  const style = `
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+      th { background: #00695C; color: white; font-weight: bold; }
+      tr:nth-child(even) { background: #f9f9f9; }
+      .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
+      .header h2 { color: #00695C; margin: 5px 0; }
+      .header h3 { color: #333; margin: 5px 0; }
+      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
+      .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+      .logo-small-img { max-height: 50px; }
+      .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
+      .dipendente-info-box { background: #00695C; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+      .dipendente-info-box h3 { margin: 0 0 5px 0; color: white; }
+      .dipendente-info-box .info-dettagli { display: flex; gap: 15px; font-size: 12px; }
+      .gruppo-giorno { margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
+      .gruppo-giorno-header { background: #00695C; color: white; padding: 8px 12px; display: flex; justify-content: space-between; }
+      .gruppo-giorno-header h4 { margin: 0; color: white; }
+      .gruppo-giorno-header .subtotale-giorno { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+      .riga-speciale.ferie td { background: #E3F2FD; color: #0d47a1; text-align: center; font-weight: bold; padding: 15px; }
+      .riga-speciale.permesso td { background: #FFF3E0; color: #e65100; text-align: center; font-weight: bold; padding: 15px; }
+      .riga-speciale.malattia td { background: #FFEBEE; color: #b71c1c; text-align: center; font-weight: bold; padding: 15px; }
+      .riga-speciale.assente td { background: #f5f5f5; color: #666; text-align: center; font-style: italic; padding: 15px; }
+    </style>
+  `;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Report Dipendente - ${utente.nome} ${utente.cognome}</title>
+      ${style}
+    </head>
+    <body>
+      <div class="header">
+        ${logoHTML}
+        <h2>REPORT DIPENDENTE</h2>
+        <h3>${utente.nome} ${utente.cognome}</h3>
+        <p style="color:#888;font-size:12px;margin:5px 0;">Periodo: ${periodo}</p>
+        <p style="color:#888;font-size:12px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
+      </div>
+      
+      <div style="margin-top:10px;">
+        ${content}
+      </div>
+      
+      <div class="footer">
+        MEC-ROY srls - Sistema di Gestione Lavoro<br>
+        Documento generato automaticamente
+      </div>
+      
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 500);
+        };
+      <\/script>
+    </body>
+    </html>
+  `;
+  
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+// Chiudi modale dettaglio dipendente cliccando fuori
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-dettaglio-dipendente');
+  if (e.target === modal) {
+    chiudiDettaglioDipendente();
+  }
+});
+// ============================================
+// CALENDARIO DETTAGLIATO (solo dipendenti)
+// ============================================
+function cambiaVistaCalendario() {
+  // Ricarica il calendario con la vista scelta
+  caricaCalendario();
+}
+
+function caricaCalendarioDettagliato() {
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+  const output = document.getElementById('calendario-output');
+  
+  if (!mese || !anno) {
+    output.innerHTML = '<p class="text-muted">Seleziona mese e anno</p>';
+    return;
+  }
+  
+  const username = utenteCorrente.username;
+  const utente = dati.utenti.find(u => u.username === username);
+  if (!utente) {
+    output.innerHTML = '<p class="text-muted">Utente non trovato</p>';
+    return;
+  }
+  
+  const giorniMese = new Date(anno, mese, 0).getDate();
+  const mesePadded = String(mese).padStart(2, '0');
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+  
+  let html = '';
+  let totaleMese = 0;
+  let registrazioniTotali = 0;
+  let giorniLavorati = 0;
+  
+  // Per ogni giorno del mese
+  for (let g = 1; g <= giorniMese; g++) {
+    const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
+    const dataObj = new Date(data + 'T00:00:00');
+    const giornoSett = dataObj.getDay();
+    const isWeekend = giornoSett === 0 || giornoSett === 6;
+    
+    // Registrazioni del giorno
+    const registrazioni = dati.registrazioni.filter(r => 
+      r.utente_id === username && r.data === data
+    );
+    
+    // Richiesta approvata (ferie/permesso/malattia)
+    const richiesta = dati.richieste.find(r => 
+      r.utente_id === username && 
+      r.stato === 'approvata' &&
+      r.data_inizio <= data && r.data_fine >= data
+    );
+    
+    // SALTA weekend se non lavorati (nessuna registrazione)
+    if (isWeekend && registrazioni.length === 0 && !richiesta) {
+      continue;
+    }
+    
+    // Giorno passato senza registrazioni e senza richiesta → ASSENTE
+    if (!isWeekend && registrazioni.length === 0 && !richiesta) {
+      const oggi = new Date();
+      oggi.setHours(0, 0, 0, 0);
+      
+      if (dataObj < oggi) {
+        html += `<div class="giorno-dettaglio">`;
+        html += `<div class="giorno-dettaglio-header">`;
+        html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+        html += `<span class="giorno-totale">⬜ ASSENTE</span>`;
+        html += `</div>`;
+        html += `</div>`;
+      }
+      continue;
+    }
+    
+    // Giorno con richiesta (ferie/permesso/malattia) e senza registrazioni
+    if (richiesta && registrazioni.length === 0) {
+      const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+      const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
+      const emojiChar = emoji[richiesta.tipo] || '📌';
+      
+      html += `<div class="giorno-dettaglio">`;
+      html += `<div class="giorno-dettaglio-header">`;
+      html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+      html += `<span class="giorno-totale">${emojiChar} ${tipo}</span>`;
+      html += `</div>`;
+      html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+      html += `<table><tbody>`;
+      html += `<tr class="riga-speciale-giorno ${richiesta.tipo}">`;
+      html += `<td>${emojiChar} <strong>${tipo}</strong>`;
+      if (richiesta.note) html += ` - ${richiesta.note}`;
+      html += `</td></tr>`;
+      html += `</tbody></table></div>`;
+      html += `</div>`;
+      continue;
+    }
+    
+    // Giorno con registrazioni di lavoro
+    let totaleGiorno = 0;
+    registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+    
+    registrazioni.forEach(r => {
+      if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+        const [h1, m1] = r.ora_inizio.split(':').map(Number);
+        const [h2, m2] = r.ora_fine.split(':').map(Number);
+        totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+      }
+    });
+    
+    registrazioniTotali += registrazioni.length;
+    totaleMese += totaleGiorno;
+    if (totaleGiorno > 0) giorniLavorati++;
+    
+    const isOltre8 = totaleGiorno > 8;
+    const bgHeader = isOltre8 ? '#b71c1c' : '#00695C';
+    
+    html += `<div class="giorno-dettaglio">`;
+    html += `<div class="giorno-dettaglio-header" style="background:${bgHeader};">`;
+    html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+    html += `<span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span>`;
+    html += `</div>`;
+    
+    html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+    html += `<table>`;
+    html += `<thead><tr>
+      <th>Commessa</th>
+      <th>Inizio</th>
+      <th>Fine</th>
+      <th>Ore</th>
+      <th>Descrizione</th>
+    </tr></thead>`;
+    html += `<tbody>`;
+    
+    registrazioni.forEach(r => {
+      const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+      const [h1, m1] = r.ora_inizio.split(':').map(Number);
+      const [h2, m2] = r.ora_fine.split(':').map(Number);
+      const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+      
+      const isStraordinario = r.straordinario ? ' ⭐' : '';
+      const isRecupero = r.recupero ? ' ⏰' : '';
+      
+      html += `<tr>`;
+      html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
+      html += `<td>${r.ora_inizio || '-'}</td>`;
+      html += `<td>${r.ora_fine || '-'}</td>`;
+      html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
+      html += `<td>${r.descrizione || '-'}</td>`;
+      html += `</tr>`;
+    });
+    
+    html += `</tbody></table></div>`;
+    html += `</div>`;
+  }
+  
+  // Se non c'è nulla da mostrare
+  if (html === '') {
+    output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
+    return;
+  }
+  
+  // Header con totali
+  const headerHTML = `
+    <div class="calendario-dettagliato-info">
+      <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
+      <div class="info-totali">
+        <span>📊 ${registrazioniTotali} registrazioni</span>
+        <span>📅 ${giorniLavorati} giorni lavorati</span>
+        <span>⏱️ Totale: ${totaleMese.toFixed(2)}h</span>
+      </div>
+    </div>
+  `;
+  
+  output.innerHTML = headerHTML + html;
+}
