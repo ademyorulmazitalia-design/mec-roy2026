@@ -4,7 +4,7 @@
 
 const CACHE_NAME = 'mecroy-cache-v1';
 
-// File da mettere in cache (funzionamento offline)
+// File da mettere in cache (per funzionamento offline)
 const FILES_TO_CACHE = [
   './',
   './index.html',
@@ -57,37 +57,52 @@ self.addEventListener('activate', (event) => {
 });
 
 // ============================================
-// FETCH (intercetta richieste)
+// FETCH - STRATEGIA "NETWORK FIRST"
 // ============================================
 self.addEventListener('fetch', (event) => {
   // Non gestire richieste a Firebase
   if (event.request.url.includes('firebase') || 
       event.request.url.includes('googleapis') ||
-      event.request.url.includes('gstatic')) {
+      event.request.url.includes('gstatic') ||
+      event.request.url.includes('cdnjs')) {
     return;
   }
   
+  // Per HTML, JS, CSS → SEMPRE dalla rete (aggiornamento automatico)
+  const url = event.request.url;
+  const isHTML = url.endsWith('.html') || url.endsWith('/') || url.includes('index.html');
+  const isJS = url.endsWith('.js');
+  const isCSS = url.endsWith('.css');
+  
+  if (isHTML || isJS || isCSS) {
+    // NETWORK FIRST: prova la rete, se fallisce usa la cache
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // Salva in cache per uso offline
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          // Se la rete fallisce (offline), usa la cache
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+  
+  // Per immagini e altri file → prima la cache, poi la rete
   event.respondWith(
     caches.match(event.request).then((response) => {
-      // Se è in cache, restituisci dalla cache
-      if (response) {
-        return response;
-      }
-      
-      // Altrimenti scarica dalla rete
-      return fetch(event.request).then((response) => {
-        // Se la risposta non è valida, restituiscila così com'è
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
-        }
-        
-        // Altrimenti salva in cache per la prossima volta
-        const responseToCache = response.clone();
+      return response || fetch(event.request).then((networkResponse) => {
+        const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);
         });
-        
-        return response;
+        return networkResponse;
       });
     })
   );
