@@ -1284,3 +1284,463 @@ body.dark-mode::before {
     padding: 6px 4px;
   }
 }
+/* ============================================
+   MODALE DETTAGLIO DIPENDENTE
+   ============================================ */
+
+/* Riusa lo stile della modale commessa */
+/* Aggiunte specifiche per il dipendente */
+
+.dipendente-info-box {
+  background: linear-gradient(135deg, #00695C 0%, #004D40 100%);
+  color: white;
+  padding: 15px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dipendente-info-box h3 {
+  margin: 0;
+  font-size: 1.2em;
+}
+
+.dipendente-info-box .info-dettagli {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 0.9em;
+}
+
+.dipendente-info-box .info-dettagli span {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+/* Raggruppamento per giorno */
+.gruppo-giorno {
+  margin-bottom: 25px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+}
+
+.gruppo-giorno-header {
+  background: linear-gradient(135deg, #00695C 0%, #004D40 100%);
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gruppo-giorno-header h4 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.gruppo-giorno-header .giorno-settimana {
+  font-size: 0.85em;
+  opacity: 0.9;
+  margin-left: 8px;
+}
+
+.gruppo-giorno-header .subtotale-giorno {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* Riga senza registrazioni (Ferie/Permesso/Malattia/Assente) */
+.riga-speciale td {
+  text-align: center;
+  padding: 20px;
+  font-weight: bold;
+  font-size: 1em;
+}
+
+.riga-speciale.ferie td {
+  background: #E3F2FD;
+  color: #0d47a1;
+}
+
+.riga-speciale.permesso td {
+  background: #FFF3E0;
+  color: #e65100;
+}
+
+.riga-speciale.malattia td {
+  background: #FFEBEE;
+  color: #b71c1c;
+}
+
+.riga-speciale.assente td {
+  background: #f5f5f5;
+  color: #666;
+  font-style: italic;
+}
+
+.riga-speciale.weekend td {
+  background: #fafafa;
+  color: #bbb;
+  font-style: italic;
+}
+
+/* Colori testo tipo registrazione */
+.tipo-lavoro {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.tipo-ferie {
+  color: #0d47a1;
+  font-weight: 600;
+}
+
+.tipo-permesso {
+  color: #e65100;
+  font-weight: 600;
+}
+
+.tipo-malattia {
+  color: #b71c1c;
+  font-weight: 600;
+}
+
+.tipo-recupero {
+  color: #856404;
+  font-weight: 600;
+}
+
+/* Icona tipo nella tabella */
+.icona-tipo {
+  font-size: 1.1em;
+  margin-right: 6px;
+}
+
+/* Dark mode - Modale dettaglio dipendente */
+.dark-mode .dipendente-info-box {
+  background: linear-gradient(135deg, #004D40 0%, #00332A 100%);
+}
+
+.dark-mode .gruppo-giorno {
+  background: #1a1a3e;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .gruppo-giorno-header {
+  background: linear-gradient(135deg, #004D40 0%, #00332A 100%);
+}
+
+.dark-mode .riga-speciale.ferie td {
+  background: #1a2a4a;
+  color: #90caf9;
+}
+
+.dark-mode .riga-speciale.permesso td {
+  background: #3a2a1a;
+  color: #ffb74d;
+}
+
+.dark-mode .riga-speciale.malattia td {
+  background: #3a1a1a;
+  color: #ef9a9a;
+}
+
+.dark-mode .riga-speciale.assente td {
+  background: #1a1a1a;
+  color: #888;
+}
+
+.dark-mode .riga-speciale.weekend td {
+  background: #0f0f1a;
+  color: #666;
+}
+
+.dark-mode .tipo-lavoro {
+  color: #81c784;
+}
+
+.dark-mode .tipo-ferie {
+  color: #64b5f6;
+}
+
+.dark-mode .tipo-permesso {
+  color: #ffb74d;
+}
+
+.dark-mode .tipo-malattia {
+  color: #ef9a9a;
+}
+
+.dark-mode .tipo-recupero {
+  color: #ffd54f;
+}
+
+/* Responsive modale dipendente */
+@media (max-width: 768px) {
+  .dipendente-info-box {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dipendente-info-box .info-dettagli {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .gruppo-giorno-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+/* ============================================
+   CALENDARIO - SELETTORE VISTA (solo dipendenti)
+   ============================================ */
+.cal-vista-selector {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 15px 20px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  flex-wrap: wrap;
+}
+
+.vista-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 600;
+  color: #555;
+  user-select: none;
+  flex: 1;
+  min-width: 150px;
+  justify-content: center;
+}
+
+.vista-radio:hover {
+  border-color: #00695C;
+  background: #e8f5e9;
+}
+
+.vista-radio input[type="radio"] {
+  display: none;
+}
+
+.vista-radio input[type="radio"]:checked + span {
+  color: #00695C;
+}
+
+.vista-radio:has(input[type="radio"]:checked) {
+  background: #00695C;
+  border-color: #00695C;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0,105,92,0.3);
+}
+
+.vista-radio:has(input[type="radio"]:checked) span {
+  color: white;
+}
+
+.vista-radio span i {
+  margin-right: 6px;
+}
+
+/* ============================================
+   CALENDARIO DETTAGLIATO (vista dipendente)
+   ============================================ */
+.calendario-dettagliato-info {
+  background: linear-gradient(135deg, #00695C 0%, #004D40 100%);
+  color: white;
+  padding: 15px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.calendario-dettagliato-info h3 {
+  margin: 0;
+  font-size: 1.2em;
+}
+
+.calendario-dettagliato-info .info-totali {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  font-size: 0.9em;
+}
+
+.calendario-dettagliato-info .info-totali span {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+/* Raggruppamento per giorno */
+.giorno-dettaglio {
+  margin-bottom: 20px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  overflow: hidden;
+}
+
+.giorno-dettaglio-header {
+  background: linear-gradient(135deg, #00695C 0%, #004D40 100%);
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.giorno-dettaglio-header h4 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.giorno-dettaglio-header .giorno-nome {
+  font-size: 0.85em;
+  opacity: 0.9;
+  margin-left: 8px;
+  font-weight: normal;
+}
+
+.giorno-dettaglio-header .giorno-totale {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* Riga speciale (FERIE/PERMESSO/MALATTIA/ASSENTE) */
+.riga-speciale-giorno td {
+  text-align: center;
+  padding: 20px;
+  font-weight: bold;
+  font-size: 1em;
+}
+
+.riga-speciale-giorno.ferie td {
+  background: #E3F2FD;
+  color: #0d47a1;
+}
+
+.riga-speciale-giorno.permesso td {
+  background: #FFF3E0;
+  color: #e65100;
+}
+
+.riga-speciale-giorno.malattia td {
+  background: #FFEBEE;
+  color: #b71c1c;
+}
+
+.riga-speciale-giorno.assente td {
+  background: #f5f5f5;
+  color: #666;
+  font-style: italic;
+}
+
+/* Dark Mode - Calendario dettagliato */
+.dark-mode .cal-vista-selector {
+  background: #1a1a3e;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .vista-radio {
+  background: #0f3460;
+  border-color: #2a2a5a;
+  color: #e0e0e0;
+}
+
+.dark-mode .vista-radio:hover {
+  background: #1a1a4e;
+  border-color: #00695C;
+}
+
+.dark-mode .vista-radio:has(input[type="radio"]:checked) {
+  background: #00695C;
+  border-color: #00695C;
+  color: white;
+}
+
+.dark-mode .calendario-dettagliato-info {
+  background: linear-gradient(135deg, #004D40 0%, #00332A 100%);
+}
+
+.dark-mode .giorno-dettaglio {
+  background: #1a1a3e;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .giorno-dettaglio-header {
+  background: linear-gradient(135deg, #004D40 0%, #00332A 100%);
+}
+
+.dark-mode .riga-speciale-giorno.ferie td {
+  background: #1a2a4a;
+  color: #90caf9;
+}
+
+.dark-mode .riga-speciale-giorno.permesso td {
+  background: #3a2a1a;
+  color: #ffb74d;
+}
+
+.dark-mode .riga-speciale-giorno.malattia td {
+  background: #3a1a1a;
+  color: #ef9a9a;
+}
+
+.dark-mode .riga-speciale-giorno.assente td {
+  background: #1a1a1a;
+  color: #888;
+}
+
+/* Responsive - Calendario dettagliato */
+@media (max-width: 768px) {
+  .cal-vista-selector {
+    flex-direction: column;
+  }
+
+  .vista-radio {
+    min-width: 100%;
+  }
+
+  .calendario-dettagliato-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .giorno-dettaglio-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
