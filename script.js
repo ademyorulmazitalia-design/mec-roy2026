@@ -2272,7 +2272,7 @@ function chiudiDettaglioCommessa() {
   commessaCorrenteDettaglio = null;
 }
 
-function esportaPDFCommessa() {
+async function esportaPDFCommessa() {
   if (!commessaCorrenteDettaglio) {
     alert('❌ Nessuna commessa selezionata');
     return;
@@ -2288,14 +2288,6 @@ function esportaPDFCommessa() {
     return;
   }
   
-  const printWindow = window.open('', '_blank', 'width=1200,height=800');
-  
-  if (!printWindow) {
-    alert('❌ Impossibile aprire la finestra di stampa. Consentire i popup per questo sito.');
-    return;
-  }
-  
-  // Costruisci info filtri
   let infoFiltri = '';
   if (filtriCommessa.dataInizio || filtriCommessa.dataFine) {
     infoFiltri += `<p><strong>Periodo:</strong> `;
@@ -2321,36 +2313,30 @@ function esportaPDFCommessa() {
     new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 
     'N/D';
   
-  const style = `
-    <style>
-      body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
-      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-      th { background: #00695C; color: white; font-weight: bold; }
-      tr:nth-child(even) { background: #f9f9f9; }
-      .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
-      .header h2 { color: #00695C; margin: 5px 0; }
-      .header h3 { color: #333; margin: 5px 0; }
-      .info-filtri { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 12px; }
-      .info-filtri p { margin: 4px 0; }
-      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
-      .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
-      .logo-small-img { max-height: 50px; }
-      .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
-      .gruppo-dipendente { margin-bottom: 20px; page-break-inside: avoid; }
-      .gruppo-dipendente-header { background: #00695C; color: white; padding: 8px 12px; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; }
-      .gruppo-dipendente-header h4 { margin: 0; color: white; }
-      .subtotale { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
-      .totale-generale { background: #fff3cd; border: 2px solid #ffc107; padding: 12px; text-align: center; font-weight: bold; font-size: 14px; border-radius: 8px; color: #856404; }
-    </style>
-  `;
-  
-  const html = `
+  const fullHTML = `
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
       <title>Report Commessa - ${commessa.nome}</title>
-      ${style}
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        th { background: #00695C; color: white; font-weight: bold; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
+        .header h2 { color: #00695C; margin: 5px 0; }
+        .header h3 { color: #333; margin: 5px 0; }
+        .info-filtri { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 12px; }
+        .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
+        .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+        .logo-small-img { max-height: 50px; }
+        .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
+        .gruppo-dipendente-header { background: #00695C; color: white; padding: 8px 12px; border-radius: 6px 6px 0 0; }
+        .subtotale { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+        .totale-generale { background: #fff3cd; border: 2px solid #ffc107; padding: 12px; text-align: center; font-weight: bold; border-radius: 8px; color: #856404; }
+      </style>
     </head>
     <body>
       <div class="header">
@@ -2360,31 +2346,17 @@ function esportaPDFCommessa() {
         <p style="color:#888;font-size:12px;margin:5px 0;">Data creazione: ${dataCreazione}</p>
         <p style="color:#888;font-size:12px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
       </div>
-      
       ${infoFiltri ? `<div class="info-filtri"><strong>🔍 Filtri applicati:</strong>${infoFiltri}</div>` : ''}
-      
-      <div style="margin-top:10px;">
-        ${content}
-      </div>
-      
+      <div style="margin-top:10px;">${content}</div>
       <div class="footer">
         MEC-ROY srls - Sistema di Gestione Lavoro<br>
         Documento generato automaticamente
       </div>
-      
-      <script>
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-          }, 500);
-        };
-      <\/script>
     </body>
     </html>
   `;
-  
-  printWindow.document.write(html);
-  printWindow.document.close();
+
+  await scaricaOCondividiFile(fullHTML, `Report_Commessa_${commessa.nome.replace(/\s+/g, '_')}`);
 }
 
 // ============================================
@@ -2855,7 +2827,7 @@ function chiudiDettaglioDipendente() {
   dipendenteCorrenteDettaglio = null;
 }
 
-function esportaPDFDipendente() {
+async function esportaPDFDipendente() {
   if (!dipendenteCorrenteDettaglio) {
     alert('❌ Nessun dipendente selezionato');
     return;
@@ -2868,13 +2840,6 @@ function esportaPDFDipendente() {
   
   if (!content || content.includes('Nessuna registrazione')) {
     alert('⚠️ Nessuna registrazione da esportare');
-    return;
-  }
-  
-  const printWindow = window.open('', '_blank', 'width=1200,height=800');
-  
-  if (!printWindow) {
-    alert('❌ Impossibile aprire la finestra di stampa. Consentire i popup per questo sito.');
     return;
   }
   
@@ -2894,40 +2859,36 @@ function esportaPDFDipendente() {
     periodo = `${meseNome} ${filtriDipendente.anno}`;
   }
   
-  const style = `
-    <style>
-      body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
-      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-      th { background: #00695C; color: white; font-weight: bold; }
-      tr:nth-child(even) { background: #f9f9f9; }
-      .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
-      .header h2 { color: #00695C; margin: 5px 0; }
-      .header h3 { color: #333; margin: 5px 0; }
-      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
-      .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
-      .logo-small-img { max-height: 50px; }
-      .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
-      .dipendente-info-box { background: #00695C; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
-      .dipendente-info-box h3 { margin: 0 0 5px 0; color: white; }
-      .dipendente-info-box .info-dettagli { display: flex; gap: 15px; font-size: 12px; }
-      .gruppo-giorno { margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
-      .gruppo-giorno-header { background: #00695C; color: white; padding: 8px 12px; display: flex; justify-content: space-between; }
-      .gruppo-giorno-header h4 { margin: 0; color: white; }
-      .gruppo-giorno-header .subtotale-giorno { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
-      .riga-speciale.ferie td { background: #E3F2FD; color: #0d47a1; text-align: center; font-weight: bold; padding: 15px; }
-      .riga-speciale.permesso td { background: #FFF3E0; color: #e65100; text-align: center; font-weight: bold; padding: 15px; }
-      .riga-speciale.malattia td { background: #FFEBEE; color: #b71c1c; text-align: center; font-weight: bold; padding: 15px; }
-      .riga-speciale.assente td { background: #f5f5f5; color: #666; text-align: center; font-style: italic; padding: 15px; }
-    </style>
-  `;
-  
-  const html = `
+  const fullHTML = `
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
       <title>Report Dipendente - ${utente.nome} ${utente.cognome}</title>
-      ${style}
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        th { background: #00695C; color: white; font-weight: bold; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
+        .header h2 { color: #00695C; margin: 5px 0; }
+        .header h3 { color: #333; margin: 5px 0; }
+        .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
+        .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+        .logo-small-img { max-height: 50px; }
+        .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
+        .dipendente-info-box { background: #00695C; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+        .dipendente-info-box h3 { margin: 0 0 5px 0; color: white; }
+        .gruppo-giorno { margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
+        .gruppo-giorno-header { background: #00695C; color: white; padding: 8px 12px; display: flex; justify-content: space-between; }
+        .gruppo-giorno-header h4 { margin: 0; color: white; }
+        .gruppo-giorno-header .subtotale-giorno { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+        .riga-speciale.ferie td { background: #E3F2FD; color: #0d47a1; text-align: center; font-weight: bold; padding: 15px; }
+        .riga-speciale.permesso td { background: #FFF3E0; color: #e65100; text-align: center; font-weight: bold; padding: 15px; }
+        .riga-speciale.malattia td { background: #FFEBEE; color: #b71c1c; text-align: center; font-weight: bold; padding: 15px; }
+        .riga-speciale.assente td { background: #f5f5f5; color: #666; text-align: center; font-style: italic; padding: 15px; }
+      </style>
     </head>
     <body>
       <div class="header">
@@ -2937,29 +2898,16 @@ function esportaPDFDipendente() {
         <p style="color:#888;font-size:12px;margin:5px 0;">Periodo: ${periodo}</p>
         <p style="color:#888;font-size:12px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
       </div>
-      
-      <div style="margin-top:10px;">
-        ${content}
-      </div>
-      
+      <div style="margin-top:10px;">${content}</div>
       <div class="footer">
         MEC-ROY srls - Sistema di Gestione Lavoro<br>
         Documento generato automaticamente
       </div>
-      
-      <script>
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-          }, 500);
-        };
-      <\/script>
     </body>
     </html>
   `;
-  
-  printWindow.document.write(html);
-  printWindow.document.close();
+
+  await scaricaOCondividiFile(fullHTML, `Report_${utente.nome}_${utente.cognome}`);
 }
 
 // Chiudi modale dettaglio dipendente cliccando fuori
@@ -3203,3 +3151,41 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('main-page').style.display = 'none';
   });
 });
+// ============================================
+// HELPER: Scarica o Condividi file (funziona su mobile)
+// ============================================
+async function scaricaOCondividiFile(htmlContent, fileNameBase) {
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const fileName = `${fileNameBase}_${new Date().toISOString().split('T')[0]}.html`;
+  const file = new File([blob], fileName, { type: 'text/html' });
+
+  // Prova Web Share API (mobile)
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: fileNameBase,
+        text: 'Report MEC-ROY'
+      });
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      console.warn('Condivisione non disponibile, uso download...', error);
+    }
+  }
+
+  // Fallback: download normale (desktop)
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  // Mostra istruzioni per mobile
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    alert('📄 File scaricato!\n\nSu telefono:\n1. Apri il file "Download" o "File"\n2. Tocca il file appena scaricato\n3. Usa "Stampa" o "Condividi" per salvarlo come PDF');
+  }
+}
