@@ -162,11 +162,26 @@ async function init() {
 function login() {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
+  const ricordami = document.getElementById('ricordami').checked;
   
   const utente = dati.utenti.find(u => u.username === username && u.password === password);
   
   if (utente) {
     utenteCorrente = utente;
+    
+    // ============================================
+    // SALVA CREDENZIALI SE "RICORDAMI" È SPUNTATO
+    // ============================================
+    if (ricordami) {
+      localStorage.setItem('ricordami_username', username);
+      localStorage.setItem('ricordami_password', password);
+      localStorage.setItem('ricordami_attivo', 'true');
+    } else {
+      localStorage.removeItem('ricordami_username');
+      localStorage.removeItem('ricordami_password');
+      localStorage.removeItem('ricordami_attivo');
+    }
+    
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('main-page').style.display = 'block';
     document.getElementById('errore').style.display = 'none';
@@ -188,7 +203,6 @@ function login() {
       document.getElementById('btn-password').style.display = 'flex';
       document.getElementById('azienda-container').style.display = 'inline-block';
       
-      // Nascondi il selettore vista per l'admin
       document.getElementById('cal-vista-selector').style.display = 'none';
       
       caricaSelectAziende();
@@ -212,7 +226,6 @@ function login() {
       document.getElementById('btn-password').style.display = 'none';
       document.getElementById('azienda-container').style.display = 'none';
       
-      // Mostra il selettore vista solo per i dipendenti
       document.getElementById('cal-vista-selector').style.display = 'flex';
       
       showTab('registra');
@@ -290,13 +303,6 @@ function login() {
   }
 }
 
-function logout() {
-  utenteCorrente = null;
-  document.getElementById('login-page').style.display = 'block';
-  document.getElementById('main-page').style.display = 'none';
-  document.getElementById('username').value = '';
-  document.getElementById('password').value = '';
-}
 
 function showTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -2462,18 +2468,6 @@ function aggiornaRichiesteManuale() {
 // ============================================
 // AVVIO
 // ============================================
-document.addEventListener('DOMContentLoaded', function() {
-  caricaDati().then(() => {
-    document.getElementById('login-page').style.display = 'block';
-    document.getElementById('main-page').style.display = 'none';
-    const anno = new Date().getFullYear();
-    document.getElementById('cal-anno').value = anno;
-  }).catch((err) => {
-    console.error('❌ Errore caricamento dati:', err);
-    document.getElementById('login-page').style.display = 'block';
-    document.getElementById('main-page').style.display = 'none';
-  });
-});
 
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-notifiche');
@@ -3168,3 +3162,62 @@ function caricaCalendarioDettagliato() {
   
   output.innerHTML = headerHTML + html;
 }
+// ============================================
+// RICORDAMI - Carica credenziali salvate
+// ============================================
+function caricaCredenzialiSalvate() {
+  const ricordamiAttivo = localStorage.getItem('ricordami_attivo');
+  
+  if (ricordamiAttivo === 'true') {
+    const username = localStorage.getItem('ricordami_username');
+    const password = localStorage.getItem('ricordami_password');
+    
+    if (username && password) {
+      document.getElementById('username').value = username;
+      document.getElementById('password').value = password;
+      document.getElementById('ricordami').checked = true;
+      
+      // Focus sul pulsante Entra
+      setTimeout(() => {
+        document.querySelector('.login-box button').focus();
+      }, 100);
+    }
+  }
+}
+
+// ============================================
+// LOGOUT - Rimuovi credenziali se non "ricordami"
+// ============================================
+function logout() {
+  utenteCorrente = null;
+  document.getElementById('login-page').style.display = 'block';
+  document.getElementById('main-page').style.display = 'none';
+  
+  // Ricarica le credenziali salvate (se "ricordami" è attivo)
+  caricaCredenzialiSalvate();
+  
+  // Se NON è ricordami, svuota i campi
+  if (localStorage.getItem('ricordami_attivo') !== 'true') {
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+  }
+}
+
+// ============================================
+// AVVIO - Carica credenziali all'apertura
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+  // Carica credenziali salvate
+  caricaCredenzialiSalvate();
+  
+  caricaDati().then(() => {
+    document.getElementById('login-page').style.display = 'block';
+    document.getElementById('main-page').style.display = 'none';
+    const anno = new Date().getFullYear();
+    document.getElementById('cal-anno').value = anno;
+  }).catch((err) => {
+    console.error('❌ Errore caricamento dati:', err);
+    document.getElementById('login-page').style.display = 'block';
+    document.getElementById('main-page').style.display = 'none';
+  });
+});
