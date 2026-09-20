@@ -183,9 +183,21 @@ function login() {
       localStorage.removeItem('ricordami_attivo');
     }
     
-    document.getElementById('login-page').style.display = 'none';
-    document.getElementById('main-page').style.display = 'block';
-    document.getElementById('errore').style.display = 'none';
+    // Fade-out del form prima di mostrare la main
+    const loginBox = document.querySelector('.login-box');
+    if (loginBox) {
+      loginBox.classList.add('fade-out');
+      setTimeout(() => {
+        document.getElementById('login-page').style.display = 'none';
+        document.getElementById('main-page').style.display = 'block';
+        document.getElementById('errore').style.display = 'none';
+        loginBox.classList.remove('fade-out');
+      }, 220);
+    } else {
+      document.getElementById('login-page').style.display = 'none';
+      document.getElementById('main-page').style.display = 'block';
+      document.getElementById('errore').style.display = 'none';
+    }
     
     document.getElementById('user-nome').textContent = utente.nome + ' ' + utente.cognome;
     const ruoloBadge = document.getElementById('user-ruolo');
@@ -303,6 +315,15 @@ function login() {
     caricaSelectDipendentiCalendario();
     
   } else {
+    // Shake del form quando le credenziali sono errate
+    const loginBox = document.querySelector('.login-box');
+    if (loginBox) {
+      loginBox.classList.remove('shake');
+      // Forza il reflow per far ripartire l'animazione se già attiva
+      void loginBox.offsetWidth;
+      loginBox.classList.add('shake');
+      setTimeout(() => loginBox.classList.remove('shake'), 550);
+    }
     document.getElementById('errore').style.display = 'block';
   }
 }
