@@ -655,6 +655,49 @@ input[disabled] {
 }
 
 /* ============================================
+   MODALE BACKUP
+   ============================================ */
+.backup-opzione {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fafafa;
+}
+
+.backup-opzione:hover {
+  border-color: #00695C;
+  background: #f0faf8;
+}
+
+.backup-opzione input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #00695C;
+  cursor: pointer;
+}
+
+.backup-opzione div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.backup-opzione strong {
+  color: #333;
+  font-size: 1em;
+}
+
+.backup-opzione small {
+  color: #888;
+  font-size: 0.85em;
+}
+
+/* ============================================
    MODALE DETTAGLIO COMMESSA
    ============================================ */
 .modal-dettaglio-commessa-content {
@@ -1134,6 +1177,22 @@ body.dark-mode::before {
   border-color: #2a2a5a;
 }
 
+/* DARK MODE - MODALE BACKUP */
+.dark-mode .backup-opzione {
+  background: #1a1a3e;
+  border-color: #2a2a5a;
+}
+.dark-mode .backup-opzione:hover {
+  border-color: #00695C;
+  background: #1a1a4e;
+}
+.dark-mode .backup-opzione strong {
+  color: #e0e0e0;
+}
+.dark-mode .backup-opzione small {
+  color: #aaa;
+}
+
 /* DARK MODE - MODALE DETTAGLIO COMMESSA */
 .dark-mode .filtri-commessa {
   background: #1a1a3e;
@@ -1284,12 +1343,10 @@ body.dark-mode::before {
     padding: 6px 4px;
   }
 }
+
 /* ============================================
    MODALE DETTAGLIO DIPENDENTE
    ============================================ */
-
-/* Riusa lo stile della modale commessa */
-/* Aggiunte specifiche per il dipendente */
 
 .dipendente-info-box {
   background: linear-gradient(135deg, #00695C 0%, #004D40 100%);
@@ -1505,6 +1562,7 @@ body.dark-mode::before {
     align-items: flex-start;
   }
 }
+
 /* ============================================
    CALENDARIO - SELETTORE VISTA (solo dipendenti)
    ============================================ */
@@ -1744,6 +1802,7 @@ body.dark-mode::before {
     align-items: flex-start;
   }
 }
+
 /* ============================================
    CHECKBOX "RICORDAMI" (pagina login)
    ============================================ */
@@ -1784,4 +1843,45 @@ body.dark-mode::before {
 
 .dark-mode .ricordami-label:hover span {
   color: #4db6ac;
+}
+/* ============================================ */
+/* SMART TIME INPUT — Ore/Minuti auto-format   */
+/* ============================================ */
+input.smart-time {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 1.4em;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 3px;
+  color: #00695C;
+  background: white;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input.smart-time:focus {
+  outline: none;
+  border-color: #00695C;
+  box-shadow: 0 0 0 4px rgba(0,105,92,0.15);
+}
+
+input.smart-time::placeholder {
+  color: #bbb;
+  letter-spacing: 3px;
+}
+
+/* Dark mode */
+.dark-mode input.smart-time {
+  background: #0f3460;
+  color: #4db6ac;
+  border-color: #2a2a5a;
+}
+.dark-mode input.smart-time:focus {
+  border-color: #00695C;
+}
+.dark-mode input.smart-time::placeholder {
+  color: #556;
 }
