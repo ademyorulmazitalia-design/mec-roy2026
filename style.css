@@ -1190,18 +1190,18 @@ input[disabled] {
    ============================================ */
 .logo-container { text-align: center; margin-bottom: 25px; }
 .logo-img {
-  max-width: 120px;
-  max-height: 120px;
+  max-width: 160px;
+  max-height: 160px;
   object-fit: contain;
   border-radius: 12px;
   margin-bottom: 10px;
   filter: drop-shadow(0 4px 8px rgba(0,105,92,0.15));
 }
-.logo-small { display: flex; align-items: center; gap: 8px; }
-.logo-small-img { max-height: 32px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,105,92,0.15)); }
+.logo-small { display: flex; align-items: center; gap: 10px; }
+.logo-small-img { max-height: 58px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,105,92,0.15)); }
 .azienda-nome { font-size: 1.6em; color: #333; margin: 5px 0; }
-.azienda-small { font-weight: 700; color: #00695C; font-size: 0.9em; }
-#logo-fallback i { font-size: 60px; color: #00695C; }
+.azienda-small { font-weight: 700; color: #00695C; font-size: 1.65em; letter-spacing: 0.5px; }
+#logo-fallback i { font-size: 70px; color: #00695C; }
 
 /* ============================================
    DARK MODE
@@ -1526,7 +1526,7 @@ body.dark-mode::before {
   .calendario-grid { gap: 3px; }
   .calendario-giorno { min-height: 40px; padding: 5px 2px; font-size: 0.7em; }
   .calendario-giorno .numero { font-size: 0.9em; }
-  .logo-img { max-width: 80px; max-height: 80px; }
+  .logo-img { max-width: 100px; max-height: 100px; }
   .azienda-nome { font-size: 1.2em; }
   .richiesta-card { flex-direction: column; align-items: stretch; }
   .richiesta-card .azioni { justify-content: center; }
@@ -2216,4 +2216,21 @@ input.smart-time::placeholder {
     opacity: 1 !important;
     transform: none !important;
   }
+}
+/* ============================================ */
+/* TITOLO HEADER "GESTIONE LAVORO"              */
+/* ============================================ */
+header h1 {
+  font-size: 1.15em;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+header h1 i {
+  font-size: 0.9em;
+  color: #00695C;
 }
