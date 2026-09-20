@@ -155,8 +155,9 @@ async function init() {
   await caricaDati();
   document.getElementById('login-page').style.display = 'block';
   document.getElementById('main-page').style.display = 'none';
-  const anno = new Date().getFullYear();
-  document.getElementById('cal-anno').value = anno;
+  const adesso = new Date();
+  document.getElementById('cal-mese').value = adesso.getMonth() + 1;
+  document.getElementById('cal-anno').value = adesso.getFullYear();
 }
 
 function login() {
@@ -168,7 +169,7 @@ function login() {
   
   if (utente) {
     utenteCorrente = utente;
-    
+    salvaSessione(utente.username);
     // ============================================
     // SALVA CREDENZIALI SE "RICORDAMI" È SPUNTATO
     // ============================================
@@ -241,7 +242,11 @@ function login() {
     dataReg.disabled = true;
     dataReg.style.backgroundColor = '#f0f0f0';
     dataReg.style.cursor = 'not-allowed';
-    
+
+    // Imposta il mese e l'anno correnti nel calendario
+    const adesso = new Date();
+    document.getElementById('cal-mese').value = adesso.getMonth() + 1;
+    document.getElementById('cal-anno').value = adesso.getFullYear();
     document.getElementById('richiesta-data-inizio').value = oggi;
     document.getElementById('richiesta-data-fine').value = oggi;
     document.getElementById('modifica-data').value = oggi;
@@ -263,16 +268,7 @@ function login() {
       const ora = new Date();
       const oraCorrente = ora.getHours().toString().padStart(2, '0') + ':00';
       oraInizio.value = oraCorrente;
-      
-      oraInizio.oninput = function() {
-        if (this.value) {
-          const [h, m] = this.value.split(':').map(Number);
-          const hFine = (h + 1).toString().padStart(2, '0');
-          oraFine.value = hFine + ':00';
-          oraFine.focus();
-        }
-      };
-      
+
       document.getElementById('straordinario').addEventListener('change', function() {
         const oraInizio = document.getElementById('ora-inizio');
         if (this.checked) {
@@ -291,6 +287,14 @@ function login() {
       
       caricaUltimaRegistrazione();
     }
+    
+    // Reset dei sotto-pannelli Commesse allo stato iniziale
+    const menuC = document.getElementById('commesse-menu');
+    const aggC  = document.getElementById('commesse-aggiungi');
+    const anaC  = document.getElementById('commesse-analizza');
+    if (menuC) menuC.style.display = 'block';
+    if (aggC)  aggC.style.display  = 'none';
+    if (anaC)  anaC.style.display  = 'none';
     
     caricaSelectCommesse();
     caricaListaCommesse();
@@ -570,7 +574,7 @@ function caricaUltimaRegistrazione() {
       oraInizio.value = (oreCorrente <= 23) ? oreOra : '13:00';
     }
     
-    const oraCorrenteMinuti = oraCorrente * 60;
+    const oraCorrenteMinuti = oraCorrente.getHours() * 60 + oraCorrente.getMinutes();
     const inizioMinuti = parseInt(oraInizio.value.split(':')[0]) * 60 + parseInt(oraInizio.value.split(':')[1] || 0);
     if (inizioMinuti > oraCorrenteMinuti) {
         oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
@@ -1000,12 +1004,13 @@ function caricaRichiesteDipendente() {
   div.innerHTML = html;
 }
 
+// FIX: non cancella più le richieste processate, filtra solo per la visualizzazione
 function caricaRichiesteAdmin() {
   const div = document.getElementById('lista-richieste-admin');
   
-  dati.richieste = dati.richieste.filter(r => r.stato === 'pending');
-  
-  const richieste = dati.richieste;
+  // ⚠️ ATTENZIONE: usiamo una variabile locale per la lista da mostrare,
+  // NON modifichiamo più dati.richieste (sennò perderemmo lo storico)
+  const richieste = dati.richieste.filter(r => r.stato === 'pending');
   
   if (richieste.length === 0) {
     div.innerHTML = '<p class="text-muted">✅ Nessuna richiesta in sospeso</p>';
@@ -1140,11 +1145,6 @@ function approvaRichiesta(id) {
   
   salvaDati();
   
-  const card = document.querySelector('.richiesta-card');
-  if (card) {
-    card.remove();
-  }
-  
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
@@ -1171,11 +1171,6 @@ function rifiutaRichiesta(id) {
   );
   
   salvaDati();
-  
-  const card = document.querySelector('.richiesta-card');
-  if (card) {
-    card.remove();
-  }
   
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
@@ -1456,7 +1451,6 @@ async function esportaPDF() {
     return;
   }
 
-  // 1. Genera l'HTML completo (come già fai)
   const logoHTML = document.querySelector('.logo-small') ? 
     document.querySelector('.logo-small').outerHTML : '<h2>MEC-ROY srls</h2>';
   
@@ -1478,11 +1472,9 @@ async function esportaPDF() {
     </html>
   `;
 
-  // 2. Converti l'HTML in un file (Blob)
   const blob = new Blob([fullHTML], { type: 'text/html' });
   const file = new File([blob], 'Report_MEC-ROY.html', { type: 'text/html' });
 
-  // 3. Controlla se il telefono supporta la condivisione di file
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
@@ -1490,14 +1482,13 @@ async function esportaPDF() {
         title: 'Report Ore MEC-ROY',
         text: 'In allegato il report ore.'
       });
-      return; // Se ha condiviso, abbiamo finito
+      return;
     } catch (error) {
-      if (error.name === 'AbortError') return; // L'utente ha annullato
+      if (error.name === 'AbortError') return;
       console.warn('Errore condivisione, provo download...', error);
     }
   }
 
-  // 4. Fallback: Se il telefono non supporta la condivisione, prova il download normale
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -1798,7 +1789,6 @@ function caricaCalendario() {
     return;
   }
 
-  // Se è dipendente e ha scelto vista "dettagliato"
   if (utenteCorrente.ruolo === 'dipendente') {
     const vistaScelta = document.querySelector('input[name="cal-vista"]:checked');
     if (vistaScelta && vistaScelta.value === 'dettagliato') {
@@ -1807,7 +1797,6 @@ function caricaCalendario() {
     }
   }
 
-  // Altrimenti usa la vista mensile (attuale)
   const isAdmin = utenteCorrente.ruolo === 'admin';
   let utenteFilter = utenteCorrente.username;
   if (isAdmin) {
@@ -2045,7 +2034,6 @@ function apriDettaglioCommessa(id) {
   
   commessaCorrenteDettaglio = id;
   
-  // Reset filtri
   filtriCommessa = {
     dataInizio: '',
     dataFine: '',
@@ -2053,25 +2041,20 @@ function apriDettaglioCommessa(id) {
     dipendenti: []
   };
   
-  // Popola header
   document.getElementById('dettaglio-commessa-nome').textContent = commessa.nome;
   const dataCreazione = commessa.data_creazione ? 
     new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 
     'N/D';
   document.getElementById('dettaglio-commessa-data').textContent = 'Creata il ' + dataCreazione;
   
-  // Reset input filtri
   document.getElementById('filtro-data-inizio').value = '';
   document.getElementById('filtro-data-fine').value = '';
   document.getElementById('filtro-ricerca').value = '';
   
-  // Popola lista dipendenti con checkbox
   popolaFiltroDipendenti();
   
-  // Mostra modale
   document.getElementById('modal-dettaglio-commessa').classList.add('active');
   
-  // Carica dati
   applicaFiltriCommessa();
 }
 
@@ -2079,7 +2062,6 @@ function popolaFiltroDipendenti() {
   const container = document.getElementById('filtro-dipendenti');
   container.innerHTML = '';
   
-  // Solo i dipendenti che hanno registrazioni su questa commessa
   const utentiConRegistrazioni = [...new Set(
     dati.registrazioni
       .filter(r => r.commessa_id === commessaCorrenteDettaglio)
@@ -2128,24 +2110,20 @@ function applicaFiltriCommessa() {
     r.commessa_id === commessaCorrenteDettaglio && r.tipo === 'lavoro'
   );
   
-  // Filtro data inizio
   if (filtriCommessa.dataInizio) {
     registrazioni = registrazioni.filter(r => r.data >= filtriCommessa.dataInizio);
   }
   
-  // Filtro data fine
   if (filtriCommessa.dataFine) {
     registrazioni = registrazioni.filter(r => r.data <= filtriCommessa.dataFine);
   }
   
-  // Filtro dipendenti (multiplo)
   if (filtriCommessa.dipendenti.length > 0) {
     registrazioni = registrazioni.filter(r => 
       filtriCommessa.dipendenti.includes(r.utente_id)
     );
   }
   
-  // Filtro ricerca testuale
   if (filtriCommessa.ricerca) {
     registrazioni = registrazioni.filter(r => {
       const utente = dati.utenti.find(u => u.username === r.utente_id);
@@ -2158,14 +2136,11 @@ function applicaFiltriCommessa() {
     });
   }
   
-  // Ordina per data
   registrazioni.sort((a, b) => b.data.localeCompare(a.data));
   
-  // Aggiorna contatore
   document.getElementById('dettaglio-contatore').textContent = 
     `📊 ${registrazioni.length} registrazioni visualizzate`;
   
-  // Raggruppa per dipendente
   const perDipendente = {};
   registrazioni.forEach(r => {
     if (!perDipendente[r.utente_id]) {
@@ -2174,7 +2149,6 @@ function applicaFiltriCommessa() {
     perDipendente[r.utente_id].push(r);
   });
   
-  // Genera HTML
   const output = document.getElementById('dettaglio-commessa-output');
   
   if (registrazioni.length === 0) {
@@ -2195,7 +2169,6 @@ function applicaFiltriCommessa() {
     html += `<div class="gruppo-dipendente-header">`;
     html += `<h4><i class="fas fa-user"></i> ${nomeDipendente}</h4>`;
     
-    // Calcola subtotale
     perDipendente[username].forEach(r => {
       totaleDipendente += r.ore || 0;
     });
@@ -2259,7 +2232,6 @@ function resetFiltriCommessa() {
   document.getElementById('filtro-data-fine').value = '';
   document.getElementById('filtro-ricerca').value = '';
   
-  // Rimuovi active da tutti i dipendenti
   document.querySelectorAll('.filtro-dipendente-item').forEach(item => {
     item.classList.remove('attivo');
   });
@@ -2445,11 +2417,19 @@ document.addEventListener('click', function(e) {
 });
 
 document.addEventListener('click', function(e) {
+  const modal = document.getElementById('modal-backup');
+  if (e.target === modal) {
+    chiudiModalBackup();
+  }
+});
+
+document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-dettaglio-commessa');
   if (e.target === modal) {
     chiudiDettaglioCommessa();
   }
 });
+
 // ============================================
 // MODALE DETTAGLIO DIPENDENTE
 // ============================================
@@ -2470,7 +2450,6 @@ function apriDettaglioDipendente(username) {
   
   dipendenteCorrenteDettaglio = username;
   
-  // Reset filtri
   const oggi = new Date();
   filtriDipendente = {
     vista: 'mese',
@@ -2479,23 +2458,18 @@ function apriDettaglioDipendente(username) {
     anno: oggi.getFullYear()
   };
   
-  // Popola header
   document.getElementById('dettaglio-dipendente-nome').textContent = utente.nome + ' ' + utente.cognome;
   document.getElementById('dettaglio-dipendente-ruolo').textContent = 'Ruolo: ' + utente.ruolo + ' | Username: ' + utente.username;
   
-  // Reset input filtri
   document.getElementById('filtro-vista-dipendente').value = 'mese';
   document.getElementById('filtro-giorno').value = filtriDipendente.giorno;
   document.getElementById('filtro-mese').value = filtriDipendente.mese;
   document.getElementById('filtro-anno').value = filtriDipendente.anno;
   
-  // Imposta vista iniziale
   cambiaVistaDipendente();
   
-  // Mostra modale
   document.getElementById('modal-dettaglio-dipendente').classList.add('active');
   
-  // Carica dati
   applicaFiltriDipendente();
 }
 
@@ -2525,7 +2499,6 @@ function applicaFiltriDipendente() {
   const output = document.getElementById('dettaglio-dipendente-output');
   
   if (vista === 'giorno') {
-    // VISTA GIORNO
     const giorno = document.getElementById('filtro-giorno').value;
     filtriDipendente.giorno = giorno;
     
@@ -2534,20 +2507,17 @@ function applicaFiltriDipendente() {
       return;
     }
     
-    // Trova registrazioni del giorno
     const registrazioni = dati.registrazioni.filter(r => 
       r.utente_id === dipendenteCorrenteDettaglio && 
       r.data === giorno
     );
     
-    // Controlla se c'è richiesta approvata (ferie/permesso/malattia)
     const richiesta = dati.richieste.find(r => 
       r.utente_id === dipendenteCorrenteDettaglio && 
       r.stato === 'approvata' &&
       r.data_inizio <= giorno && r.data_fine >= giorno
     );
     
-    // Aggiorna contatore
     document.getElementById('dettaglio-dipendente-contatore').textContent = 
       `📊 ${registrazioni.length} registrazioni`;
     
@@ -2566,12 +2536,10 @@ function applicaFiltriDipendente() {
     let html = '';
     let totaleGiorno = 0;
     
-    // Header giorno
     html += `<div class="gruppo-giorno">`;
     html += `<div class="gruppo-giorno-header">`;
     html += `<h4><i class="fas fa-calendar-day"></i> ${dataFormattata}</h4>`;
     
-    // Se c'è una richiesta approvata (ferie/permesso/malattia)
     if (richiesta) {
       const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
       const tipo = richiesta.tipo.toUpperCase();
@@ -2593,7 +2561,6 @@ function applicaFiltriDipendente() {
       return;
     }
     
-    // Calcola totale
     registrazioni.forEach(r => {
       if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
         const [h1, m1] = r.ora_inizio.split(':').map(Number);
@@ -2642,7 +2609,6 @@ function applicaFiltriDipendente() {
     output.innerHTML = html;
     
   } else {
-    // VISTA MESE
     const mese = parseInt(document.getElementById('filtro-mese').value);
     const anno = parseInt(document.getElementById('filtro-anno').value);
     
@@ -2663,34 +2629,28 @@ function applicaFiltriDipendente() {
     let totaleMese = 0;
     let registrazioniTotali = 0;
     
-    // Per ogni giorno del mese
     for (let g = 1; g <= giorniMese; g++) {
       const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
       const dataObj = new Date(data + 'T00:00:00');
       const giornoSett = dataObj.getDay();
       const isWeekend = giornoSett === 0 || giornoSett === 6;
       
-      // Registrazioni del giorno
       const registrazioni = dati.registrazioni.filter(r => 
         r.utente_id === dipendenteCorrenteDettaglio && 
         r.data === data
       );
       
-      // Richiesta approvata (ferie/permesso/malattia)
       const richiesta = dati.richieste.find(r => 
         r.utente_id === dipendenteCorrenteDettaglio && 
         r.stato === 'approvata' &&
         r.data_inizio <= data && r.data_fine >= data
     );
       
-      // Se weekend e nessuna registrazione
       if (isWeekend && registrazioni.length === 0 && !richiesta) {
-        continue; // Salta i weekend vuoti
+        continue;
       }
       
-      // Se nessuna registrazione e nessuna richiesta e non weekend
       if (registrazioni.length === 0 && !richiesta && !isWeekend) {
-        // Giorno passato senza registrazioni → ASSENTE
         const oggi = new Date();
         oggi.setHours(0, 0, 0, 0);
         
@@ -2705,7 +2665,6 @@ function applicaFiltriDipendente() {
         continue;
       }
       
-      // Giorno con richiesta (ferie/permesso/malattia)
       if (richiesta && registrazioni.length === 0) {
         const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
         const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
@@ -2727,7 +2686,6 @@ function applicaFiltriDipendente() {
         continue;
       }
       
-      // Giorno con registrazioni di lavoro
       let totaleGiorno = 0;
       registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
       
@@ -2781,7 +2739,6 @@ function applicaFiltriDipendente() {
       html += `</div>`;
     }
     
-    // Aggiorna contatore
     document.getElementById('dettaglio-dipendente-contatore').textContent = 
       `📊 ${registrazioniTotali} registrazioni nel mese`;
     
@@ -2790,7 +2747,6 @@ function applicaFiltriDipendente() {
       return;
     }
     
-    // Totale generale in cima
     const headerHTML = `
       <div class="dipendente-info-box">
         <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
@@ -2910,18 +2866,17 @@ async function esportaPDFDipendente() {
   await scaricaOCondividiFile(fullHTML, `Report_${utente.nome}_${utente.cognome}`);
 }
 
-// Chiudi modale dettaglio dipendente cliccando fuori
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-dettaglio-dipendente');
   if (e.target === modal) {
     chiudiDettaglioDipendente();
   }
 });
+
 // ============================================
 // CALENDARIO DETTAGLIATO (solo dipendenti)
 // ============================================
 function cambiaVistaCalendario() {
-  // Ricarica il calendario con la vista scelta
   caricaCalendario();
 }
 
@@ -2952,31 +2907,26 @@ function caricaCalendarioDettagliato() {
   let registrazioniTotali = 0;
   let giorniLavorati = 0;
   
-  // Per ogni giorno del mese
   for (let g = 1; g <= giorniMese; g++) {
     const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
     const dataObj = new Date(data + 'T00:00:00');
     const giornoSett = dataObj.getDay();
     const isWeekend = giornoSett === 0 || giornoSett === 6;
     
-    // Registrazioni del giorno
     const registrazioni = dati.registrazioni.filter(r => 
       r.utente_id === username && r.data === data
     );
     
-    // Richiesta approvata (ferie/permesso/malattia)
     const richiesta = dati.richieste.find(r => 
       r.utente_id === username && 
       r.stato === 'approvata' &&
       r.data_inizio <= data && r.data_fine >= data
     );
     
-    // SALTA weekend se non lavorati (nessuna registrazione)
     if (isWeekend && registrazioni.length === 0 && !richiesta) {
       continue;
     }
     
-    // Giorno passato senza registrazioni e senza richiesta → ASSENTE
     if (!isWeekend && registrazioni.length === 0 && !richiesta) {
       const oggi = new Date();
       oggi.setHours(0, 0, 0, 0);
@@ -2992,7 +2942,6 @@ function caricaCalendarioDettagliato() {
       continue;
     }
     
-    // Giorno con richiesta (ferie/permesso/malattia) e senza registrazioni
     if (richiesta && registrazioni.length === 0) {
       const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
       const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
@@ -3014,7 +2963,6 @@ function caricaCalendarioDettagliato() {
       continue;
     }
     
-    // Giorno con registrazioni di lavoro
     let totaleGiorno = 0;
     registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
     
@@ -3072,13 +3020,11 @@ function caricaCalendarioDettagliato() {
     html += `</div>`;
   }
   
-  // Se non c'è nulla da mostrare
   if (html === '') {
     output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
     return;
   }
   
-  // Header con totali
   const headerHTML = `
     <div class="calendario-dettagliato-info">
       <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
@@ -3092,9 +3038,26 @@ function caricaCalendarioDettagliato() {
   
   output.innerHTML = headerHTML + html;
 }
+
 // ============================================
 // RICORDAMI - Carica credenziali salvate
 // ============================================
+// ============================================
+// SESSIONE PERSISTENTE — Ricorda l'utente loggato
+// ============================================
+function salvaSessione(username) {
+  if (!username) return;
+  localStorage.setItem('utente_loggato', username);
+}
+
+function cancellaSessione() {
+  localStorage.removeItem('utente_loggato');
+}
+
+function leggiSessione() {
+  return localStorage.getItem('utente_loggato');
+}
+
 function caricaCredenzialiSalvate() {
   const ricordamiAttivo = localStorage.getItem('ricordami_attivo');
   
@@ -3107,7 +3070,6 @@ function caricaCredenzialiSalvate() {
       document.getElementById('password').value = password;
       document.getElementById('ricordami').checked = true;
       
-      // Focus sul pulsante Entra
       setTimeout(() => {
         document.querySelector('.login-box button').focus();
       }, 100);
@@ -3116,16 +3078,29 @@ function caricaCredenzialiSalvate() {
 }
 
 // ============================================
-// LOGOUT - Rimuovi credenziali se non "ricordami"
+// LOGOUT - Reset completo dello stato
 // ============================================
 function logout() {
+  cancellaSessione();
   utenteCorrente = null;
+
+  // Reset dei sotto-pannelli Commesse (evita che restino aperti dopo il logout)
+  const menuC = document.getElementById('commesse-menu');
+  const aggC  = document.getElementById('commesse-aggiungi');
+  const anaC  = document.getElementById('commesse-analizza');
+  if (menuC) menuC.style.display = 'block';
+  if (aggC)  aggC.style.display  = 'none';
+  if (anaC)  anaC.style.display  = 'none';
+
+  // Chiudi eventuali modali aperte
+  document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
+
   document.getElementById('login-page').style.display = 'block';
   document.getElementById('main-page').style.display = 'none';
-  
+
   // Ricarica le credenziali salvate (se "ricordami" è attivo)
   caricaCredenzialiSalvate();
-  
+
   // Se NON è ricordami, svuota i campi
   if (localStorage.getItem('ricordami_attivo') !== 'true') {
     document.getElementById('username').value = '';
@@ -3137,20 +3112,161 @@ function logout() {
 // AVVIO - Carica credenziali all'apertura
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
-  // Carica credenziali salvate
   caricaCredenzialiSalvate();
   
   caricaDati().then(() => {
+    const adesso = new Date();
+    document.getElementById('cal-mese').value = adesso.getMonth() + 1;
+    document.getElementById('cal-anno').value = adesso.getFullYear();
+
+    // 🔑 Controlla se c'è una sessione salvata
+    const usernameSalvato = leggiSessione();
+    if (usernameSalvato) {
+      const utente = dati.utenti.find(u => u.username === usernameSalvato);
+      if (utente) {
+        // Utente valido → ricrea il login automaticamente
+        utenteCorrente = utente;
+
+        // Ricordami: popola il form (ma verrà nascosto subito)
+        document.getElementById('username').value = utente.username;
+        
+        // Applica il login come se l'utente avesse appena cliccato "Entra"
+        document.getElementById('login-page').style.display = 'none';
+        document.getElementById('main-page').style.display = 'block';
+        document.getElementById('errore').style.display = 'none';
+        
+        document.getElementById('user-nome').textContent = utente.nome + ' ' + utente.cognome;
+        const ruoloBadge = document.getElementById('user-ruolo');
+        ruoloBadge.textContent = utente.ruolo;
+        ruoloBadge.className = 'badge ' + utente.ruolo;
+        
+        if (utente.ruolo === 'admin') {
+          document.getElementById('tab-registra').style.display = 'none';
+          document.getElementById('tab-richiedi').style.display = 'none';
+          document.getElementById('tab-modifica').style.display = 'inline-block';
+          document.getElementById('tab-richieste').style.display = 'inline-block';
+          document.getElementById('tab-commesse').style.display = 'inline-block';
+          document.getElementById('tab-dipendenti').style.display = 'inline-block';
+          document.getElementById('tab-calendario').style.display = 'inline-block';
+          document.getElementById('cal-filtro-dipendente').style.display = 'block';
+          document.getElementById('btn-password').style.display = 'flex';
+          document.getElementById('azienda-container').style.display = 'inline-block';
+          document.getElementById('cal-vista-selector').style.display = 'none';
+          
+          caricaSelectAziende();
+          caricaSelectAziendeCommesse();
+          caricaSelectDipendentiModifica();
+          caricaSelectDipendentiCalendario();
+          caricaRichiesteAdmin();
+          caricaListaDipendenti();
+          aggiornaBadgeRichieste();
+          showTab('modifica');
+        } else {
+          document.getElementById('tab-registra').style.display = 'inline-block';
+          document.getElementById('tab-richiedi').style.display = 'inline-block';
+          document.getElementById('tab-modifica').style.display = 'none';
+          document.getElementById('tab-richieste').style.display = 'none';
+          document.getElementById('tab-commesse').style.display = 'none';
+          document.getElementById('tab-dipendenti').style.display = 'none';
+          document.getElementById('tab-calendario').style.display = 'inline-block';
+          document.getElementById('cal-filtro-dipendente').style.display = 'none';
+          document.getElementById('btn-password').style.display = 'none';
+          document.getElementById('azienda-container').style.display = 'none';
+          document.getElementById('cal-vista-selector').style.display = 'flex';
+          showTab('registra');
+        }
+        
+        document.getElementById('notifiche-container').style.display = 'inline-block';
+        aggiornaBadgeNotifiche();
+        caricaDarkMode();
+
+        // Imposta il mese e l'anno correnti nel calendario
+        const adesso = new Date();
+        document.getElementById('cal-mese').value = adesso.getMonth() + 1;
+        document.getElementById('cal-anno').value = adesso.getFullYear();
+
+        const oggi = new Date().toISOString().split('T')[0];
+        const dataReg = document.getElementById('data-reg');
+        dataReg.value = oggi;
+        dataReg.disabled = true;
+        dataReg.style.backgroundColor = '#f0f0f0';
+        dataReg.style.cursor = 'not-allowed';
+        
+        document.getElementById('richiesta-data-inizio').value = oggi;
+        document.getElementById('richiesta-data-fine').value = oggi;
+        document.getElementById('modifica-data').value = oggi;
+        document.getElementById('recupero-data').value = oggi;
+        
+        caricaSelectRecuperoCommesse();
+        
+        document.getElementById('tipo-richiesta').addEventListener('change', function() {
+          const tipo = this.value;
+          document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
+          document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
+          document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
+        });
+        
+        if (utente.ruolo === 'dipendente') {
+          const oraInizio = document.getElementById('ora-inizio');
+          const ora = new Date();
+          const oraCorrente = ora.getHours().toString().padStart(2, '0') + ':00';
+          oraInizio.value = oraCorrente;
+
+          document.getElementById('straordinario').addEventListener('change', function() {
+            const oraInizio = document.getElementById('ora-inizio');
+            if (this.checked) {
+              oraInizio.disabled = false;
+              oraInizio.style.backgroundColor = 'white';
+              oraInizio.style.cursor = 'text';
+              document.getElementById('info-registrazione').innerHTML = `
+                <div class="info-msg" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;">
+                  ⏰ <strong>Modalità Straordinario attivata!</strong> Le ore oltre le 8 verranno segnate come straordinario.
+                </div>
+              `;
+            } else {
+              caricaUltimaRegistrazione();
+            }
+          });
+          
+          caricaUltimaRegistrazione();
+        }
+        
+        const menuC = document.getElementById('commesse-menu');
+        const aggC  = document.getElementById('commesse-aggiungi');
+        const anaC  = document.getElementById('commesse-analizza');
+        if (menuC) menuC.style.display = 'block';
+        if (aggC)  aggC.style.display  = 'none';
+        if (anaC)  anaC.style.display  = 'none';
+        
+        caricaSelectCommesse();
+        caricaListaCommesse();
+        caricaRichiesteDipendente();
+        caricaSelectDipendentiModifica();
+        caricaSelectDipendentiCalendario();
+        
+        // Re-inizializza lo smart-time (importante!)
+        ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) initSmartTime(el);
+        });
+        
+        return;
+      } else {
+        // Utente non più esistente → cancella sessione e mostra login
+        cancellaSessione();
+      }
+    }
+    
+    // Nessuna sessione valida → mostra login
     document.getElementById('login-page').style.display = 'block';
     document.getElementById('main-page').style.display = 'none';
-    const anno = new Date().getFullYear();
-    document.getElementById('cal-anno').value = anno;
   }).catch((err) => {
     console.error('❌ Errore caricamento dati:', err);
     document.getElementById('login-page').style.display = 'block';
     document.getElementById('main-page').style.display = 'none';
   });
 });
+
 // ============================================
 // HELPER: Scarica o Condividi file (funziona su mobile)
 // ============================================
@@ -3159,7 +3275,6 @@ async function scaricaOCondividiFile(htmlContent, fileNameBase) {
   const fileName = `${fileNameBase}_${new Date().toISOString().split('T')[0]}.html`;
   const file = new File([blob], fileName, { type: 'text/html' });
 
-  // Prova Web Share API (mobile)
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
@@ -3174,7 +3289,6 @@ async function scaricaOCondividiFile(htmlContent, fileNameBase) {
     }
   }
 
-  // Fallback: download normale (desktop)
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -3184,8 +3298,764 @@ async function scaricaOCondividiFile(htmlContent, fileNameBase) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
-  // Mostra istruzioni per mobile
   if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
     alert('📄 File scaricato!\n\nSu telefono:\n1. Apri il file "Download" o "File"\n2. Tocca il file appena scaricato\n3. Usa "Stampa" o "Condividi" per salvarlo come PDF');
   }
 }
+
+// ============================================
+// BACKUP ZIP (solo admin)
+// ============================================
+
+function apriModalBackup() {
+  if (utenteCorrente?.ruolo !== 'admin') {
+    alert('Solo gli amministratori possono scaricare il backup');
+    return;
+  }
+  document.getElementById('msg-backup').innerHTML = '';
+  document.getElementById('modal-backup').classList.add('active');
+}
+
+function chiudiModalBackup() {
+  document.getElementById('modal-backup').classList.remove('active');
+}
+
+async function eseguiBackup() {
+  if (utenteCorrente?.ruolo !== 'admin') return;
+
+  const tipo = document.querySelector('input[name="backup-tipo"]:checked')?.value || 'tutto';
+  const msg = document.getElementById('msg-backup');
+
+  msg.innerHTML = '<div class="info-msg">⏳ Generazione backup in corso...</div>';
+
+  try {
+    await new Promise(r => setTimeout(r, 100));
+
+    const zip = new JSZip();
+    const dataOggi = new Date().toISOString().split('T')[0];
+    const nomeCartella = `MEC-ROY_Backup_${dataOggi}`;
+    const root = zip.folder(nomeCartella);
+
+    // ---------- STILI CONDIVISI ----------
+    const stiliComuni = `
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #333; background: #f5f5f5; margin: 0; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        h1 { color: #00695C; margin: 5px 0; font-size: 1.6em; }
+        h2 { color: #00695C; margin: 5px 0; font-size: 1.2em; font-weight: 500; }
+        h3 { color: #333; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 6px 4px; text-align: center; overflow: hidden; }
+        th { background: #00695C; color: white; font-weight: 600; font-size: 11px; }
+        td:first-child, th:first-child { text-align: left; padding-left: 10px; min-width: 130px; width: 130px; white-space: nowrap; }
+        tr:nth-child(even) td { background: #fafafa; }
+        .gruppo { margin-bottom: 25px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+        .gruppo-header { background: linear-gradient(135deg, #00695C 0%, #004D40 100%); color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .gruppo-header h4 { margin: 0; font-size: 1em; font-weight: 500; }
+        .totale { background: #fff3cd; border: 2px solid #ffc107; padding: 12px; text-align: center; font-weight: bold; border-radius: 8px; color: #856404; margin: 20px 0; }
+        .header-info { text-align: center; padding: 10px 0 15px 0; border-bottom: 2px solid #00695C; margin-bottom: 20px; }
+        .header-info h1 { border: none; margin: 5px 0; }
+        .header-info p { color: #888; margin: 3px 0; font-size: 12px; }
+        .footer { text-align: center; padding: 15px; color: #888; font-size: 11px; border-top: 2px solid #ddd; margin-top: 30px; }
+        .subtotale { background: rgba(255,255,255,0.25); padding: 3px 10px; border-radius: 10px; font-size: 12px; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: bold; margin-left: 3px; }
+        .badge.straordinario { background: #d32f2f; color: white; }
+        .badge.recupero { background: #ffc107; color: #333; }
+        .legenda { margin: 15px 0; padding: 10px 15px; background: #f8f9fa; border-radius: 6px; font-size: 12px; color: #555; }
+        .wrap { overflow-x: auto; }
+        @media print {
+          body { background: white; padding: 0; }
+          .container { box-shadow: none; padding: 10px; }
+        }
+      </style>
+    `;
+
+    const intestazione = (titolo, sottotitolo) => `
+      <div class="header-info">
+        <h1>MEC-ROY srls</h1>
+        <h2>${titolo}</h2>
+        ${sottotitolo ? `<p>${sottotitolo}</p>` : ''}
+        <p>Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
+      </div>
+    `;
+
+    const pieDiPagina = `
+      <div class="footer">
+        MEC-ROY srls - Sistema di Gestione Lavoro<br>
+        Documento generato automaticamente dal backup
+      </div>
+    `;
+
+    const headHTML = (titolo) => `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${titolo}</title>${stiliComuni}</head><body><div class="container">`;
+
+    // ---------- FUNZIONE: RENDER ORE MENSILI (riepilogo tutti) ----------
+    function renderRiepilogoMensile(anno, mese) {
+      const giorniMese = new Date(anno, mese, 0).getDate();
+      const mesePadded = String(mese).padStart(2, '0');
+      const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+        'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+      const giorniSett = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+      const dipendenti = dati.utenti.filter(u => u.ruolo === 'dipendente')
+        .sort((a,b) => (a.cognome || '').localeCompare(b.cognome || ''));
+
+      let html = `<table><thead><tr><th>Dipendente</th>`;
+      for (let g = 1; g <= giorniMese; g++) {
+        const giornoSett = new Date(anno, mese - 1, g).getDay();
+        const isWeekend = giornoSett === 0 || giornoSett === 6;
+        const bg = isWeekend ? '#004D40' : '#00695C';
+        html += `<th style="background:${bg};">${g}<br><span style="font-weight:400;font-size:10px;opacity:0.85;">${giorniSett[giornoSett]}</span></th>`;
+      }
+      html += `<th style="background:#004D40;">Totale</th></tr></thead><tbody>`;
+
+      dipendenti.forEach(dip => {
+        html += `<tr><td><strong>${dip.cognome || ''} ${dip.nome || ''}</strong></td>`;
+        let totaleOre = 0;
+
+        for (let g = 1; g <= giorniMese; g++) {
+          const data = `${anno}-${mesePadded}-${String(g).padStart(2,'0')}`;
+          const giornoSett = new Date(anno, mese - 1, g).getDay();
+          const isWeekend = giornoSett === 0 || giornoSett === 6;
+
+          const regs = dati.registrazioni.filter(r =>
+            r.utente_id === dip.username && r.data === data
+          );
+
+          let cella = '';
+          let bg = 'white';
+
+          if (regs.length > 0) {
+            const haFerie = regs.some(r => r.tipo === 'ferie');
+            const haPermesso = regs.some(r => r.tipo === 'permesso');
+            const haMalattia = regs.some(r => r.tipo === 'malattia');
+            const haLavoro = regs.some(r => r.tipo === 'lavoro');
+            const haStraordinario = regs.some(r => r.straordinario === true);
+            const haRecupero = regs.some(r => r.recupero === true);
+
+            if (haFerie) { cella = 'F'; bg = '#E3F2FD'; }
+            else if (haPermesso) { cella = 'P'; bg = '#FFF3E0'; }
+            else if (haMalattia) { cella = 'M'; bg = '#FFEBEE'; }
+            else if (haLavoro) {
+              let oreG = 0;
+              regs.forEach(r => {
+                if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+                  const [h1, m1] = r.ora_inizio.split(':').map(Number);
+                  const [h2, m2] = r.ora_fine.split(':').map(Number);
+                  oreG += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+                }
+              });
+              totaleOre += oreG;
+              if (haStraordinario) { cella = oreG.toFixed(1) + 'h★'; bg = '#ffebee'; }
+              else if (haRecupero) { cella = oreG.toFixed(1) + 'h⏰'; bg = '#fff3cd'; }
+              else { cella = oreG.toFixed(1) + 'h'; bg = '#E8F5E9'; }
+            }
+          } else {
+            if (isWeekend) { cella = '/'; bg = '#f5f5f5'; }
+            else {
+              const dataObj = new Date(data + 'T00:00:00');
+              const oggi = new Date(); oggi.setHours(0,0,0,0);
+              if (dataObj < oggi) { cella = 'A'; bg = '#f5f5f5'; }
+            }
+          }
+
+          html += `<td style="background:${bg};">${cella}</td>`;
+        }
+
+        html += `<td style="background:#e8f5e9;font-weight:bold;color:#2e7d32;">${totaleOre.toFixed(1)}h</td></tr>`;
+      });
+
+      html += `</tbody></table>`;
+
+      const legenda = `<div class="legenda"><strong>Legenda:</strong> F = Ferie · P = Permesso · M = Malattia · A = Assente · / = Weekend · Xh = Ore lavorate · ★ = Straordinario · ⏰ = Recupero</div>`;
+
+      return `${headHTML(`Riepilogo ${meseNome} ${anno}`)}
+        ${intestazione(`Riepilogo Mensile - ${meseNome} ${anno}`, `Tutti i dipendenti`)}
+        ${legenda}
+        <div class="wrap">${html}</div>
+        ${pieDiPagina}
+      </div></body></html>`;
+    }
+
+    // ---------- FUNZIONE: RENDER DIPENDENTE MENSILE (singolo) ----------
+    function renderDipendenteMensile(dip, anno, mese, registrazioni) {
+      const giorniMese = new Date(anno, mese, 0).getDate();
+      const mesePadded = String(mese).padStart(2, '0');
+      const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+        'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+      const giorniSett = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+      const perGiorno = {};
+      registrazioni.forEach(r => {
+        if (!perGiorno[r.data]) perGiorno[r.data] = [];
+        perGiorno[r.data].push(r);
+      });
+
+      let htmlCalendario = `<div class="wrap"><table><thead><tr>`;
+      for (let g = 1; g <= giorniMese; g++) {
+        const giornoSett = new Date(anno, mese - 1, g).getDay();
+        const isWeekend = giornoSett === 0 || giornoSett === 6;
+        const bg = isWeekend ? '#004D40' : '#00695C';
+        htmlCalendario += `<th style="background:${bg};width:calc(100% / ${giorniMese});">${g}<br><span style="font-weight:400;font-size:10px;opacity:0.85;">${giorniSett[giornoSett]}</span></th>`;
+      }
+      htmlCalendario += `</tr></thead><tbody><tr>`;
+
+      let totaleMese = 0;
+
+      for (let g = 1; g <= giorniMese; g++) {
+        const data = `${anno}-${mesePadded}-${String(g).padStart(2,'0')}`;
+        const giornoSett = new Date(anno, mese - 1, g).getDay();
+        const isWeekend = giornoSett === 0 || giornoSett === 6;
+        const regs = perGiorno[data] || [];
+
+        let cella = '';
+        let bg = 'white';
+
+        if (regs.length > 0) {
+          const haFerie = regs.some(r => r.tipo === 'ferie');
+          const haPermesso = regs.some(r => r.tipo === 'permesso');
+          const haMalattia = regs.some(r => r.tipo === 'malattia');
+          const haLavoro = regs.some(r => r.tipo === 'lavoro');
+          const haStraordinario = regs.some(r => r.straordinario === true);
+          const haRecupero = regs.some(r => r.recupero === true);
+
+          if (haFerie) { cella = 'F'; bg = '#E3F2FD'; }
+          else if (haPermesso) { cella = 'P'; bg = '#FFF3E0'; }
+          else if (haMalattia) { cella = 'M'; bg = '#FFEBEE'; }
+          else if (haLavoro) {
+            let oreG = 0;
+            regs.forEach(r => {
+              if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+                const [h1, m1] = r.ora_inizio.split(':').map(Number);
+                const [h2, m2] = r.ora_fine.split(':').map(Number);
+                oreG += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+              }
+            });
+            totaleMese += oreG;
+            if (haStraordinario) { cella = oreG.toFixed(1) + 'h★'; bg = '#ffebee'; }
+            else if (haRecupero) { cella = oreG.toFixed(1) + 'h⏰'; bg = '#fff3cd'; }
+            else { cella = oreG.toFixed(1) + 'h'; bg = '#E8F5E9'; }
+          }
+        } else {
+          if (isWeekend) { cella = '/'; bg = '#f5f5f5'; }
+          else {
+            const dataObj = new Date(data + 'T00:00:00');
+            const oggi = new Date(); oggi.setHours(0,0,0,0);
+            if (dataObj < oggi) { cella = 'A'; bg = '#f5f5f5'; }
+          }
+        }
+
+        htmlCalendario += `<td style="background:${bg};padding:8px 4px;">${cella}</td>`;
+      }
+
+      htmlCalendario += `</tr></tbody></table></div>`;
+
+      const giorniConRegs = Object.keys(perGiorno).sort();
+
+      let htmlDettaglio = '';
+      if (giorniConRegs.length > 0) {
+        htmlDettaglio += `<h3 style="margin-top:25px;">📋 Dettaglio giorno per giorno</h3>`;
+
+        for (const data of giorniConRegs) {
+          const regs = perGiorno[data].sort((a,b) => (a.ora_inizio||'').localeCompare(b.ora_inizio||''));
+          const dataObj = new Date(data + 'T00:00:00');
+          const dataFormattata = dataObj.toLocaleDateString('it-IT', {
+            weekday: 'long', day: 'numeric', month: 'long'
+          });
+
+          let totGiorno = 0;
+          regs.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              totGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+
+          htmlDettaglio += `<div class="gruppo">`;
+          htmlDettaglio += `<div class="gruppo-header"><h4>📅 ${dataFormattata}</h4><span class="subtotale">${totGiorno.toFixed(2)}h</span></div>`;
+          htmlDettaglio += `<table><thead><tr><th style="text-align:left;width:auto;">Commessa</th><th style="width:80px;">Inizio</th><th style="width:80px;">Fine</th><th style="width:90px;">Ore</th><th style="text-align:left;width:auto;">Descrizione</th></tr></thead><tbody>`;
+
+          regs.forEach(r => {
+            const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+            const [h1, m1] = r.ora_inizio.split(':').map(Number);
+            const [h2, m2] = r.ora_fine.split(':').map(Number);
+            const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+
+            let badge = '';
+            if (r.straordinario) badge += '<span class="badge straordinario">STRAORD.</span>';
+            if (r.recupero) badge += '<span class="badge recupero">RECUPERO</span>';
+
+            htmlDettaglio += `<tr>
+              <td style="text-align:left;"><strong>${commessa?.nome || 'N/A'}</strong></td>
+              <td>${r.ora_inizio || '-'}</td>
+              <td>${r.ora_fine || '-'}</td>
+              <td><strong>${ore.toFixed(2)}h</strong>${badge}</td>
+              <td style="text-align:left;">${r.descrizione || '-'}</td>
+            </tr>`;
+          });
+
+          htmlDettaglio += `</tbody></table></div>`;
+        }
+      }
+
+      const legenda = `<div class="legenda"><strong>Legenda:</strong> F = Ferie · P = Permesso · M = Malattia · A = Assente · / = Weekend · Xh = Ore lavorate · ★ = Straordinario · ⏰ = Recupero</div>`;
+
+      return `${headHTML(`Ore ${meseNome} ${anno} - ${dip.nome} ${dip.cognome}`)}
+        ${intestazione(`Ore Mensili - ${meseNome} ${anno}`, `${dip.cognome} ${dip.nome}`)}
+        ${legenda}
+        <div class="totale">📊 TOTALE MESE: ${totaleMese.toFixed(2)}h</div>
+        ${htmlCalendario}
+        ${htmlDettaglio}
+        ${pieDiPagina}
+      </div></body></html>`;
+    }
+
+    // ============================================
+    // 1. ORE MENSILI (riepilogo + un file per ogni dipendente, per mese)
+    // ============================================
+    if (tipo === 'tutto' || tipo === 'ore') {
+      const cartellaOre = root.folder('Ore_Mensili');
+
+      const combinazioni = new Set();
+      dati.registrazioni.forEach(r => {
+        if (r.data && r.data.length >= 7) combinazioni.add(r.data.substring(0, 7));
+      });
+
+      const combinazioniOrdinate = [...combinazioni].sort();
+      const dipendentiOrdinati = dati.utenti
+        .filter(u => u.ruolo === 'dipendente')
+        .sort((a,b) => (a.cognome || '').localeCompare(b.cognome || ''));
+
+      for (const annoMese of combinazioniOrdinate) {
+        const [anno, mese] = annoMese.split('-').map(Number);
+        const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+          'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+
+        const cartellaMese = cartellaOre.folder(annoMese);
+
+        // 1a. Riepilogo mensile con tutti i dipendenti
+        const htmlRiepilogo = renderRiepilogoMensile(anno, mese);
+        cartellaMese.file(`Riepilogo_${meseNome}_${anno}.html`, htmlRiepilogo);
+
+        // 1b. Un file per ogni dipendente con ore in questo mese
+        for (const dip of dipendentiOrdinati) {
+          const regs = dati.registrazioni.filter(r =>
+            r.utente_id === dip.username && r.data.startsWith(annoMese)
+          );
+          if (regs.length === 0) continue;
+
+          const htmlSingolo = renderDipendenteMensile(dip, anno, mese, regs);
+          cartellaMese.file(`${dip.cognome}_${dip.nome}.html`, htmlSingolo);
+        }
+      }
+    }
+
+    // ============================================
+    // 2. DIPENDENTI (un file per dipendente, dettaglio completo)
+    // ============================================
+    if (tipo === 'tutto') {
+      const cartellaDip = root.folder('Dipendenti');
+      const dipendenti = dati.utenti.filter(u => u.ruolo === 'dipendente')
+        .sort((a,b) => (a.cognome || '').localeCompare(b.cognome || ''));
+
+      for (const dip of dipendenti) {
+        const registrazioni = dati.registrazioni.filter(r => r.utente_id === dip.username);
+        if (registrazioni.length === 0) continue;
+
+        const perGiorno = {};
+        registrazioni.forEach(r => {
+          if (!perGiorno[r.data]) perGiorno[r.data] = [];
+          perGiorno[r.data].push(r);
+        });
+
+        const giorniOrdinati = Object.keys(perGiorno).sort();
+
+        let htmlGiorni = '';
+        let totaleGenerale = 0;
+
+        for (const data of giorniOrdinati) {
+          const regs = perGiorno[data].sort((a,b) => (a.ora_inizio||'').localeCompare(b.ora_inizio||''));
+          const dataObj = new Date(data + 'T00:00:00');
+          const dataFormattata = dataObj.toLocaleDateString('it-IT', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+          });
+
+          let totGiorno = 0;
+          regs.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              totGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+          totaleGenerale += totGiorno;
+
+          htmlGiorni += `<div class="gruppo">`;
+          htmlGiorni += `<div class="gruppo-header"><h4>📅 ${dataFormattata}</h4><span class="subtotale">${totGiorno.toFixed(2)}h</span></div>`;
+          htmlGiorni += `<table><thead><tr><th style="width:auto;text-align:left;">Commessa</th><th style="width:80px;">Inizio</th><th style="width:80px;">Fine</th><th style="width:90px;">Ore</th><th style="width:auto;text-align:left;">Descrizione</th></tr></thead><tbody>`;
+
+          regs.forEach(r => {
+            const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+            const [h1, m1] = r.ora_inizio.split(':').map(Number);
+            const [h2, m2] = r.ora_fine.split(':').map(Number);
+            const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+
+            let badge = '';
+            if (r.straordinario) badge += '<span class="badge straordinario">STRAORD.</span>';
+            if (r.recupero) badge += '<span class="badge recupero">RECUPERO</span>';
+
+            htmlGiorni += `<tr style="text-align:left;">
+              <td style="text-align:left;"><strong>${commessa?.nome || 'N/A'}</strong></td>
+              <td>${r.ora_inizio || '-'}</td>
+              <td>${r.ora_fine || '-'}</td>
+              <td><strong>${ore.toFixed(2)}h</strong>${badge}</td>
+              <td style="text-align:left;">${r.descrizione || '-'}</td>
+            </tr>`;
+          });
+
+          htmlGiorni += `</tbody></table></div>`;
+        }
+
+        const htmlCompleto = `${headHTML(`Dettaglio ${dip.nome} ${dip.cognome}`)}
+          ${intestazione(`Dettaglio Dipendente`, `${dip.cognome} ${dip.nome} · ${giorniOrdinati.length} giorni registrati`)}
+          <div class="totale">📊 TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h</div>
+          ${htmlGiorni}
+          ${pieDiPagina}
+        </div></body></html>`;
+
+        cartellaDip.file(`${dip.cognome}_${dip.nome}.html`, htmlCompleto);
+      }
+    }
+
+    // ============================================
+    // 3. COMMESSE (un file per commessa)
+    // ============================================
+    if (tipo === 'tutto' || tipo === 'commesse') {
+      const cartellaComm = root.folder('Commesse');
+
+      for (const commessa of dati.commesse) {
+        const registrazioni = dati.registrazioni.filter(r =>
+          r.commessa_id === commessa.id && r.tipo === 'lavoro'
+        );
+        if (registrazioni.length === 0) continue;
+
+        const perDip = {};
+        registrazioni.forEach(r => {
+          if (!perDip[r.utente_id]) perDip[r.utente_id] = [];
+          perDip[r.utente_id].push(r);
+        });
+
+        let htmlDip = '';
+        let totaleGenerale = 0;
+
+        for (const username of Object.keys(perDip)) {
+          const utente = dati.utenti.find(u => u.username === username);
+          const nomeDip = utente ? `${utente.cognome || ''} ${utente.nome || ''}` : username;
+          const regs = perDip[username].sort((a,b) => a.data.localeCompare(b.data));
+
+          let totDip = 0;
+          regs.forEach(r => { totDip += r.ore || 0; });
+          totaleGenerale += totDip;
+
+          htmlDip += `<div class="gruppo">`;
+          htmlDip += `<div class="gruppo-header"><h4>👤 ${nomeDip}</h4><span class="subtotale">${totDip.toFixed(2)}h</span></div>`;
+          htmlDip += `<table><thead><tr><th style="width:100px;">Data</th><th style="width:80px;">Inizio</th><th style="width:80px;">Fine</th><th style="width:100px;">Ore</th><th style="text-align:left;">Descrizione</th></tr></thead><tbody>`;
+
+          regs.forEach(r => {
+            const [h1, m1] = r.ora_inizio.split(':').map(Number);
+            const [h2, m2] = r.ora_fine.split(':').map(Number);
+            const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+
+            let badge = '';
+            if (r.straordinario) badge += '<span class="badge straordinario">STRAORD.</span>';
+            if (r.recupero) badge += '<span class="badge recupero">RECUPERO</span>';
+
+            htmlDip += `<tr>
+              <td>${r.data}</td>
+              <td>${r.ora_inizio}</td>
+              <td>${r.ora_fine}</td>
+              <td><strong>${ore.toFixed(2)}h</strong>${badge}</td>
+              <td style="text-align:left;">${r.descrizione || '-'}</td>
+            </tr>`;
+          });
+
+          htmlDip += `</tbody></table></div>`;
+        }
+
+        const nomeFile = commessa.nome.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const htmlCompleto = `${headHTML(`Commessa ${commessa.nome}`)}
+          ${intestazione(`Report Commessa`, commessa.nome)}
+          <div class="totale">📊 TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h</div>
+          ${htmlDip}
+          ${pieDiPagina}
+        </div></body></html>`;
+
+        cartellaComm.file(`${nomeFile}.html`, htmlCompleto);
+      }
+    }
+
+    // ============================================
+    // 4. Genera ZIP
+    // ============================================
+    msg.innerHTML = '<div class="info-msg">📦 Creazione ZIP in corso...</div>';
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const nomeZip = `${nomeCartella}.zip`;
+
+    const file = new File([blob], nomeZip, { type: 'application/zip' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: nomeCartella,
+          text: 'Backup MEC-ROY'
+        });
+        msg.innerHTML = '<div class="success">✅ Backup generato e condiviso!</div>';
+        setTimeout(chiudiModalBackup, 1500);
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') { msg.innerHTML = ''; return; }
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeZip;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    msg.innerHTML = '<div class="success">✅ Backup scaricato con successo!</div>';
+    setTimeout(chiudiModalBackup, 1500);
+
+  } catch (err) {
+    console.error('❌ Errore backup:', err);
+    msg.innerHTML = '<div class="error">❌ Errore durante il backup: ' + err.message + '</div>';
+  }
+}
+// ============================================
+// SMART TIME INPUT — Gestione intelligente ore
+// ============================================
+// Logica:
+// - L'utente digita solo cifre
+// - Ore valide: 0-24  |  Minuti validi: 0-59
+// - Quando completi le ore → focus si sposta alla parte minuti (stesso campo)
+// - Quando completi i minuti → focus passa al campo successivo
+// - Backspace cancella l'ultima cifra
+// ============================================
+
+const SMART_TIME_DEFS = {
+  'ora-inizio': { next: 'ora-fine' },
+  'ora-fine': { next: 'descrizione' },
+  'recupero-ora-inizio': { next: 'recupero-ora-fine' },
+  'recupero-ora-fine': { next: 'recupero-motivo' }
+};
+
+function initSmartTime(input) {
+  if (!input || input.dataset.smartInit === '1') return;
+  input.dataset.smartInit = '1';
+
+  // Stato interno: 'ore' o 'minuti'
+  input.dataset.smartPhase = 'ore';
+  input.dataset.smartOre = '';
+  input.dataset.smartMinuti = '';
+
+  input.addEventListener('focus', () => {
+    // Se ci sono già 4 cifre complete, riparte dalla fase ore quando riselezioni
+    if (input.dataset.smartOre.length === 2 && input.dataset.smartMinuti.length === 2) {
+      input.dataset.smartPhase = 'ore';
+      input.dataset.smartOre = '';
+      input.dataset.smartMinuti = '';
+      input.value = '';
+    }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    // Blocca caratteri non numerici (eccetto controlli)
+    const controllo = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'];
+    if (controllo.includes(e.key)) {
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        gestisciBackspace(input);
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // Completa il campo e salta
+        saltaAlProssimo(input);
+      }
+      return;
+    }
+    if (!/^\d$/.test(e.key)) {
+      e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+    gestisciCifra(input, e.key);
+  });
+
+  // Per mobile (input event)
+  input.addEventListener('input', (e) => {
+    // Rimuovi caratteri non numerici che potrebbero essere inseriti
+    const pulito = input.value.replace(/[^\d]/g, '');
+    if (pulito.length < 4) {
+      input.value = formattaSmartTime(pulito);
+    }
+  });
+}
+
+function gestisciCifra(input, cifra) {
+  const fase = input.dataset.smartPhase;
+  let ore = input.dataset.smartOre;
+  let minuti = input.dataset.smartMinuti;
+
+  if (fase === 'ore') {
+    // Ore: 0-24
+    const tentativo = ore + cifra; // es. '0' + '8' = '08', oppure '1' + '5' = '15'
+
+    // Prima cifra: se è 3-9, capiamo che l'ora è completa (es. 8 → 08)
+    if (ore === '') {
+      if (cifra >= '3' && cifra <= '9') {
+        // Unica cifra: diventa '0' + cifra
+        ore = '0' + cifra;
+        input.dataset.smartOre = ore;
+        // Passa ai minuti
+        input.dataset.smartPhase = 'minuti';
+        input.value = formattaSmartTime(ore + ':' + '');
+        return;
+      } else {
+        // 0, 1, 2 → aspetta la seconda cifra
+        ore = cifra;
+        input.dataset.smartOre = ore;
+        input.value = formattaSmartTime(ore + ':');
+        return;
+      }
+    } else {
+      // Seconda cifra delle ore
+      const oreNum = parseInt(tentativo, 10);
+      if (oreNum >= 0 && oreNum <= 24) {
+        // Ore valide (00-24)
+        let oreFinali;
+        if (oreNum === 24) {
+          oreFinali = '24';
+        } else {
+          oreFinali = tentativo.padStart(2, '0');
+        }
+        input.dataset.smartOre = oreFinali;
+        input.dataset.smartPhase = 'minuti';
+        input.value = formattaSmartTime(oreFinali + ':');
+        return;
+      } else {
+        // Ore > 24 → non valido, ignora la seconda cifra
+        // Resta in fase ore con la prima cifra
+        return;
+      }
+    }
+  }
+
+  if (fase === 'minuti') {
+    const tentativo = minuti + cifra; // es. '3' + '0' = '30'
+
+    // Prima cifra dei minuti
+    if (minuti === '') {
+      if (cifra >= '6' && cifra <= '9') {
+        // Unica cifra: diventa '0' + cifra
+        minuti = '0' + cifra;
+        input.dataset.smartMinuti = minuti;
+        // Completa e salta
+        input.value = formattaSmartTime(input.dataset.smartOre + ':' + minuti);
+        saltaAlProssimo(input);
+        return;
+      } else {
+        // 0-5 → aspetta seconda cifra
+        minuti = cifra;
+        input.dataset.smartMinuti = minuti;
+        input.value = formattaSmartTime(input.dataset.smartOre + ':' + minuti);
+        return;
+      }
+    } else {
+      // Seconda cifra dei minuti
+      const minNum = parseInt(tentativo, 10);
+      if (minNum >= 0 && minNum <= 59) {
+        const minFinali = tentativo.padStart(2, '0');
+        input.dataset.smartMinuti = minFinali;
+        input.value = formattaSmartTime(input.dataset.smartOre + ':' + minFinali);
+        // Completa e salta
+        saltaAlProssimo(input);
+        return;
+      } else {
+        // > 59, ignora
+        return;
+      }
+    }
+  }
+}
+
+function gestisciBackspace(input) {
+  const fase = input.dataset.smartPhase;
+  let ore = input.dataset.smartOre;
+  let minuti = input.dataset.smartMinuti;
+
+  if (fase === 'minuti') {
+    if (minuti.length > 0) {
+      minuti = minuti.slice(0, -1);
+      input.dataset.smartMinuti = minuti;
+      input.value = formattaSmartTime(ore + ':' + minuti);
+    } else {
+      // Torna alla fase ore
+      input.dataset.smartPhase = 'ore';
+      if (ore.length > 0) {
+        ore = ore.slice(0, -1);
+        input.dataset.smartOre = ore;
+      }
+      input.value = formattaSmartTime(ore + (ore ? ':' : ''));
+    }
+  } else if (fase === 'ore') {
+    if (ore.length > 0) {
+      ore = ore.slice(0, -1);
+      input.dataset.smartOre = ore;
+      input.value = formattaSmartTime(ore + (ore ? ':' : ''));
+    }
+  }
+}
+
+function formattaSmartTime(valore) {
+  // valore è tipo '08:' oppure '08:3' oppure '08:30'
+  if (!valore) return '';
+  if (valore.endsWith(':')) {
+    return valore;
+  }
+  return valore;
+}
+
+function saltaAlProssimo(input) {
+  const id = input.id;
+  const def = SMART_TIME_DEFS[id];
+  if (def && def.next) {
+    const next = document.getElementById(def.next);
+    if (next) {
+      setTimeout(() => {
+        next.focus();
+        if (typeof next.select === 'function') next.select();
+      }, 50);
+    }
+  }
+}
+
+// Inizializza al caricamento
+document.addEventListener('DOMContentLoaded', () => {
+  ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) initSmartTime(el);
+  });
+});
+
+// Reinizializza nel caso i campi vengano creati dopo (sicurezza)
+setTimeout(() => {
+  ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) initSmartTime(el);
+  });
+}, 1000);
