@@ -2,7 +2,7 @@
    SFONDO VERDE SCURO LUCIDO EFFETTO PLASTIFICATO
    ============================================ */
 body {
-  background: linear-gradient(135deg, #007945 0%, #00593b 50%, #003B33 100%);
+  background: linear-gradient(135deg, #01815f 0%, #036b34 50%, #003B33 100%);
   min-height: 100vh;
   margin: 0;
   padding: 20px;
