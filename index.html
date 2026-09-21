@@ -19,6 +19,7 @@
   <!-- ===== FIREBASE SDK ===== -->
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js"></script>
   
   <!-- ===== JSZIP (per backup ZIP) ===== -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -750,6 +751,16 @@
           console.error('❌ Errore Service Worker:', error);
         });
     });
+  }
+
+  // Inizializza Firebase Messaging per il SW
+  if (firebase.messaging && firebase.messaging.isSupported()) {
+    try {
+      const messaging = firebase.messaging();
+      console.log('✅ Firebase Messaging inizializzato');
+    } catch (e) {
+      console.warn('⚠️ Firebase Messaging non disponibile:', e);
+    }
   }
 </script>
 
