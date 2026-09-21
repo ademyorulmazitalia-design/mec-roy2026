@@ -273,6 +273,12 @@ function login() {
       document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
     });
     
+        // Chiedi il permesso per le notifiche (solo dipendenti)
+    setTimeout(() => {
+      chiediPermessoNotifiche();
+      ascoltaRinnovoToken();
+    }, 1500);
+    
     if (utente.ruolo === 'dipendente') {
       const oraInizio = document.getElementById('ora-inizio');
       const oraFine = document.getElementById('ora-fine');
@@ -4080,3 +4086,83 @@ setTimeout(() => {
     if (el) initSmartTime(el);
   });
 }, 1000);
+
+// ============================================
+// NOTIFICHE PUSH (Firebase Cloud Messaging)
+// ============================================
+
+// Chiave VAPID pubblica generata da Firebase Console
+const VAPID_KEY = 'BGDim7zjRi-WXyIDYoKnZjAX92fChXCHo1uUZKOef9l2cHSu6FJrInHrB4IEFAJewF8TrJCDzTsNR1BANwLUml0';
+
+// Chiedi il permesso e salva il token dell'utente
+async function chiediPermessoNotifiche() {
+  if (!utenteCorrente) return;
+  if (utenteCorrente.ruolo !== 'dipendente') return;  // solo i dipendenti ricevono notifiche
+
+  // 1. Controlla che il browser supporti le notifiche
+  if (!('Notification' in window)) {
+    console.warn('⚠️ Notifiche non supportate da questo browser');
+    return;
+  }
+
+  // 2. Controlla se il permesso è già stato dato
+  if (Notification.permission === 'denied') {
+    console.warn('⚠️ Notifiche bloccate dall\'utente');
+    return;
+  }
+
+  // 3. Se già concesso, salta la richiesta e procedi al token
+  if (Notification.permission === 'default') {
+    const permesso = await Notification.requestPermission();
+    if (permesso !== 'granted') {
+      console.log('❌ Utente ha rifiutato le notifiche');
+      return;
+    }
+  }
+
+  // 4. Ottieni il token FCM
+  try {
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+
+    if (!token) {
+      console.warn('⚠️ Nessun token ottenuto');
+      return;
+    }
+
+    console.log('✅ Token FCM ottenuto:', token);
+
+    // 5. Salva il token dentro l'utente su Firestore
+    const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
+    if (!utente) return;
+
+    // Se il token è già quello salvato, non fare nulla
+    if (utente.token_fcm === token) {
+      console.log('ℹ️ Token già aggiornato');
+      return;
+    }
+
+    utente.token_fcm = token;
+    await salvaDati();
+    console.log('✅ Token FCM salvato su Firestore');
+
+  } catch (err) {
+    console.error('❌ Errore durante getToken:', err);
+  }
+}
+
+// Ascolta i cambi automatici del token (Firebase può rigenerarlo)
+async function ascoltaRinnovoToken() {
+  if (!utenteCorrente) return;
+  if (utenteCorrente.ruolo !== 'dipendente') return;
+
+  try {
+    const messaging = firebase.messaging();
+    messaging.onTokenRefresh(async () => {
+      console.log('🔄 Token FCM rinnovato, aggiorno Firestore...');
+      await chiediPermessoNotifiche();
+    });
+  } catch (err) {
+    // Ignora silenziosamente se non supportato
+  }
+}
