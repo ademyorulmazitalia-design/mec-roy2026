@@ -1119,7 +1119,7 @@ function caricaRichiesteAdmin() {
   div.innerHTML = html;
 }
 
-function approvaRichiesta(id) {
+async function approvaRichiesta(id) {
   const richiesta = dati.richieste.find(r => r.id === id);
   if (!richiesta) {
     alert('❌ Richiesta non trovata');
@@ -1132,6 +1132,24 @@ function approvaRichiesta(id) {
   }
   
   richiesta.stato = 'approvata';
+    // 🔔 Salva in richieste_trigger per notificare il dipendente
+   try {
+    await db.collection('richieste_trigger').add({
+      richiesta_id: richiesta.id,
+      utente_id: richiesta.utente_id,
+      tipo: richiesta.tipo,
+      azione: 'approvata',
+      data_inizio: richiesta.data_inizio || null,
+      data_fine: richiesta.data_fine || null,
+      data: richiesta.data || null,
+      ora_inizio: richiesta.ora_inizio || null,
+      ora_fine: richiesta.ora_fine || null,
+      creato_il: new Date().toISOString()
+    });
+    console.log('✅ Aggiornamento approvazione salvato per notifica');
+    } catch (err) {
+    console.warn('⚠️ Errore salvataggio trigger approvazione:', err);
+  }
 
   const utenteIdCorretto = richiesta.utente_id;
 
@@ -1217,7 +1235,7 @@ function approvaRichiesta(id) {
   alert('✅ Richiesta approvata! Notifica inviata al dipendente.');
 }
 
-function rifiutaRichiesta(id) {
+async function rifiutaRichiesta(id) {
   const richiesta = dati.richieste.find(r => r.id === id);
   if (!richiesta) {
     alert('❌ Richiesta non trovata');
@@ -1225,6 +1243,26 @@ function rifiutaRichiesta(id) {
   }
   
   richiesta.stato = 'rifiutata';
+
+    // 🔔 Salva in richieste_trigger per notificare il dipendente
+  try {
+    await db.collection('richieste_trigger').add({
+      richiesta_id: richiesta.id,
+      utente_id: richiesta.utente_id,
+      tipo: richiesta.tipo,
+      azione: 'rifiutata',
+      data_inizio: richiesta.data_inizio || null,
+      data_fine: richiesta.data_fine || null,
+      data: richiesta.data || null,
+      ora_inizio: richiesta.ora_inizio || null,
+      ora_fine: richiesta.ora_fine || null,
+      creato_il: new Date().toISOString()
+    });
+    console.log('✅ Aggiornamento rifiuto salvato per notifica');
+  } catch (err) {
+    console.warn('⚠️ Errore salvataggio trigger rifiuto:', err);
+  }
+
   
   const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
   aggiungiNotifica(
