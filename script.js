@@ -4097,24 +4097,17 @@ const VAPID_KEY = 'BGDim7zjRi-WXyIDYoKnZjAX92fChXCHo1uUZKOef9l2cHSu6FJrInHrB4IEF
 // Chiedi il permesso e salva il token dell'utente
 async function chiediPermessoNotifiche() {
   if (!utenteCorrente) return;
-  // ✅ Modificato: ora vale per TUTTI (anche admin, per test)
-  // if (utenteCorrente.ruolo !== 'dipendente') return;
 
-  // 1. Controlla che il browser supporti le notifiche
   if (!('Notification' in window)) {
-    console.warn('⚠️ Notifiche non supportate da questo browser');
-    alert('⚠️ Il tuo browser non supporta le notifiche');
+    console.warn('⚠️ Notifiche non supportate');
     return;
   }
 
-  // 2. Controlla se il permesso è già stato dato
   if (Notification.permission === 'denied') {
-    console.warn('⚠️ Notifiche bloccate dall\'utente');
-    alert('⚠️ Hai bloccato le notifiche. Vai nelle impostazioni del telefono per sbloccarle.');
+    console.warn('⚠️ Notifiche bloccate');
     return;
   }
 
-  // 3. Se già concesso, salta la richiesta e procedi al token
   if (Notification.permission === 'default') {
     const permesso = await Notification.requestPermission();
     if (permesso !== 'granted') {
@@ -4123,34 +4116,38 @@ async function chiediPermessoNotifiche() {
     }
   }
 
-  // 4. Ottieni il token FCM
   try {
-    const messaging = firebase.messaging();
-    // Registra esplicitamente il service worker di Firebase
-    // (Firebase di default lo cerca nella root, ma noi siamo in /mec-roy2026/)
+    // 1. Registra il service worker di Firebase ESPLICITAMENTE
+    //    e ASPETTA che sia pronto
+    console.log('📝 Registrazione firebase-messaging-sw.js...');
+    
     const swReg = await navigator.serviceWorker.register(
-      new URL('firebase-messaging-sw.js', location.href).pathname,
-      { scope: new URL('firebase-cloud-messaging-push-scope', location.href).pathname }
-   );
+      './firebase-messaging-sw.js',
+      { scope: './firebase-cloud-messaging-push-scope' }
+    );
+    
+    console.log('✅ SW Firebase registrato:', swReg);
 
-    // Ora ottieni il token passando il service worker registrato
+    // 2. ASPETTA che il SW sia effettivamente attivo
+    await navigator.serviceWorker.ready;
+    console.log('✅ Service worker pronto');
+
+    // 3. Ora ottieni il token passando la registrazione
+    const messaging = firebase.messaging();
     const token = await messaging.getToken({
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: swReg
-   });
+    });
 
     if (!token) {
       console.warn('⚠️ Nessun token ottenuto');
-      alert('⚠️ Errore: nessun token ottenuto');
       return;
     }
 
     console.log('✅ Token FCM ottenuto:', token);
-
-    // Salvalo in una variabile visibile per debug
     window._tokenFCMDebug = token;
 
-    // 5. Salva il token dentro l'utente su Firestore
+    // 4. Salva il token nell'utente su Firestore
     const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
     if (!utente) return;
 
@@ -4161,14 +4158,11 @@ async function chiediPermessoNotifiche() {
 
     utente.token_fcm = token;
     await salvaDati();
-    console.log('✅ Token FCM salvato su Firestore');
-
-    // (per debug) mostra in console come copiarlo
-    console.log('%c📋 COPIA QUESTO TOKEN PER IL TEST: ' + token, 'background: #00695C; color: white; padding: 4px 8px; border-radius: 4px;');
+    console.log('%c✅ Token FCM salvato su Firestore', 'background: #00695C; color: white; padding: 4px 8px; border-radius: 4px;');
 
   } catch (err) {
     console.error('❌ Errore durante getToken:', err);
-    alert('❌ Errore: ' + err.message);
+    console.error('Dettagli errore:', err.message, err.stack);
   }
 }
 
