@@ -4126,7 +4126,18 @@ async function chiediPermessoNotifiche() {
   // 4. Ottieni il token FCM
   try {
     const messaging = firebase.messaging();
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+    // Registra esplicitamente il service worker di Firebase
+    // (Firebase di default lo cerca nella root, ma noi siamo in /mec-roy2026/)
+    const swReg = await navigator.serviceWorker.register(
+      new URL('firebase-messaging-sw.js', location.href).pathname,
+      { scope: new URL('firebase-cloud-messaging-push-scope', location.href).pathname }
+   );
+
+    // Ora ottieni il token passando il service worker registrato
+    const token = await messaging.getToken({
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: swReg
+   });
 
     if (!token) {
       console.warn('⚠️ Nessun token ottenuto');
