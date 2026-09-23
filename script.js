@@ -4097,17 +4097,20 @@ const VAPID_KEY = 'BGDim7zjRi-WXyIDYoKnZjAX92fChXCHo1uUZKOef9l2cHSu6FJrInHrB4IEF
 // Chiedi il permesso e salva il token dell'utente
 async function chiediPermessoNotifiche() {
   if (!utenteCorrente) return;
-  if (utenteCorrente.ruolo !== 'dipendente') return;  // solo i dipendenti ricevono notifiche
+  // ✅ Modificato: ora vale per TUTTI (anche admin, per test)
+  // if (utenteCorrente.ruolo !== 'dipendente') return;
 
   // 1. Controlla che il browser supporti le notifiche
   if (!('Notification' in window)) {
     console.warn('⚠️ Notifiche non supportate da questo browser');
+    alert('⚠️ Il tuo browser non supporta le notifiche');
     return;
   }
 
   // 2. Controlla se il permesso è già stato dato
   if (Notification.permission === 'denied') {
     console.warn('⚠️ Notifiche bloccate dall\'utente');
+    alert('⚠️ Hai bloccato le notifiche. Vai nelle impostazioni del telefono per sbloccarle.');
     return;
   }
 
@@ -4127,16 +4130,19 @@ async function chiediPermessoNotifiche() {
 
     if (!token) {
       console.warn('⚠️ Nessun token ottenuto');
+      alert('⚠️ Errore: nessun token ottenuto');
       return;
     }
 
     console.log('✅ Token FCM ottenuto:', token);
 
+    // Salvalo in una variabile visibile per debug
+    window._tokenFCMDebug = token;
+
     // 5. Salva il token dentro l'utente su Firestore
     const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
     if (!utente) return;
 
-    // Se il token è già quello salvato, non fare nulla
     if (utente.token_fcm === token) {
       console.log('ℹ️ Token già aggiornato');
       return;
@@ -4146,15 +4152,19 @@ async function chiediPermessoNotifiche() {
     await salvaDati();
     console.log('✅ Token FCM salvato su Firestore');
 
+    // (per debug) mostra in console come copiarlo
+    console.log('%c📋 COPIA QUESTO TOKEN PER IL TEST: ' + token, 'background: #00695C; color: white; padding: 4px 8px; border-radius: 4px;');
+
   } catch (err) {
     console.error('❌ Errore durante getToken:', err);
+    alert('❌ Errore: ' + err.message);
   }
 }
 
 // Ascolta i cambi automatici del token (Firebase può rigenerarlo)
 async function ascoltaRinnovoToken() {
   if (!utenteCorrente) return;
-  if (utenteCorrente.ruolo !== 'dipendente') return;
+  // if (utenteCorrente.ruolo !== 'dipendente') return;  // commentato per test
 
   try {
     const messaging = firebase.messaging();
