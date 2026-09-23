@@ -884,7 +884,7 @@ function salvaRegistrazione() {
   caricaUltimaRegistrazione();
 }
 
-function inviaRichiesta() {
+async function inviaRichiesta() {
   if (utenteCorrente?.ruolo === 'admin') {
     alert('Gli amministratori non possono fare richieste');
     return;
@@ -932,17 +932,38 @@ function inviaRichiesta() {
     dati.richieste.push(richiesta);
     salvaDati();
 
+    // 🔔 Salva anche nella collection "richieste_trigger" per attivare la Cloud Function
+    try {
+      await db.collection('richieste_trigger').add({
+        richiesta_id: richiesta.id,
+        utente_id: richiesta.utente_id,
+        tipo: richiesta.tipo,
+        data: richiesta.data || null,
+        ora_inizio: richiesta.ora_inizio || null,
+        ora_fine: richiesta.ora_fine || null,
+        commessa_id: richiesta.commessa_id || null,
+        descrizione_lavoro: richiesta.descrizione_lavoro || null,
+        creato_il: new Date().toISOString()
+      });
+      console.log('✅ Richiesta recupero salvata nella collection di trigger');
+    } catch (err) {
+      console.warn('⚠️ Errore salvataggio collection trigger:', err);
+    }
+
     msg.innerHTML = '<div class="success">✅ Richiesta di recupero ore inviata! Attendi l\'approvazione dell\'admin.</div>';
-    
+
     document.getElementById('recupero-data').value = '';
     document.getElementById('recupero-ora-inizio').value = '';
     document.getElementById('recupero-ora-fine').value = '';
     document.getElementById('recupero-motivo').value = '';
-    
+
     aggiornaBadgeRichieste();
     return;
   }
 
+  // ============================================
+  // Rami ferie / permesso / malattia
+  // ============================================
   const data_inizio = document.getElementById('richiesta-data-inizio').value;
   const data_fine = document.getElementById('richiesta-data-fine').value;
   const note = document.getElementById('richiesta-note').value.trim();
@@ -977,11 +998,27 @@ function inviaRichiesta() {
   dati.richieste.push(richiesta);
   salvaDati();
 
+  // 🔔 Salva anche nella collection "richieste_trigger" per attivare la Cloud Function
+  try {
+    await db.collection('richieste_trigger').add({
+      richiesta_id: richiesta.id,
+      utente_id: richiesta.utente_id,
+      tipo: richiesta.tipo,
+      data_inizio: richiesta.data_inizio || null,
+      data_fine: richiesta.data_fine || null,
+      note: richiesta.note || null,
+      creato_il: new Date().toISOString()
+    });
+    console.log('✅ Richiesta salvata nella collection di trigger');
+  } catch (err) {
+    console.warn('⚠️ Errore salvataggio collection trigger:', err);
+  }
+
   msg.innerHTML = '<div class="success">✅ Richiesta inviata! Attendi la risposta.</div>';
-  
+
   document.getElementById('richiesta-note').value = '';
   document.getElementById('certificato').value = '';
-  
+
   caricaRichiesteDipendente();
   aggiornaBadgeRichieste();
 }
