@@ -125,6 +125,76 @@ async function salvaDati() {
   await salvaSuFirestore(dati);
 }
 
+// ============================================
+// CONTROLLO SOVRAPPOSIZIONI
+// ============================================
+function controllaSovrapposizioni(username, data, ora_inizio, ora_fine, tipo) {
+  // Ritorna:
+  //   null → nessuna sovrapposizione
+  //   { tipo: 'ore' | 'richiesta' | 'ferie', messaggio: '...' } → sovrapposizione trovata
+
+  // 1. Controlla ore lavorate nella stessa fascia
+  if (ora_inizio && ora_fine) {
+    const oreEsistenti = dati.registrazioni.filter(r =>
+      r.utente_id === username &&
+      r.data === data &&
+      r.tipo === 'lavoro' &&
+      r.ora_inizio && r.ora_fine &&
+      !(ora_fine <= r.ora_inizio || ora_inizio >= r.ora_fine)  // controllo sovrapposizione
+    );
+    if (oreEsistenti.length > 0) {
+      const r = oreEsistenti[0];
+      return {
+        tipo: 'ore',
+        messaggio: `Hai già ore registrate il ${data} dalle ${r.ora_inizio} alle ${r.ora_fine}. Correggi l'orario.`
+      };
+    }
+  }
+
+  // 2. Controlla richieste già esistenti (pending o approvate)
+  const richiesteEsistenti = dati.richieste.filter(r => {
+    if (r.utente_id !== username) return false;
+    if (r.stato === 'rifiutata') return false;  // le rifiutate si ignorano
+
+    // Recupero ore: confronta fascia oraria
+    if (r.tipo === 'recupero_ore' && ora_inizio && ora_fine && r.ora_inizio && r.ora_fine) {
+      return r.data === data &&
+             !(ora_fine <= r.ora_inizio || ora_inizio >= r.ora_fine);
+    }
+
+    // Ferie/permesso/malattia: confronta date
+    if (r.tipo !== 'recupero_ore') {
+      if (data >= r.data_inizio && data <= r.data_fine) {
+        // Se è una ferie e la richiesta nuova è recupero ore, permetti (gestito altrove)
+        if (r.tipo === 'ferie' && tipo === 'recupero_ore') {
+          return false;  // NON bloccare, l'admin confermerà
+        }
+        return true;  // Altre sovrapposizioni bloccano
+      }
+    }
+
+    return false;
+  });
+
+  if (richiesteEsistenti.length > 0) {
+    const r = richiesteEsistenti[0];
+    const tipoLabel = r.tipo.replace('_', ' ');
+    if (r.tipo === 'recupero_ore') {
+      return {
+        tipo: 'richiesta',
+        messaggio: `Hai già una richiesta in attesa per ${r.data} dalle ${r.ora_inizio} alle ${r.ora_fine}. Attendi la risposta dell'admin.`
+      };
+    } else {
+      return {
+        tipo: 'richiesta',
+        messaggio: `Hai già una richiesta di ${tipoLabel} dal ${r.data_inizio} al ${r.data_fine}. Correggi le date.`
+      };
+    }
+  }
+
+  return null;  // Nessuna sovrapposizione
+}
+
 function calcolaOreGiornata(username, data) {
   const registrazioni = dati.registrazioni.filter(r => 
     r.utente_id === username && 
@@ -271,6 +341,11 @@ function login() {
       document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
       document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
       document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
+      
+      // 🕐 Mostra i campi orari SOLO per ferie e permesso (non per malattia)
+      const mostraOrari = (tipo === 'ferie' || tipo === 'permesso');
+      document.getElementById('riga-orari-opzionali').style.display = mostraOrari ? 'flex' : 'none';
+      document.getElementById('hint-orari-opzionali').style.display = mostraOrari ? 'block' : 'none';
     });
     
         // Chiedi il permesso per le notifiche (solo dipendenti)
@@ -916,6 +991,19 @@ async function inviaRichiesta() {
       return;
     }
 
+        // 🔒 Controlla sovrapposizioni
+    const sovrapposizione = controllaSovrapposizioni(
+      utenteCorrente.username,
+      data,
+      ora_inizio,
+      ora_fine,
+      'recupero_ore'
+    );
+    if (sovrapposizione) {
+      msg.innerHTML = '<div class="error">❌ ' + sovrapposizione.messaggio + '</div>';
+      return;
+    }
+
     const richiesta = {
       id: prossimoId++,
       utente_id: utenteCorrente.username,
@@ -977,6 +1065,38 @@ async function inviaRichiesta() {
   if (data_inizio > data_fine) {
     msg.innerHTML = '<div class="error">La data inizio deve essere prima della data fine</div>';
     return;
+  }
+
+    // 🔒 Controlla sovrapposizioni per ogni giorno del periodo richiesto
+  const ora_inizio_richiesta = document.getElementById('richiesta-ora-inizio').value.trim();
+  const ora_fine_richiesta = document.getElementById('richiesta-ora-fine').value.trim();
+  
+  // Se sono compilate entrambe, controlla la fascia oraria specifica
+  // Se sono vuote, controlla tutta la giornata
+  const oraInizioCheck = (ora_inizio_richiesta && ora_fine_richiesta) ? ora_inizio_richiesta : null;
+  const oraFineCheck = (ora_inizio_richiesta && ora_fine_richiesta) ? ora_fine_richiesta : null;
+  
+  // Genera la lista dei giorni da controllare
+  let dataCorrente = new Date(data_inizio);
+  const dataFine = new Date(data_fine);
+  const giorniDaControllare = [];
+  while (dataCorrente <= dataFine) {
+    giorniDaControllare.push(dataCorrente.toISOString().split('T')[0]);
+    dataCorrente.setDate(dataCorrente.getDate() + 1);
+  }
+  
+  for (const giorno of giorniDaControllare) {
+    const sovrapposizione = controllaSovrapposizioni(
+      utenteCorrente.username,
+      giorno,
+      oraInizioCheck,
+      oraFineCheck,
+      tipo
+    );
+    if (sovrapposizione) {
+      msg.innerHTML = '<div class="error">❌ ' + sovrapposizione.messaggio + '</div>';
+      return;
+    }
   }
 
   const richiesta = {
@@ -1800,7 +1920,7 @@ function caricaRegistrazioniModifica() {
   const isOltre8 = totaleGiornata > 8;
 
   let html = '<div class="table-wrapper"><table><thead><tr>';
-  html += '<th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th><th>Azioni</th>';
+  html += '<th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Tipo</th><th>Descrizione</th><th>Azioni</th>';
   html += '</tr></thead><tbody>';
 
   registrazioni.forEach(r => {
@@ -1810,11 +1930,23 @@ function caricaRegistrazioniModifica() {
     const ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
     const isStraordinario = r.straordinario || false;
 
+    // Determina il tipo della registrazione (default: 'lavoro')
+    const tipoCorrente = r.tipo || 'lavoro';
+
     html += '<tr' + (isOltre8 ? ' class="ore-straordinario"' : '') + '>';
     html += '<td><strong>' + (commessa?.nome || 'N/A') + '</strong></td>';
     html += '<td><input type="time" id="mod-inizio-' + r.id + '" value="' + r.ora_inizio + '" class="edit-input" /></td>';
     html += '<td><input type="time" id="mod-fine-' + r.id + '" value="' + r.ora_fine + '" class="edit-input" /></td>';
     html += '<td>' + ore.toFixed(2) + 'h' + (isStraordinario ? ' ⭐' : '') + '</td>';
+    html += '<td>' +
+      '<select id="mod-tipo-' + r.id + '" class="edit-input">' +
+        '<option value="lavoro"' + (tipoCorrente === 'lavoro' ? ' selected' : '') + '>Lavoro</option>' +
+        '<option value="ferie"' + (tipoCorrente === 'ferie' ? ' selected' : '') + '>Ferie</option>' +
+        '<option value="permesso"' + (tipoCorrente === 'permesso' ? ' selected' : '') + '>Permesso</option>' +
+        '<option value="malattia"' + (tipoCorrente === 'malattia' ? ' selected' : '') + '>Malattia</option>' +
+        '<option value="recupero_ore"' + (tipoCorrente === 'recupero_ore' ? ' selected' : '') + '>Recupero ore</option>' +
+      '</select>' +
+    '</td>';
     html += '<td><input type="text" id="mod-desc-' + r.id + '" value="' + (r.descrizione || '') + '" class="edit-input" /></td>';
     html += '<td>';
     html += '<button class="btn-warning" onclick="salvaModifica(' + r.id + ')"><i class="fas fa-save"></i></button>';
@@ -1838,10 +1970,11 @@ function caricaRegistrazioniModifica() {
   div.innerHTML = html;
 }
 
-function salvaModifica(id) {
+async function salvaModifica(id) {
   const nuovaInizio = document.getElementById('mod-inizio-' + id).value;
   const nuovaFine = document.getElementById('mod-fine-' + id).value;
   const nuovaDesc = document.getElementById('mod-desc-' + id).value.trim();
+  const nuovoTipo = document.getElementById('mod-tipo-' + id).value;
 
   const registro = dati.registrazioni.find(r => r.id === id);
   if (!registro) return;
@@ -1854,12 +1987,13 @@ function salvaModifica(id) {
   registro.ora_inizio = nuovaInizio;
   registro.ora_fine = nuovaFine;
   registro.descrizione = nuovaDesc;
+  registro.tipo = nuovoTipo;
   
   const [h1, m1] = nuovaInizio.split(':').map(Number);
   const [h2, m2] = nuovaFine.split(':').map(Number);
   registro.ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
 
-  salvaDati();
+  await salvaDati();
   caricaRegistrazioniModifica();
   alert('✅ Registrazione modificata!');
 }
@@ -3301,12 +3435,17 @@ document.addEventListener('DOMContentLoaded', function() {
         
         caricaSelectRecuperoCommesse();
         
-        document.getElementById('tipo-richiesta').addEventListener('change', function() {
-          const tipo = this.value;
-          document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
-          document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
-          document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
-        });
+document.getElementById('tipo-richiesta').addEventListener('change', function() {
+  const tipo = this.value;
+  document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
+  document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
+  document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
+  
+  // 🕐 Mostra i campi orari SOLO per ferie e permesso (non per malattia)
+  const mostraOrari = (tipo === 'ferie' || tipo === 'permesso');
+  document.getElementById('riga-orari-opzionali').style.display = mostraOrari ? 'flex' : 'none';
+  document.getElementById('hint-orari-opzionali').style.display = mostraOrari ? 'block' : 'none';
+});
         
         if (utente.ruolo === 'dipendente') {
           const oraInizio = document.getElementById('ora-inizio');
@@ -3347,7 +3486,7 @@ document.addEventListener('DOMContentLoaded', function() {
         caricaSelectDipendentiCalendario();
         
         // Re-inizializza lo smart-time (importante!)
-        ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
+        ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine', 'richiesta-ora-inizio', 'richiesta-ora-fine'].forEach(id => {
           const el = document.getElementById(id);
           if (el) initSmartTime(el);
         });
