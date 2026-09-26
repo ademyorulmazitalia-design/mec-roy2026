@@ -1,8 +1,9 @@
 // ============================================
 // SERVICE WORKER - MEC-ROY Gestione Ore
+// Solo cache. Le notifiche sono gestite da firebase-messaging-sw.js
 // ============================================
 
-const CACHE_NAME = 'mecroy-cache-v1';
+const CACHE_NAME = 'mecroy-cache-v2';
 
 // File da mettere in cache (per funzionamento offline)
 const FILES_TO_CACHE = [
@@ -104,68 +105,6 @@ self.addEventListener('fetch', (event) => {
         });
         return networkResponse;
       });
-    })
-  );
-});
-// ============================================
-// NOTIFICHE PUSH (Firebase Cloud Messaging)
-// ============================================
-
-// Firebase config (serve per inizializzare il SW come "messaging")
-importScripts('https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js');
-
-firebase.initializeApp({
-  apiKey: "AIzaSyCjVygYWWtq3FoARPQN_PufBXoUtZy1Z8g",
-  authDomain: "mec-roy-2026.firebaseapp.com",
-  projectId: "mec-roy-2026",
-  storageBucket: "mec-roy-2026.firebasestorage.app",
-  messagingSenderId: "236947448329",
-  appId: "1:236947448329:web:57776a8a00011adb9fced8"
-});
-
-const messaging = firebase.messaging();
-
-// Gestisce le notifiche quando l'app è in BACKGROUND o chiusa
-messaging.onBackgroundMessage((payload) => {
-  console.log('📬 Notifica ricevuta in background:', payload);
-
-  const titolo = payload.notification?.title || 'MEC-ROY';
-  const corpo = payload.notification?.body || 'Ricordati di registrare le ore!';
-  const icona = payload.notification?.icon || 'images/logo-192.png';
-
-  self.registration.showNotification(titolo, {
-    body: corpo,
-    icon: icona,
-    badge: 'images/logo-192.png',
-    vibrate: [200, 100, 200],
-    tag: 'mecroy-ore',
-    requireInteraction: true,
-    data: {
-      url: payload.data?.url || '/'
-    }
-  });
-});
-
-// Gestisce il click sulla notifica
-self.addEventListener('notificationclick', (event) => {
-  console.log('👆 Notifica cliccata');
-  event.notification.close();
-
-  const urlDaAprire = event.notification.data?.url || '/';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Se l'app è già aperta, portala in primo piano
-      for (const client of clientList) {
-        if ('focus' in client) {
-          return client.focus();
-        }
-      }
-      // Altrimenti apri una nuova finestra
-      if (clients.openWindow) {
-        return clients.openWindow(urlDaAprire);
-      }
     })
   );
 });
