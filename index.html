@@ -202,6 +202,21 @@
               <input type="date" id="richiesta-data-fine" />
             </div>
           </div>
+          
+          <!-- ORARI OPZIONALI (solo per ferie/permesso) -->
+          <div class="form-row" id="riga-orari-opzionali" style="display:none;">
+            <div class="form-group">
+              <label><i class="fas fa-clock"></i> Ora Inizio (opzionale)</label>
+              <input type="text" id="richiesta-ora-inizio" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label><i class="fas fa-clock"></i> Ora Fine (opzionale)</label>
+              <input type="text" id="richiesta-ora-fine" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
+            </div>
+          </div>
+          <small class="hint" id="hint-orari-opzionali" style="display:none;">
+            💡 Lascia vuoto per giornata intera. Compila per indicare solo alcune ore (es. permesso di 2 ore).
+          </small>
         </div>
 
         <div id="gruppo-recupero" style="display:none;">
