@@ -1283,6 +1283,88 @@ async function approvaRichiesta(id) {
       return;
     }
 
+    // 🔍 Controlla se il dipendente ha ferie in questo giorno
+    const ferieEsistenti = dati.registrazioni.filter(r =>
+      r.utente_id === utenteIdCorretto &&
+      r.data === richiesta.data &&
+      r.tipo === 'ferie'
+    );
+
+    // 🕐 Controlla se ci sono già ore lavorate nella stessa fascia (diverse dal recupero)
+    const oreEsistenti = dati.registrazioni.filter(r =>
+      r.utente_id === utenteIdCorretto &&
+      r.data === richiesta.data &&
+      r.tipo === 'lavoro' &&
+      r.ora_inizio && r.ora_fine &&
+      !(richiesta.ora_fine <= r.ora_inizio || richiesta.ora_inizio >= r.ora_fine)
+    );
+    if (oreEsistenti.length > 0) {
+      alert('❌ Impossibile approvare: ci sono già ore registrate in questa fascia (' +
+            oreEsistenti[0].ora_inizio + ' - ' + oreEsistenti[0].ora_fine + ').');
+      richiesta.stato = 'pending';  // ripristina
+      return;
+    }
+
+    // ⚠️ Se ci sono ferie, chiedi conferma
+    if (ferieEsistenti.length > 0) {
+      const conferma = confirm(
+        '⚠️ ATTENZIONE!\n\n' +
+        'Il dipendente ha FERIE il ' + richiesta.data + '.\n\n' +
+        'Approvando queste ore (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + '), la ferie verrà sostituita da:\n' +
+        '• Lavoro dalle ' + richiesta.ora_inizio + ' alle ' + richiesta.ora_fine + '\n' +
+        '• Permesso per il resto della giornata\n\n' +
+        'Confermi l\'approvazione?'
+      );
+      if (!conferma) {
+        richiesta.stato = 'pending';  // ripristina lo stato
+        alert('❌ Approvazione annullata.');
+        return;
+      }
+
+      // 🗑️ Cancella le ferie esistenti di quel giorno
+      dati.registrazioni = dati.registrazioni.filter(r =>
+        !(r.utente_id === utenteIdCorretto &&
+          r.data === richiesta.data &&
+          r.tipo === 'ferie')
+      );
+
+      // 📋 Calcola le ore di permesso per il resto della giornata
+      // Giornata tipo: 08:00-12:00 + 13:00-17:00 = 8 ore
+      const orePermesso = 8 - oreLavorate;
+      
+      if (orePermesso > 0) {
+        // Crea permesso: se le ore lavorate sono al mattino, il permesso è al pomeriggio
+        // Se sono al pomeriggio, il permesso è al mattino
+        // Se sono in mezzo, dividi (ma semplifichiamo)
+        const hInizio = parseInt(richiesta.ora_inizio.split(':')[0]);
+        
+        let permessoInizio, permessoFine;
+        
+        if (hInizio < 12) {
+          // Lavoro al mattino → permesso al pomeriggio
+          permessoInizio = '13:00';
+          permessoFine = String(13 + orePermesso).padStart(2, '0') + ':00';
+        } else {
+          // Lavoro al pomeriggio → permesso al mattino
+          permessoInizio = '08:00';
+          permessoFine = String(8 + orePermesso).padStart(2, '0') + ':00';
+        }
+        
+        dati.registrazioni.push({
+          id: prossimoId++,
+          utente_id: utenteIdCorretto,
+          commessa_id: null,
+          data: richiesta.data,
+          ora_inizio: permessoInizio,
+          ora_fine: permessoFine,
+          descrizione: 'Permesso (per recupero ore)',
+          tipo: 'permesso',
+          ore: orePermesso
+        });
+      }
+    }
+
+    // ✅ Crea la registrazione di lavoro
     dati.registrazioni.push({
       id: prossimoId++,
       utente_id: utenteIdCorretto,
@@ -1299,7 +1381,8 @@ async function approvaRichiesta(id) {
     aggiungiNotifica(
       utenteIdCorretto,
       'recupero_approvato',
-      '✅ Le tue ore del ' + richiesta.data + ' (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + ') sono state APPROVATE e inserite!',
+      '✅ Le tue ore del ' + richiesta.data + ' (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + ') sono state APPROVATE e inserite!' +
+      (ferieEsistenti.length > 0 ? ' La ferie è stata sostituita da permesso.' : ''),
       '#'
     );
     
