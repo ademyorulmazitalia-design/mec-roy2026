@@ -29,8 +29,13 @@ db.enablePersistence()
 
 let dati = {};
 let utenteCorrente = null;
-let prossimoId = 1; 
+let prossimoId = 1;
 let commessaCorrenteDettaglio = null;
+
+// ⭐ NUOVO: variabili per ascolto realtime (Problema 4)
+let _stoSalvando = false;
+let _unsubscribeSnapshot = null;
+
 let filtriCommessa = {
   dataInizio: '',
   dataFine: '',
@@ -70,33 +75,36 @@ async function salvaSuFirestore(datiDaSalvare) {
 
 async function caricaDati() {
   const datiFirestore = await caricaDaFirestore();
-  
+
   if (datiFirestore) {
     dati = datiFirestore;
-    
+
+    if (!dati.utenti) dati.utenti = [];
+    if (!dati.registrazioni) dati.registrazioni = [];
+    if (!dati.richieste) dati.richieste = [];
+    if (!dati.notifiche) dati.notifiche = [];
+    if (!dati.commesse) dati.commesse = [];
+    if (!dati.aziende) dati.aziende = [{ id: 1, nome: 'MEC-ROY srls' }];
+
     let maxIdTrovato = 0;
     dati.richieste.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
     dati.registrazioni.forEach(r => { if (r.id > maxIdTrovato) maxIdTrovato = r.id; });
     dati.notifiche.forEach(n => { if (n.id > maxIdTrovato) maxIdTrovato = n.id; });
     prossimoId = maxIdTrovato + 1;
-    
+
     return dati;
   }
-  
+
   const saved = localStorage.getItem('datiLavoroV2');
   if (saved) {
     const parsed = JSON.parse(saved);
-    if (!parsed.aziende) {
-      parsed.aziende = [{ id: 1, nome: 'MEC-ROY srls' }];
-    }
-    if (!parsed.commesse) {
-      parsed.commesse = [];
-    }
+    if (!parsed.aziende) parsed.aziende = [{ id: 1, nome: 'MEC-ROY srls' }];
+    if (!parsed.commesse) parsed.commesse = [];
     dati = parsed;
     await salvaSuFirestore(dati);
     return dati;
   }
-  
+
   const defaultData = {
     utenti: [
       { username: 'admin', password: 'admin123', nome: 'Admin', cognome: 'Sistema', ruolo: 'admin' }
@@ -105,42 +113,113 @@ async function caricaDati() {
     registrazioni: [],
     richieste: [],
     notifiche: [],
-    aziende: [
-      { id: 1, nome: 'MEC-ROY srls' }
-    ]
+    aziende: [{ id: 1, nome: 'MEC-ROY srls' }]
   };
-  
+
   dati = defaultData;
   await salvaSuFirestore(dati);
   localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
   return dati;
 }
 
+// ⭐ MODIFICATA: aggiunto flag _stoSalvando per il realtime
 async function salvaDati() {
+  _stoSalvando = true;
   try {
     localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
   } catch (e) {
     console.warn('⚠️ Salvataggio locale bloccato, salvo solo su Cloud.');
   }
   await salvaSuFirestore(dati);
+  // Aspetta un attimo prima di riattivare l'ascolto (dà tempo a Firestore)
+  setTimeout(() => { _stoSalvando = false; }, 800);
+}
+
+// ============================================
+// ⭐ NUOVO — ASCOLTO REALTIME FIRESTORE (Problema 4)
+// ============================================
+function attivaAscoltoRealtime() {
+  if (_unsubscribeSnapshot) {
+    _unsubscribeSnapshot();
+    _unsubscribeSnapshot = null;
+  }
+
+  console.log('🔄 Attivo ascolto realtime Firestore...');
+
+  _unsubscribeSnapshot = db.collection('dati').doc('main').onSnapshot((snapshot) => {
+    if (!snapshot.exists) return;
+
+    if (_stoSalvando) {
+      console.log('⏸️ Snapshot ignorato (stiamo salvando)');
+      return;
+    }
+
+    const datiNuovi = snapshot.data();
+    if (!datiNuovi) return;
+
+    if (JSON.stringify(datiNuovi) === JSON.stringify(dati)) return;
+
+    console.log('🔄 Dati aggiornati da Firestore (realtime)');
+    dati = datiNuovi;
+
+    if (!dati.utenti) dati.utenti = [];
+    if (!dati.registrazioni) dati.registrazioni = [];
+    if (!dati.richieste) dati.richieste = [];
+    if (!dati.notifiche) dati.notifiche = [];
+    if (!dati.commesse) dati.commesse = [];
+    if (!dati.aziende) dati.aziende = [{ id: 1, nome: 'MEC-ROY srls' }];
+
+    if (utenteCorrente) {
+      aggiornaUIDopoRealtime();
+    }
+  });
+}
+
+function aggiornaUIDopoRealtime() {
+  if (!utenteCorrente) return;
+
+  aggiornaBadgeRichieste();
+  aggiornaBadgeNotifiche();
+
+  const panelAttivo = document.querySelector('.panel.active');
+  if (!panelAttivo) return;
+
+  const id = panelAttivo.id;
+
+  if (id === 'panel-richieste' && utenteCorrente.ruolo === 'admin') {
+    caricaRichiesteAdmin();
+  }
+  if (id === 'panel-richiedi') {
+    caricaRichiesteDipendente();
+  }
+  if (id === 'panel-dipendenti' && utenteCorrente.ruolo === 'admin') {
+    caricaListaDipendenti();
+  }
+  if (id === 'panel-commesse' && utenteCorrente.ruolo === 'admin') {
+    caricaListaCommesse();
+  }
+}
+
+// ============================================
+// ⭐ NUOVO — HELPER: controllo weekend (Problema 2)
+// ============================================
+function isWeekendOggi() {
+  const oggi = new Date();
+  const giorno = oggi.getDay(); // 0 = domenica, 6 = sabato
+  return giorno === 0 || giorno === 6;
 }
 
 // ============================================
 // CONTROLLO SOVRAPPOSIZIONI
 // ============================================
 function controllaSovrapposizioni(username, data, ora_inizio, ora_fine, tipo) {
-  // Ritorna:
-  //   null → nessuna sovrapposizione
-  //   { tipo: 'ore' | 'richiesta' | 'ferie', messaggio: '...' } → sovrapposizione trovata
-
-  // 1. Controlla ore lavorate nella stessa fascia
   if (ora_inizio && ora_fine) {
     const oreEsistenti = dati.registrazioni.filter(r =>
       r.utente_id === username &&
       r.data === data &&
       r.tipo === 'lavoro' &&
       r.ora_inizio && r.ora_fine &&
-      !(ora_fine <= r.ora_inizio || ora_inizio >= r.ora_fine)  // controllo sovrapposizione
+      !(ora_fine <= r.ora_inizio || ora_inizio >= r.ora_fine)
     );
     if (oreEsistenti.length > 0) {
       const r = oreEsistenti[0];
@@ -151,25 +230,21 @@ function controllaSovrapposizioni(username, data, ora_inizio, ora_fine, tipo) {
     }
   }
 
-  // 2. Controlla richieste già esistenti (pending o approvate)
   const richiesteEsistenti = dati.richieste.filter(r => {
     if (r.utente_id !== username) return false;
-    if (r.stato === 'rifiutata') return false;  // le rifiutate si ignorano
+    if (r.stato === 'rifiutata') return false;
 
-    // Recupero ore: confronta fascia oraria
     if (r.tipo === 'recupero_ore' && ora_inizio && ora_fine && r.ora_inizio && r.ora_fine) {
       return r.data === data &&
              !(ora_fine <= r.ora_inizio || ora_inizio >= r.ora_fine);
     }
 
-    // Ferie/permesso/malattia: confronta date
     if (r.tipo !== 'recupero_ore') {
       if (data >= r.data_inizio && data <= r.data_fine) {
-        // Se è una ferie e la richiesta nuova è recupero ore, permetti (gestito altrove)
         if (r.tipo === 'ferie' && tipo === 'recupero_ore') {
-          return false;  // NON bloccare, l'admin confermerà
+          return false;
         }
-        return true;  // Altre sovrapposizioni bloccano
+        return true;
       }
     }
 
@@ -192,16 +267,16 @@ function controllaSovrapposizioni(username, data, ora_inizio, ora_fine, tipo) {
     }
   }
 
-  return null;  // Nessuna sovrapposizione
+  return null;
 }
 
 function calcolaOreGiornata(username, data) {
-  const registrazioni = dati.registrazioni.filter(r => 
-    r.utente_id === username && 
-    r.data === data && 
+  const registrazioni = dati.registrazioni.filter(r =>
+    r.utente_id === username &&
+    r.data === data &&
     r.tipo === 'lavoro'
   );
-  
+
   let totaleOre = 0;
   registrazioni.forEach(r => {
     if (r.ore) {
@@ -230,19 +305,20 @@ async function init() {
   document.getElementById('cal-anno').value = adesso.getFullYear();
 }
 
+// ============================================
+// LOGIN — con attivazione ascolto realtime
+// ============================================
 function login() {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   const ricordami = document.getElementById('ricordami').checked;
-  
+
   const utente = dati.utenti.find(u => u.username === username && u.password === password);
-  
+
   if (utente) {
     utenteCorrente = utente;
     salvaSessione(utente.username);
-    // ============================================
-    // SALVA CREDENZIALI SE "RICORDAMI" È SPUNTATO
-    // ============================================
+
     if (ricordami) {
       localStorage.setItem('ricordami_username', username);
       localStorage.setItem('ricordami_password', password);
@@ -252,8 +328,7 @@ function login() {
       localStorage.removeItem('ricordami_password');
       localStorage.removeItem('ricordami_attivo');
     }
-    
-    // Fade-out del form prima di mostrare la main
+
     const loginBox = document.querySelector('.login-box');
     if (loginBox) {
       loginBox.classList.add('fade-out');
@@ -268,12 +343,12 @@ function login() {
       document.getElementById('main-page').style.display = 'block';
       document.getElementById('errore').style.display = 'none';
     }
-    
+
     document.getElementById('user-nome').textContent = utente.nome + ' ' + utente.cognome;
     const ruoloBadge = document.getElementById('user-ruolo');
     ruoloBadge.textContent = utente.ruolo;
     ruoloBadge.className = 'badge ' + utente.ruolo;
-    
+
     if (utente.ruolo === 'admin') {
       document.getElementById('tab-registra').style.display = 'none';
       document.getElementById('tab-richiedi').style.display = 'none';
@@ -285,9 +360,9 @@ function login() {
       document.getElementById('cal-filtro-dipendente').style.display = 'block';
       document.getElementById('btn-password').style.display = 'flex';
       document.getElementById('azienda-container').style.display = 'inline-block';
-      
+
       document.getElementById('cal-vista-selector').style.display = 'none';
-      
+
       caricaSelectAziende();
       caricaSelectAziendeCommesse();
       caricaSelectDipendentiModifica();
@@ -295,7 +370,7 @@ function login() {
       caricaRichiesteAdmin();
       caricaListaDipendenti();
       aggiornaBadgeRichieste();
-      
+
       showTab('modifica');
     } else {
       document.getElementById('tab-registra').style.display = 'inline-block';
@@ -308,16 +383,16 @@ function login() {
       document.getElementById('cal-filtro-dipendente').style.display = 'none';
       document.getElementById('btn-password').style.display = 'none';
       document.getElementById('azienda-container').style.display = 'none';
-      
+
       document.getElementById('cal-vista-selector').style.display = 'flex';
-      
+
       showTab('registra');
     }
-    
+
     document.getElementById('notifiche-container').style.display = 'inline-block';
     aggiornaBadgeNotifiche();
     caricaDarkMode();
-    
+
     const oggi = new Date().toISOString().split('T')[0];
     const dataReg = document.getElementById('data-reg');
     dataReg.value = oggi;
@@ -325,7 +400,6 @@ function login() {
     dataReg.style.backgroundColor = '#f0f0f0';
     dataReg.style.cursor = 'not-allowed';
 
-    // Imposta il mese e l'anno correnti nel calendario
     const adesso = new Date();
     document.getElementById('cal-mese').value = adesso.getMonth() + 1;
     document.getElementById('cal-anno').value = adesso.getFullYear();
@@ -333,31 +407,27 @@ function login() {
     document.getElementById('richiesta-data-fine').value = oggi;
     document.getElementById('modifica-data').value = oggi;
     document.getElementById('recupero-data').value = oggi;
-    
+
     caricaSelectRecuperoCommesse();
-    
+
     document.getElementById('tipo-richiesta').addEventListener('change', function() {
       const tipo = this.value;
       document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
       document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
       document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
-      
-      // 🕐 Mostra i campi orari SOLO per ferie e permesso (non per malattia)
+
       const mostraOrari = (tipo === 'ferie' || tipo === 'permesso');
       document.getElementById('riga-orari-opzionali').style.display = mostraOrari ? 'flex' : 'none';
       document.getElementById('hint-orari-opzionali').style.display = mostraOrari ? 'block' : 'none';
     });
-    
-        // Chiedi il permesso per le notifiche (solo dipendenti)
+
     setTimeout(() => {
       chiediPermessoNotifiche();
       ascoltaRinnovoToken();
     }, 1500);
-    
+
     if (utente.ruolo === 'dipendente') {
       const oraInizio = document.getElementById('ora-inizio');
-      const oraFine = document.getElementById('ora-fine');
-      
       const ora = new Date();
       const oraCorrente = ora.getHours().toString().padStart(2, '0') + ':00';
       oraInizio.value = oraCorrente;
@@ -377,30 +447,30 @@ function login() {
           caricaUltimaRegistrazione();
         }
       });
-      
+
       caricaUltimaRegistrazione();
     }
-    
-    // Reset dei sotto-pannelli Commesse allo stato iniziale
+
     const menuC = document.getElementById('commesse-menu');
     const aggC  = document.getElementById('commesse-aggiungi');
     const anaC  = document.getElementById('commesse-analizza');
     if (menuC) menuC.style.display = 'block';
     if (aggC)  aggC.style.display  = 'none';
     if (anaC)  anaC.style.display  = 'none';
-    
+
     caricaSelectCommesse();
     caricaListaCommesse();
     caricaRichiesteDipendente();
     caricaSelectDipendentiModifica();
     caricaSelectDipendentiCalendario();
-    
+
+    // ⭐ Attiva ascolto realtime
+    attivaAscoltoRealtime();
+
   } else {
-    // Shake del form quando le credenziali sono errate
     const loginBox = document.querySelector('.login-box');
     if (loginBox) {
       loginBox.classList.remove('shake');
-      // Forza il reflow per far ripartire l'animazione se già attiva
       void loginBox.offsetWidth;
       loginBox.classList.add('shake');
       setTimeout(() => loginBox.classList.remove('shake'), 550);
@@ -409,17 +479,16 @@ function login() {
   }
 }
 
-
 function showTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  
+
   const tabButton = document.querySelector(`.tab[onclick="showTab('${tab}')"]`);
   if (tabButton) tabButton.classList.add('active');
-  
+
   const panel = document.getElementById('panel-' + tab);
   if (panel) panel.classList.add('active');
-  
+
   if (tab === 'modifica') caricaRegistrazioniModifica();
   if (tab === 'commesse') caricaListaCommesse();
   if (tab === 'dipendenti') caricaListaDipendenti();
@@ -433,13 +502,13 @@ function showTab(tab) {
 function toggleDarkMode() {
   const container = document.getElementById('app-container');
   const body = document.body;
-  
+
   container.classList.toggle('dark-mode');
   body.classList.toggle('dark-mode');
-  
+
   const btn = document.getElementById('btn-darkmode');
   const isDark = container.classList.contains('dark-mode');
-  
+
   if (isDark) {
     btn.innerHTML = '<i class="fas fa-sun"></i>';
     localStorage.setItem('darkMode_' + (utenteCorrente?.username || 'default'), 'true');
@@ -545,9 +614,7 @@ function aggiungiAzienda() {
     return;
   }
 
-  if (!dati.aziende) {
-    dati.aziende = [];
-  }
+  if (!dati.aziende) dati.aziende = [];
 
   const maxId = dati.aziende.length > 0 ? dati.aziende.reduce((max, a) => a.id > max ? a.id : max, 0) : 0;
   dati.aziende.push({ id: maxId + 1, nome: nome });
@@ -563,12 +630,12 @@ function aggiungiAzienda() {
 
 function caricaListaAziende() {
   const div = document.getElementById('lista-aziende');
-  
+
   if (!div) {
     console.error('❌ Elemento lista-aziende non trovato');
     return;
   }
-  
+
   if (!dati.aziende || dati.aziende.length === 0) {
     div.innerHTML = '<p class="text-muted">Nessuna azienda</p>';
     return;
@@ -595,17 +662,17 @@ function caricaListaAziende() {
 
 function eliminaAzienda(id) {
   if (!confirm('Eliminare questa azienda? Verranno eliminati anche i dipendenti associati.')) return;
-  
+
   const utentiAzienda = dati.utenti.filter(u => u.azienda_id === id);
   const usernames = utentiAzienda.map(u => u.username);
-  
+
   dati.utenti = dati.utenti.filter(u => u.azienda_id !== id);
   dati.registrazioni = dati.registrazioni.filter(r => !usernames.includes(r.utente_id));
   dati.richieste = dati.richieste.filter(r => !usernames.includes(r.utente_id));
   dati.notifiche = dati.notifiche.filter(n => !usernames.includes(n.utente_id));
-  
+
   dati.aziende = dati.aziende.filter(a => a.id !== id);
-  
+
   salvaDati();
   caricaListaAziende();
   caricaSelectAziende();
@@ -640,8 +707,8 @@ function caricaUltimaRegistrazione() {
 
   const isPomeriggio = oreCorrente >= 13;
 
-  const registrazioniOggi = dati.registrazioni.filter(r => 
-    r.utente_id === utenteCorrente.username && 
+  const registrazioniOggi = dati.registrazioni.filter(r =>
+    r.utente_id === utenteCorrente.username &&
     r.data === oggi &&
     r.tipo === 'lavoro'
   );
@@ -651,9 +718,7 @@ function caricaUltimaRegistrazione() {
   const oraFine = document.getElementById('ora-fine');
   const straordinarioCheck = document.getElementById('straordinario');
 
-  if (straordinarioCheck && straordinarioCheck.checked) {
-    return;
-  }
+  if (straordinarioCheck && straordinarioCheck.checked) return;
 
   let ultima = null;
   if (registrazioniOggi.length > 0) {
@@ -675,7 +740,7 @@ function caricaUltimaRegistrazione() {
       const oreOra = oreCorrente.toString().padStart(2, '0') + ':00';
       oraInizio.value = (oreCorrente <= 23) ? oreOra : '13:00';
     }
-    
+
     const oraCorrenteMinuti = oraCorrente.getHours() * 60 + oraCorrente.getMinutes();
     const inizioMinuti = parseInt(oraInizio.value.split(':')[0]) * 60 + parseInt(oraInizio.value.split(':')[1] || 0);
     if (inizioMinuti > oraCorrenteMinuti) {
@@ -703,10 +768,10 @@ function caricaUltimaRegistrazione() {
   oraInizio.value = ultima.ora_fine;
   oraInizio.disabled = true;
   oraInizio.style.backgroundColor = '#f0f0f0';
-  
+
   oraFine.disabled = false;
   oraFine.style.backgroundColor = 'white';
-  
+
   const hFine = (parseInt(ultima.ora_fine.split(':')[0]) + 1).toString().padStart(2, '0');
   oraFine.value = hFine + ':00';
 
@@ -718,12 +783,12 @@ function caricaUltimaRegistrazione() {
 function caricaSelectCommesse() {
   const select = document.getElementById('commessa');
   select.innerHTML = '<option value="">-- Seleziona una commessa --</option>';
-  
+
   if (dati.commesse.length === 0) {
     select.innerHTML = '<option value="">-- Nessuna commessa disponibile --</option>';
     return;
   }
-  
+
   dati.commesse.forEach(c => {
     select.innerHTML += '<option value="' + c.id + '">' + c.nome + '</option>';
   });
@@ -745,7 +810,7 @@ function aggiungiCommessa() {
   }
 
   const maxId = dati.commesse.reduce((max, c) => c.id > max ? c.id : max, 0);
-  
+
   dati.commesse.push({
     id: maxId + 1,
     nome: nome,
@@ -768,7 +833,7 @@ function aggiungiCommessa() {
 
 function caricaListaCommesse() {
   const div = document.getElementById('lista-commesse');
-  
+
   if (dati.commesse.length === 0) {
     div.innerHTML = '<p class="text-muted">📭 Nessuna commessa creata</p>';
     return;
@@ -797,7 +862,7 @@ function caricaListaCommesse() {
 function apriModificaCommessa(id) {
   const commessa = dati.commesse.find(c => c.id === id);
   if (!commessa) return;
-  
+
   const nuovoNome = prompt('Inserisci il nuovo nome della commessa:', commessa.nome);
   if (nuovoNome && nuovoNome.trim() !== '') {
     commessa.nome = nuovoNome.trim();
@@ -810,10 +875,10 @@ function apriModificaCommessa(id) {
 
 function eliminaCommessa(id) {
   if (!confirm('Eliminare questa commessa? Verranno eliminate anche tutte le ore registrate su di essa.')) return;
-  
+
   dati.commesse = dati.commesse.filter(c => c.id !== id);
   dati.registrazioni = dati.registrazioni.filter(r => r.commessa_id !== id);
-  
+
   salvaDati();
   caricaListaCommesse();
   caricaSelectCommesse();
@@ -873,7 +938,7 @@ function salvaRegistrazione() {
   const adesso = new Date();
   const minutiAdesso = adesso.getHours() * 60 + adesso.getMinutes();
   const minutiInizio = parseInt(ora_inizio.split(':')[0]) * 60 + parseInt(ora_inizio.split(':')[1] || 0);
-  
+
   if (minutiInizio > minutiAdesso) {
     msg.innerHTML = `<div class="error">❌ Non puoi segnare un orario nel futuro! L'ora attuale è ${adesso.getHours()}:${String(adesso.getMinutes()).padStart(2, '0')}.</div>`;
     return;
@@ -896,7 +961,7 @@ function salvaRegistrazione() {
     }
   }
 
-  const esistente = dati.registrazioni.find(r => 
+  const esistente = dati.registrazioni.find(r =>
     r.utente_id === utenteCorrente.username &&
     r.data === data &&
     ((ora_inizio >= r.ora_inizio && ora_inizio < r.ora_fine) ||
@@ -951,18 +1016,35 @@ function salvaRegistrazione() {
   if (!msg.innerHTML.includes('arrotondate')) {
     msg.innerHTML = '<div class="success">✅ Registrazione salvata!</div>';
   }
-  
+
   document.getElementById('ora-fine').value = '';
   document.getElementById('descrizione').value = '';
   document.getElementById('straordinario').checked = false;
-  
+
   caricaUltimaRegistrazione();
 }
 
+// ============================================
+// ⭐ INVIA RICHIESTA — con blocco weekend COMPLETO
+// ============================================
 async function inviaRichiesta() {
   if (utenteCorrente?.ruolo === 'admin') {
     alert('Gli amministratori non possono fare richieste');
     return;
+  }
+
+  // ⭐ Rileggi Firestore prima di operare (fix Problema 4)
+  try {
+    const datiFreschi = await caricaDaFirestore();
+    if (datiFreschi) {
+      dati = datiFreschi;
+      if (!dati.utenti) dati.utenti = [];
+      if (!dati.registrazioni) dati.registrazioni = [];
+      if (!dati.richieste) dati.richieste = [];
+      if (!dati.notifiche) dati.notifiche = [];
+    }
+  } catch (e) {
+    console.warn('⚠️ Impossibile rileggere Firestore prima della richiesta:', e);
   }
 
   const tipo = document.getElementById('tipo-richiesta').value;
@@ -991,7 +1073,6 @@ async function inviaRichiesta() {
       return;
     }
 
-        // 🔒 Controlla sovrapposizioni
     const sovrapposizione = controllaSovrapposizioni(
       utenteCorrente.username,
       data,
@@ -1018,24 +1099,28 @@ async function inviaRichiesta() {
     };
 
     dati.richieste.push(richiesta);
-    salvaDati();
+    await salvaDati();
 
-    // 🔔 Salva anche nella collection "richieste_trigger" per attivare la Cloud Function
-    try {
-      await db.collection('richieste_trigger').add({
-        richiesta_id: richiesta.id,
-        utente_id: richiesta.utente_id,
-        tipo: richiesta.tipo,
-        data: richiesta.data || null,
-        ora_inizio: richiesta.ora_inizio || null,
-        ora_fine: richiesta.ora_fine || null,
-        commessa_id: richiesta.commessa_id || null,
-        descrizione_lavoro: richiesta.descrizione_lavoro || null,
-        creato_il: new Date().toISOString()
-      });
-      console.log('✅ Richiesta recupero salvata nella collection di trigger');
-    } catch (err) {
-      console.warn('⚠️ Errore salvataggio collection trigger:', err);
+    // ⭐ Blocco weekend
+    if (isWeekendOggi()) {
+      console.log('📵 Weekend: notifica push NON inviata');
+    } else {
+      try {
+        await db.collection('richieste_trigger').add({
+          richiesta_id: richiesta.id,
+          utente_id: richiesta.utente_id,
+          tipo: richiesta.tipo,
+          data: richiesta.data || null,
+          ora_inizio: richiesta.ora_inizio || null,
+          ora_fine: richiesta.ora_fine || null,
+          commessa_id: richiesta.commessa_id || null,
+          descrizione_lavoro: richiesta.descrizione_lavoro || null,
+          creato_il: new Date().toISOString()
+        });
+        console.log('✅ Richiesta recupero salvata nella collection di trigger');
+      } catch (err) {
+        console.warn('⚠️ Errore salvataggio collection trigger:', err);
+      }
     }
 
     msg.innerHTML = '<div class="success">✅ Richiesta di recupero ore inviata! Attendi l\'approvazione dell\'admin.</div>';
@@ -1067,16 +1152,12 @@ async function inviaRichiesta() {
     return;
   }
 
-    // 🔒 Controlla sovrapposizioni per ogni giorno del periodo richiesto
   const ora_inizio_richiesta = document.getElementById('richiesta-ora-inizio').value.trim();
   const ora_fine_richiesta = document.getElementById('richiesta-ora-fine').value.trim();
-  
-  // Se sono compilate entrambe, controlla la fascia oraria specifica
-  // Se sono vuote, controlla tutta la giornata
+
   const oraInizioCheck = (ora_inizio_richiesta && ora_fine_richiesta) ? ora_inizio_richiesta : null;
   const oraFineCheck = (ora_inizio_richiesta && ora_fine_richiesta) ? ora_fine_richiesta : null;
-  
-  // Genera la lista dei giorni da controllare
+
   let dataCorrente = new Date(data_inizio);
   const dataFine = new Date(data_fine);
   const giorniDaControllare = [];
@@ -1084,7 +1165,7 @@ async function inviaRichiesta() {
     giorniDaControllare.push(dataCorrente.toISOString().split('T')[0]);
     dataCorrente.setDate(dataCorrente.getDate() + 1);
   }
-  
+
   for (const giorno of giorniDaControllare) {
     const sovrapposizione = controllaSovrapposizioni(
       utenteCorrente.username,
@@ -1116,22 +1197,26 @@ async function inviaRichiesta() {
   }
 
   dati.richieste.push(richiesta);
-  salvaDati();
+  await salvaDati();
 
-  // 🔔 Salva anche nella collection "richieste_trigger" per attivare la Cloud Function
-  try {
-    await db.collection('richieste_trigger').add({
-      richiesta_id: richiesta.id,
-      utente_id: richiesta.utente_id,
-      tipo: richiesta.tipo,
-      data_inizio: richiesta.data_inizio || null,
-      data_fine: richiesta.data_fine || null,
-      note: richiesta.note || null,
-      creato_il: new Date().toISOString()
-    });
-    console.log('✅ Richiesta salvata nella collection di trigger');
-  } catch (err) {
-    console.warn('⚠️ Errore salvataggio collection trigger:', err);
+  // ⭐ Blocco weekend (secondo blocco: ferie/permesso/malattia)
+  if (isWeekendOggi()) {
+    console.log('📵 Weekend: notifica push NON inviata');
+  } else {
+    try {
+      await db.collection('richieste_trigger').add({
+        richiesta_id: richiesta.id,
+        utente_id: richiesta.utente_id,
+        tipo: richiesta.tipo,
+        data_inizio: richiesta.data_inizio || null,
+        data_fine: richiesta.data_fine || null,
+        note: richiesta.note || null,
+        creato_il: new Date().toISOString()
+      });
+      console.log('✅ Richiesta salvata nella collection di trigger');
+    } catch (err) {
+      console.warn('⚠️ Errore salvataggio collection trigger:', err);
+    }
   }
 
   msg.innerHTML = '<div class="success">✅ Richiesta inviata! Attendi la risposta.</div>';
@@ -1146,24 +1231,24 @@ async function inviaRichiesta() {
 function caricaRichiesteDipendente() {
   const div = document.getElementById('lista-richieste-dipendente');
   const richieste = dati.richieste.filter(r => r.utente_id === utenteCorrente.username);
-  
+
   if (richieste.length === 0) {
     div.innerHTML = '<p class="text-muted">Nessuna richiesta inviata</p>';
     return;
   }
 
   const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-  const statoMap = { 
-    pending: '⏳ In attesa', 
-    approvata: '✅ APPROVATA', 
-    rifiutata: '❌ RIFIUTATA' 
+  const statoMap = {
+    pending: '⏳ In attesa',
+    approvata: '✅ APPROVATA',
+    rifiutata: '❌ RIFIUTATA'
   };
   const statoColor = {
     pending: '#ffc107',
     approvata: '#28a745',
     rifiutata: '#dc3545'
   };
-  
+
   let html = '<div class="table-wrapper"><table><thead><tr>';
   html += '<th>Tipo</th><th>Periodo</th><th>Note</th><th>Stato</th>';
   html += '</tr></thead><tbody>';
@@ -1188,26 +1273,23 @@ function caricaRichiesteDipendente() {
   div.innerHTML = html;
 }
 
-// FIX: non cancella più le richieste processate, filtra solo per la visualizzazione
 function caricaRichiesteAdmin() {
   const div = document.getElementById('lista-richieste-admin');
-  
-  // ⚠️ ATTENZIONE: usiamo una variabile locale per la lista da mostrare,
-  // NON modifichiamo più dati.richieste (sennò perderemmo lo storico)
+
   const richieste = dati.richieste.filter(r => r.stato === 'pending');
-  
+
   if (richieste.length === 0) {
     div.innerHTML = '<p class="text-muted">✅ Nessuna richiesta in sospeso</p>';
     return;
   }
 
   const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-  
+
   let html = '';
   richieste.forEach(r => {
     const utente = dati.utenti.find(u => u.username === r.utente_id);
     const nome = utente ? utente.nome + ' ' + utente.cognome : r.utente_id;
-    
+
     let dettagli = '';
     if (r.tipo === 'recupero_ore') {
       dettagli = `
@@ -1222,7 +1304,7 @@ function caricaRichiesteAdmin() {
         ${r.certificato ? `<br><small>📎 Certificato: ${r.certificato}</small>` : ''}
       `;
     }
-    
+
     html += `<div class="richiesta-card pending">
       <div class="info">
         <strong>${emoji[r.tipo] || '📌'} ${r.tipo.replace('_', ' ').charAt(0).toUpperCase() + r.tipo.replace('_', ' ').slice(1)} - ${nome}</strong>
@@ -1239,255 +1321,10 @@ function caricaRichiesteAdmin() {
   div.innerHTML = html;
 }
 
-async function approvaRichiesta(id) {
-  const richiesta = dati.richieste.find(r => r.id === id);
-  if (!richiesta) {
-    alert('❌ Richiesta non trovata');
-    return;
-  }
-  
-  if (richiesta.stato !== 'pending') {
-    alert('⚠️ Questa richiesta è già stata processata.');
-    return;
-  }
-  
-  richiesta.stato = 'approvata';
-    // 🔔 Salva in richieste_trigger per notificare il dipendente
-   try {
-    await db.collection('richieste_trigger').add({
-      richiesta_id: richiesta.id,
-      utente_id: richiesta.utente_id,
-      tipo: richiesta.tipo,
-      azione: 'approvata',
-      data_inizio: richiesta.data_inizio || null,
-      data_fine: richiesta.data_fine || null,
-      data: richiesta.data || null,
-      ora_inizio: richiesta.ora_inizio || null,
-      ora_fine: richiesta.ora_fine || null,
-      creato_il: new Date().toISOString()
-    });
-    console.log('✅ Aggiornamento approvazione salvato per notifica');
-    } catch (err) {
-    console.warn('⚠️ Errore salvataggio trigger approvazione:', err);
-  }
-
-  const utenteIdCorretto = richiesta.utente_id;
-
-  if (richiesta.tipo === 'recupero_ore') {
-    const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
-    const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
-    let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-    
-    if (oreLavorate <= 0 || oreLavorate > 12) {
-      alert('❌ ERRORE DATI: Orario non valido per la richiesta di recupero. Controlla le ore inserite.');
-      return;
-    }
-
-    // 🔍 Controlla se il dipendente ha ferie in questo giorno
-    const ferieEsistenti = dati.registrazioni.filter(r =>
-      r.utente_id === utenteIdCorretto &&
-      r.data === richiesta.data &&
-      r.tipo === 'ferie'
-    );
-
-    // 🕐 Controlla se ci sono già ore lavorate nella stessa fascia (diverse dal recupero)
-    const oreEsistenti = dati.registrazioni.filter(r =>
-      r.utente_id === utenteIdCorretto &&
-      r.data === richiesta.data &&
-      r.tipo === 'lavoro' &&
-      r.ora_inizio && r.ora_fine &&
-      !(richiesta.ora_fine <= r.ora_inizio || richiesta.ora_inizio >= r.ora_fine)
-    );
-    if (oreEsistenti.length > 0) {
-      alert('❌ Impossibile approvare: ci sono già ore registrate in questa fascia (' +
-            oreEsistenti[0].ora_inizio + ' - ' + oreEsistenti[0].ora_fine + ').');
-      richiesta.stato = 'pending';  // ripristina
-      return;
-    }
-
-    // ⚠️ Se ci sono ferie, chiedi conferma
-    if (ferieEsistenti.length > 0) {
-      const conferma = confirm(
-        '⚠️ ATTENZIONE!\n\n' +
-        'Il dipendente ha FERIE il ' + richiesta.data + '.\n\n' +
-        'Approvando queste ore (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + '), la ferie verrà sostituita da:\n' +
-        '• Lavoro dalle ' + richiesta.ora_inizio + ' alle ' + richiesta.ora_fine + '\n' +
-        '• Permesso per il resto della giornata\n\n' +
-        'Confermi l\'approvazione?'
-      );
-      if (!conferma) {
-        richiesta.stato = 'pending';  // ripristina lo stato
-        alert('❌ Approvazione annullata.');
-        return;
-      }
-
-      // 🗑️ Cancella le ferie esistenti di quel giorno
-      dati.registrazioni = dati.registrazioni.filter(r =>
-        !(r.utente_id === utenteIdCorretto &&
-          r.data === richiesta.data &&
-          r.tipo === 'ferie')
-      );
-
-      // 📋 Calcola le ore di permesso per il resto della giornata
-      // Giornata tipo: 08:00-12:00 + 13:00-17:00 = 8 ore
-      const orePermesso = 8 - oreLavorate;
-      
-      if (orePermesso > 0) {
-        // Crea permesso: se le ore lavorate sono al mattino, il permesso è al pomeriggio
-        // Se sono al pomeriggio, il permesso è al mattino
-        // Se sono in mezzo, dividi (ma semplifichiamo)
-        const hInizio = parseInt(richiesta.ora_inizio.split(':')[0]);
-        
-        let permessoInizio, permessoFine;
-        
-        if (hInizio < 12) {
-          // Lavoro al mattino → permesso al pomeriggio
-          permessoInizio = '13:00';
-          permessoFine = String(13 + orePermesso).padStart(2, '0') + ':00';
-        } else {
-          // Lavoro al pomeriggio → permesso al mattino
-          permessoInizio = '08:00';
-          permessoFine = String(8 + orePermesso).padStart(2, '0') + ':00';
-        }
-        
-        dati.registrazioni.push({
-          id: prossimoId++,
-          utente_id: utenteIdCorretto,
-          commessa_id: null,
-          data: richiesta.data,
-          ora_inizio: permessoInizio,
-          ora_fine: permessoFine,
-          descrizione: 'Permesso (per recupero ore)',
-          tipo: 'permesso',
-          ore: orePermesso
-        });
-      }
-    }
-
-    // ✅ Crea la registrazione di lavoro
-    dati.registrazioni.push({
-      id: prossimoId++,
-      utente_id: utenteIdCorretto,
-      commessa_id: richiesta.commessa_id || null,
-      data: richiesta.data,
-      ora_inizio: richiesta.ora_inizio,
-      ora_fine: richiesta.ora_fine,
-      descrizione: richiesta.descrizione_lavoro || 'Recupero ore',
-      tipo: 'lavoro',
-      recupero: true,
-      ore: oreLavorate
-    });
-    
-    aggiungiNotifica(
-      utenteIdCorretto,
-      'recupero_approvato',
-      '✅ Le tue ore del ' + richiesta.data + ' (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + ') sono state APPROVATE e inserite!' +
-      (ferieEsistenti.length > 0 ? ' La ferie è stata sostituita da permesso.' : ''),
-      '#'
-    );
-    
-  } else {
-    dati.registrazioni.push({
-      id: prossimoId++,
-      utente_id: utenteIdCorretto,
-      commessa_id: null,
-      data: richiesta.data_inizio,
-      ora_inizio: '00:00',
-      ora_fine: '00:00',
-      descrizione: richiesta.tipo + ' (approvata)',
-      tipo: richiesta.tipo,
-      richiesta_id: richiesta.id
-    });
-    
-    if (richiesta.data_inizio !== richiesta.data_fine) {
-      let dataCorrente = new Date(richiesta.data_inizio);
-      const dataFine = new Date(richiesta.data_fine);
-      while (dataCorrente < dataFine) {
-        dataCorrente.setDate(dataCorrente.getDate() + 1);
-        const dataStr = dataCorrente.toISOString().split('T')[0];
-        dati.registrazioni.push({
-          id: prossimoId++,
-          utente_id: utenteIdCorretto,
-          commessa_id: null,
-          data: dataStr,
-          ora_inizio: '00:00',
-          ora_fine: '00:00',
-          descrizione: richiesta.tipo + ' (approvata)',
-          tipo: richiesta.tipo,
-          richiesta_id: richiesta.id
-        });
-      }
-    }
-    
-    const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-    aggiungiNotifica(
-      utenteIdCorretto,
-      'approvazione',
-      emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata APPROVATA ✅',
-      '#'
-    );
-  }
-  
-  salvaDati();
-  
-  caricaRichiesteAdmin();
-  aggiornaBadgeRichieste();
-  caricaRichiesteDipendente();
-  aggiornaBadgeNotifiche();
-  
-  alert('✅ Richiesta approvata! Notifica inviata al dipendente.');
-}
-
-async function rifiutaRichiesta(id) {
-  const richiesta = dati.richieste.find(r => r.id === id);
-  if (!richiesta) {
-    alert('❌ Richiesta non trovata');
-    return;
-  }
-  
-  richiesta.stato = 'rifiutata';
-
-    // 🔔 Salva in richieste_trigger per notificare il dipendente
-  try {
-    await db.collection('richieste_trigger').add({
-      richiesta_id: richiesta.id,
-      utente_id: richiesta.utente_id,
-      tipo: richiesta.tipo,
-      azione: 'rifiutata',
-      data_inizio: richiesta.data_inizio || null,
-      data_fine: richiesta.data_fine || null,
-      data: richiesta.data || null,
-      ora_inizio: richiesta.ora_inizio || null,
-      ora_fine: richiesta.ora_fine || null,
-      creato_il: new Date().toISOString()
-    });
-    console.log('✅ Aggiornamento rifiuto salvato per notifica');
-  } catch (err) {
-    console.warn('⚠️ Errore salvataggio trigger rifiuto:', err);
-  }
-
-  
-  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-  aggiungiNotifica(
-    richiesta.utente_id,
-    'rifiuto',
-    emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata RIFIUTATA ❌',
-    '#'
-  );
-  
-  salvaDati();
-  
-  caricaRichiesteAdmin();
-  aggiornaBadgeRichieste();
-  caricaRichiesteDipendente();
-  aggiornaBadgeNotifiche();
-  alert('❌ Richiesta rifiutata. Notifica inviata al dipendente.');
-}
-
 function aggiornaBadgeRichieste() {
   const pending = dati.richieste.filter(r => r.stato === 'pending').length;
   const badge = document.getElementById('badge-richieste');
-  
+
   if (pending > 0) {
     badge.style.display = 'inline-block';
     badge.textContent = pending;
@@ -1516,11 +1353,11 @@ function aggiungiNotifica(utente_id, tipo, messaggio, link) {
 
 function aggiornaBadgeNotifiche() {
   if (!utenteCorrente) return;
-  
-  const nonLette = dati.notifiche.filter(n => 
+
+  const nonLette = dati.notifiche.filter(n =>
     n.utente_id === utenteCorrente.username && !n.letto
   ).length;
-  
+
   const badge = document.getElementById('badge-notifiche');
   if (nonLette > 0) {
     badge.style.display = 'inline-block';
@@ -1536,17 +1373,17 @@ function aggiornaBadgeNotifiche() {
 function mostraNotifiche() {
   const modal = document.getElementById('modal-notifiche');
   modal.classList.add('active');
-  
+
   const div = document.getElementById('notifiche-lista');
   const notifiche = dati.notifiche
     .filter(n => n.utente_id === utenteCorrente.username)
     .sort((a, b) => new Date(b.data) - new Date(a.data));
-  
+
   if (notifiche.length === 0) {
     div.innerHTML = '<p class="text-muted">Nessuna notifica</p>';
     return;
   }
-  
+
   let html = '';
   notifiche.forEach(n => {
     const data = new Date(n.data).toLocaleDateString('it-IT') + ' ' + new Date(n.data).toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
@@ -1558,7 +1395,7 @@ function mostraNotifiche() {
       </div>
     `;
   });
-  
+
   div.innerHTML = html;
 }
 
@@ -1613,7 +1450,7 @@ function salvaNuovaPassword() {
   salvaDati();
 
   msg.innerHTML = '<div class="success">✅ Password cambiata con successo!</div>';
-  
+
   setTimeout(() => {
     chiudiModificaPassword();
   }, 1500);
@@ -1643,7 +1480,7 @@ function esportaOreMese() {
 
   const giorniMese = new Date(annoNum, meseNum, 0).getDate();
   const dipendenti = dati.utenti.filter(u => u.ruolo === 'dipendente');
-  
+
   if (dipendenti.length === 0) {
     alert('Nessun dipendente trovato');
     return;
@@ -1651,7 +1488,6 @@ function esportaOreMese() {
 
   let header = 'DIPENDENTE';
   for (let g = 1; g <= giorniMese; g++) {
-    const data = `${annoNum}-${String(meseNum).padStart(2,'0')}-${String(g).padStart(2,'0')}`;
     const giornoSett = new Date(annoNum, meseNum - 1, g).getDay();
     const giornoNome = ['DOM','LUN','MAR','MER','GIO','VEN','SAB'][giornoSett];
     header += `;${g} (${giornoNome})`;
@@ -1671,7 +1507,7 @@ function esportaOreMese() {
       const giornoSett = new Date(annoNum, meseNum - 1, g).getDay();
       const isWeekend = giornoSett === 0 || giornoSett === 6;
 
-      const registrazioni = dati.registrazioni.filter(r => 
+      const registrazioni = dati.registrazioni.filter(r =>
         r.utente_id === dip.username && r.data === data
       );
 
@@ -1684,13 +1520,10 @@ function esportaOreMese() {
         const haMalattia = registrazioni.some(r => r.tipo === 'malattia');
         const haLavoro = registrazioni.some(r => r.tipo === 'lavoro');
 
-        if (haFerie) {
-          simbolo = 'F';
-        } else if (haPermesso) {
-          simbolo = 'P';
-        } else if (haMalattia) {
-          simbolo = 'M';
-        } else if (haLavoro) {
+        if (haFerie) simbolo = 'F';
+        else if (haPermesso) simbolo = 'P';
+        else if (haMalattia) simbolo = 'M';
+        else if (haLavoro) {
           registrazioni.forEach(r => {
             if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
               const [h1, m1] = r.ora_inizio.split(':').map(Number);
@@ -1704,14 +1537,14 @@ function esportaOreMese() {
         if (isWeekend) {
           simbolo = '/';
         } else {
-          const haRichiestaApprovata = dati.richieste.some(r => 
-            r.utente_id === dip.username && 
+          const haRichiestaApprovata = dati.richieste.some(r =>
+            r.utente_id === dip.username &&
             r.stato === 'approvata' &&
             r.data_inizio <= data && r.data_fine >= data
           );
           if (haRichiestaApprovata) {
-            const richiesta = dati.richieste.find(r => 
-              r.utente_id === dip.username && 
+            const richiesta = dati.richieste.find(r =>
+              r.utente_id === dip.username &&
               r.stato === 'approvata' &&
               r.data_inizio <= data && r.data_fine >= data
             );
@@ -1750,15 +1583,15 @@ function esportaOreMese() {
 async function esportaPDF() {
   const output = document.getElementById('calendario-output');
   const content = output.innerHTML;
-  
+
   if (!content || content.includes('Seleziona mese/anno')) {
     alert('⚠️ Prima genera il report nel calendario');
     return;
   }
 
-  const logoHTML = document.querySelector('.logo-small') ? 
+  const logoHTML = document.querySelector('.logo-small') ?
     document.querySelector('.logo-small').outerHTML : '<h2>MEC-ROY srls</h2>';
-  
+
   const fullHTML = `
     <!DOCTYPE html>
     <html>
@@ -1843,7 +1676,7 @@ function aggiungiDipendente() {
 
 function caricaListaDipendenti() {
   const div = document.getElementById('lista-dipendenti');
-  
+
   if (dati.utenti.length === 0) {
     div.innerHTML = '<p class="text-muted">📭 Nessun dipendente</p>';
     return;
@@ -1874,13 +1707,14 @@ function caricaListaDipendenti() {
   html += '</tbody></table></div>';
   div.innerHTML = html;
 }
+
 function apriModificaDipendente(username) {
   const utente = dati.utenti.find(u => u.username === username);
   if (!utente) return;
-  
+
   const row = document.getElementById('row-' + username);
   if (!row) return;
-  
+
   row.innerHTML = `
     <td><input type="text" id="edit-username-${username}" value="${utente.username}" class="edit-input" /></td>
     <td><input type="text" id="edit-nome-${username}" value="${utente.nome}" class="edit-input" /></td>
@@ -1903,25 +1737,25 @@ function salvaModificaDipendente(oldUsername) {
   const nome = document.getElementById('edit-nome-' + oldUsername).value.trim();
   const cognome = document.getElementById('edit-cognome-' + oldUsername).value.trim();
   const ruolo = document.getElementById('edit-ruolo-' + oldUsername).value;
-  
+
   if (!nuovoUsername || !nome || !cognome) {
     alert('Compila tutti i campi');
     return;
   }
-  
+
   if (nuovoUsername !== oldUsername && dati.utenti.some(u => u.username === nuovoUsername)) {
     alert('❌ Username già esistente');
     return;
   }
-  
+
   const utente = dati.utenti.find(u => u.username === oldUsername);
   if (!utente) return;
-  
+
   utente.username = nuovoUsername;
   utente.nome = nome;
   utente.cognome = cognome;
   utente.ruolo = ruolo;
-  
+
   if (nuovoUsername !== oldUsername) {
     dati.registrazioni.forEach(r => {
       if (r.utente_id === oldUsername) r.utente_id = nuovoUsername;
@@ -1933,7 +1767,7 @@ function salvaModificaDipendente(oldUsername) {
       if (n.utente_id === oldUsername) n.utente_id = nuovoUsername;
     });
   }
-  
+
   salvaDati();
   caricaListaDipendenti();
   caricaSelectDipendentiModifica();
@@ -1948,7 +1782,7 @@ function annullaModificaDipendente(username) {
 function eliminaDipendente(username) {
   const registrazioniCount = dati.registrazioni.filter(r => r.utente_id === username).length;
   const richiesteCount = dati.richieste.filter(r => r.utente_id === username).length;
-  
+
   let msg = '⚠️ Eliminare il dipendente "' + username + '"?\n\n';
   if (registrazioniCount > 0 || richiesteCount > 0) {
     msg += '⚠️ ATTENZIONE: Questo dipendente ha:\n';
@@ -1957,14 +1791,14 @@ function eliminaDipendente(username) {
     msg += '\nEliminando il dipendente, TUTTI questi dati verranno PERDUTI.\n';
   }
   msg += '\nSei sicuro di voler procedere?';
-  
+
   if (!confirm(msg)) return;
-  
+
   dati.utenti = dati.utenti.filter(u => u.username !== username);
   dati.registrazioni = dati.registrazioni.filter(r => r.utente_id !== username);
   dati.richieste = dati.richieste.filter(r => r.utente_id !== username);
   dati.notifiche = dati.notifiche.filter(n => n.utente_id !== username);
-  
+
   salvaDati();
   caricaListaDipendenti();
   caricaSelectDipendentiModifica();
@@ -1990,7 +1824,7 @@ function caricaRegistrazioniModifica() {
     return;
   }
 
-  const registrazioni = dati.registrazioni.filter(r => 
+  const registrazioni = dati.registrazioni.filter(r =>
     r.utente_id === username && r.data === data && r.tipo === 'lavoro'
   );
 
@@ -2012,8 +1846,6 @@ function caricaRegistrazioniModifica() {
     const [h2, m2] = r.ora_fine.split(':').map(Number);
     const ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
     const isStraordinario = r.straordinario || false;
-
-    // Determina il tipo della registrazione (default: 'lavoro')
     const tipoCorrente = r.tipo || 'lavoro';
 
     html += '<tr' + (isOltre8 ? ' class="ore-straordinario"' : '') + '>';
@@ -2071,7 +1903,7 @@ async function salvaModifica(id) {
   registro.ora_fine = nuovaFine;
   registro.descrizione = nuovaDesc;
   registro.tipo = nuovoTipo;
-  
+
   const [h1, m1] = nuovaInizio.split(':').map(Number);
   const [h2, m2] = nuovaFine.split(':').map(Number);
   registro.ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
@@ -2083,7 +1915,7 @@ async function salvaModifica(id) {
 
 function eliminaRegistrazione(id) {
   if (!confirm('Eliminare questa registrazione?')) return;
-  
+
   dati.registrazioni = dati.registrazioni.filter(r => r.id !== id);
   salvaDati();
   caricaRegistrazioniModifica();
@@ -2161,7 +1993,7 @@ function caricaCalendario() {
   html += '<div style="overflow-x:auto;">';
   html += '<table style="width:100%;border-collapse:collapse;font-size:0.85em;">';
   html += '<thead><tr><th style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:120px;">Dipendente</th>';
-  
+
   const giorniSett = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
   for (let g = 1; g <= giorniMese; g++) {
     const giornoSett = new Date(anno, mese - 1, g).getDay();
@@ -2183,7 +2015,7 @@ function caricaCalendario() {
       const giornoSett = new Date(anno, mese - 1, g).getDay();
       const isWeekend = giornoSett === 0 || giornoSett === 6;
 
-      const registrazioni = dati.registrazioni.filter(r => 
+      const registrazioni = dati.registrazioni.filter(r =>
         r.utente_id === dip.username && r.data === data
       );
 
@@ -2228,7 +2060,7 @@ function caricaCalendario() {
               oreGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
             }
           });
-          
+
           if (haStraordinario) {
             cella = oreGiorno.toFixed(1) + 'h ⭐';
             bgColor = '#ffebee';
@@ -2243,14 +2075,14 @@ function caricaCalendario() {
           cella = '/';
           bgColor = '#f5f5f5';
         } else {
-          const haRichiestaApprovata = dati.richieste.some(r => 
-            r.utente_id === dip.username && 
+          const haRichiestaApprovata = dati.richieste.some(r =>
+            r.utente_id === dip.username &&
             r.stato === 'approvata' &&
             r.data_inizio <= data && r.data_fine >= data
           );
           if (haRichiestaApprovata) {
-            const richiesta = dati.richieste.find(r => 
-              r.utente_id === dip.username && 
+            const richiesta = dati.richieste.find(r =>
+              r.utente_id === dip.username &&
               r.stato === 'approvata' &&
               r.data_inizio <= data && r.data_fine >= data
             );
@@ -2258,7 +2090,7 @@ function caricaCalendario() {
               if (richiesta.tipo === 'ferie') { cella = 'F'; bgColor = '#E3F2FD'; }
               else if (richiesta.tipo === 'permesso') { cella = 'P'; bgColor = '#FFF3E0'; }
               else if (richiesta.tipo === 'malattia') { cella = 'M'; bgColor = '#FFEBEE'; }
-              else if (richiesta.tipo === 'recupero_ore') { 
+              else if (richiesta.tipo === 'recupero_ore') {
                 const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
                 const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
                 const oreRecupero = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
@@ -2270,7 +2102,7 @@ function caricaCalendario() {
             const oggi = new Date();
             oggi.setHours(0, 0, 0, 0);
             const dataGiorno = new Date(data + 'T00:00:00');
-            
+
             if (dataGiorno > oggi) {
               cella = '';
               bgColor = 'white';
@@ -2306,9 +2138,6 @@ function caricaCalendario() {
   output.innerHTML = html;
 }
 
-// ============================================
-// GESTIONE COMMESSE - MENU
-// ============================================
 function mostraAggiungiCommessa() {
   document.getElementById('commesse-menu').style.display = 'none';
   document.getElementById('commesse-aggiungi').style.display = 'block';
@@ -2320,7 +2149,7 @@ function mostraAnalizzaCommessa() {
   document.getElementById('commesse-menu').style.display = 'none';
   document.getElementById('commesse-aggiungi').style.display = 'none';
   document.getElementById('commesse-analizza').style.display = 'block';
-  
+
   const select = document.getElementById('analizza-commessa-select');
   select.innerHTML = '<option value="">-- Seleziona --</option>';
   dati.commesse.forEach(c => {
@@ -2337,65 +2166,60 @@ function tornaMenuCommesse() {
 function caricaAnalisiCommessa() {
   const id = parseInt(document.getElementById('analizza-commessa-select').value);
   if (!id) return;
-  
   apriDettaglioCommessa(id);
 }
 
-// ============================================
-// NUOVA MODALE DETTAGLIO COMMESSA
-// ============================================
 function apriDettaglioCommessa(id) {
   const commessa = dati.commesse.find(c => c.id === id);
   if (!commessa) {
     alert('❌ Commessa non trovata');
     return;
   }
-  
+
   commessaCorrenteDettaglio = id;
-  
+
   filtriCommessa = {
     dataInizio: '',
     dataFine: '',
     ricerca: '',
     dipendenti: []
   };
-  
+
   document.getElementById('dettaglio-commessa-nome').textContent = commessa.nome;
-  const dataCreazione = commessa.data_creazione ? 
-    new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 
-    'N/D';
+  const dataCreazione = commessa.data_creazione ?
+    new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 'N/D';
   document.getElementById('dettaglio-commessa-data').textContent = 'Creata il ' + dataCreazione;
-  
+
   document.getElementById('filtro-data-inizio').value = '';
   document.getElementById('filtro-data-fine').value = '';
   document.getElementById('filtro-ricerca').value = '';
-  
+
   popolaFiltroDipendenti();
-  
+
   document.getElementById('modal-dettaglio-commessa').classList.add('active');
-  
+
   applicaFiltriCommessa();
 }
 
 function popolaFiltroDipendenti() {
   const container = document.getElementById('filtro-dipendenti');
   container.innerHTML = '';
-  
+
   const utentiConRegistrazioni = [...new Set(
     dati.registrazioni
       .filter(r => r.commessa_id === commessaCorrenteDettaglio)
       .map(r => r.utente_id)
   )];
-  
+
   if (utentiConRegistrazioni.length === 0) {
     container.innerHTML = '<p class="text-muted" style="margin:0;">Nessun dipendente con registrazioni</p>';
     return;
   }
-  
+
   utentiConRegistrazioni.forEach(username => {
     const utente = dati.utenti.find(u => u.username === username);
     if (!utente) return;
-    
+
     const item = document.createElement('div');
     item.className = 'filtro-dipendente-item';
     item.dataset.username = username;
@@ -2420,81 +2244,79 @@ function popolaFiltroDipendenti() {
 
 function applicaFiltriCommessa() {
   if (!commessaCorrenteDettaglio) return;
-  
+
   filtriCommessa.dataInizio = document.getElementById('filtro-data-inizio').value;
   filtriCommessa.dataFine = document.getElementById('filtro-data-fine').value;
   filtriCommessa.ricerca = document.getElementById('filtro-ricerca').value.toLowerCase().trim();
-  
-  let registrazioni = dati.registrazioni.filter(r => 
+
+  let registrazioni = dati.registrazioni.filter(r =>
     r.commessa_id === commessaCorrenteDettaglio && r.tipo === 'lavoro'
   );
-  
+
   if (filtriCommessa.dataInizio) {
     registrazioni = registrazioni.filter(r => r.data >= filtriCommessa.dataInizio);
   }
-  
+
   if (filtriCommessa.dataFine) {
     registrazioni = registrazioni.filter(r => r.data <= filtriCommessa.dataFine);
   }
-  
+
   if (filtriCommessa.dipendenti.length > 0) {
-    registrazioni = registrazioni.filter(r => 
+    registrazioni = registrazioni.filter(r =>
       filtriCommessa.dipendenti.includes(r.utente_id)
     );
   }
-  
+
   if (filtriCommessa.ricerca) {
     registrazioni = registrazioni.filter(r => {
       const utente = dati.utenti.find(u => u.username === r.utente_id);
       const nome = utente ? (utente.nome + ' ' + utente.cognome).toLowerCase() : '';
       const descrizione = (r.descrizione || '').toLowerCase();
       const data = r.data || '';
-      return nome.includes(filtriCommessa.ricerca) || 
+      return nome.includes(filtriCommessa.ricerca) ||
              descrizione.includes(filtriCommessa.ricerca) ||
              data.includes(filtriCommessa.ricerca);
     });
   }
-  
+
   registrazioni.sort((a, b) => b.data.localeCompare(a.data));
-  
-  document.getElementById('dettaglio-contatore').textContent = 
+
+  document.getElementById('dettaglio-contatore').textContent =
     `📊 ${registrazioni.length} registrazioni visualizzate`;
-  
+
   const perDipendente = {};
   registrazioni.forEach(r => {
-    if (!perDipendente[r.utente_id]) {
-      perDipendente[r.utente_id] = [];
-    }
+    if (!perDipendente[r.utente_id]) perDipendente[r.utente_id] = [];
     perDipendente[r.utente_id].push(r);
   });
-  
+
   const output = document.getElementById('dettaglio-commessa-output');
-  
+
   if (registrazioni.length === 0) {
     output.innerHTML = '<p class="text-muted">Nessuna registrazione trovata con i filtri applicati.</p>';
     return;
   }
-  
+
   let html = '';
   let totaleGenerale = 0;
-  
+
   Object.keys(perDipendente).forEach(username => {
     const utente = dati.utenti.find(u => u.username === username);
     const nomeDipendente = utente ? utente.nome + ' ' + utente.cognome : username;
-    
+
     let totaleDipendente = 0;
-    
+
     html += `<div class="gruppo-dipendente">`;
     html += `<div class="gruppo-dipendente-header">`;
     html += `<h4><i class="fas fa-user"></i> ${nomeDipendente}</h4>`;
-    
+
     perDipendente[username].forEach(r => {
       totaleDipendente += r.ore || 0;
     });
-    
+
     html += `<span class="subtotale">${totaleDipendente.toFixed(2)}h</span>`;
     html += `</div>`;
-    
+
     html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
     html += `<table>`;
     html += `<thead><tr>
@@ -2506,16 +2328,16 @@ function applicaFiltriCommessa() {
       <th>Descrizione</th>
     </tr></thead>`;
     html += `<tbody>`;
-    
+
     perDipendente[username].forEach(r => {
       const commessa = dati.commesse.find(c => c.id === r.commessa_id);
       const [h1, m1] = r.ora_inizio.split(':').map(Number);
       const [h2, m2] = r.ora_fine.split(':').map(Number);
       const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-      
+
       const isStraordinario = r.straordinario ? ' ⭐' : '';
       const isRecupero = r.recupero ? ' ⏰' : '';
-      
+
       html += `<tr>`;
       html += `<td>${r.data}</td>`;
       html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
@@ -2525,17 +2347,17 @@ function applicaFiltriCommessa() {
       html += `<td>${r.descrizione || '-'}</td>`;
       html += `</tr>`;
     });
-    
+
     html += `</tbody></table></div>`;
     html += `</div>`;
-    
+
     totaleGenerale += totaleDipendente;
   });
-  
+
   html += `<div class="totale-generale">
     <i class="fas fa-calculator"></i> TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h
   </div>`;
-  
+
   output.innerHTML = html;
 }
 
@@ -2546,15 +2368,15 @@ function resetFiltriCommessa() {
     ricerca: '',
     dipendenti: []
   };
-  
+
   document.getElementById('filtro-data-inizio').value = '';
   document.getElementById('filtro-data-fine').value = '';
   document.getElementById('filtro-ricerca').value = '';
-  
+
   document.querySelectorAll('.filtro-dipendente-item').forEach(item => {
     item.classList.remove('attivo');
   });
-  
+
   applicaFiltriCommessa();
 }
 
@@ -2568,17 +2390,17 @@ async function esportaPDFCommessa() {
     alert('❌ Nessuna commessa selezionata');
     return;
   }
-  
+
   const commessa = dati.commesse.find(c => c.id === commessaCorrenteDettaglio);
   if (!commessa) return;
-  
+
   const content = document.getElementById('dettaglio-commessa-output').innerHTML;
-  
+
   if (!content || content.includes('Nessuna registrazione')) {
     alert('⚠️ Nessuna registrazione da esportare');
     return;
   }
-  
+
   let infoFiltri = '';
   if (filtriCommessa.dataInizio || filtriCommessa.dataFine) {
     infoFiltri += `<p><strong>Periodo:</strong> `;
@@ -2596,14 +2418,13 @@ async function esportaPDFCommessa() {
   if (filtriCommessa.ricerca) {
     infoFiltri += `<p><strong>Ricerca:</strong> "${filtriCommessa.ricerca}"</p>`;
   }
-  
-  const logoHTML = document.querySelector('.logo-small') ? 
+
+  const logoHTML = document.querySelector('.logo-small') ?
     document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
-  
-  const dataCreazione = commessa.data_creazione ? 
-    new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 
-    'N/D';
-  
+
+  const dataCreazione = commessa.data_creazione ?
+    new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 'N/D';
+
   const fullHTML = `
     <!DOCTYPE html>
     <html>
@@ -2651,33 +2472,50 @@ async function esportaPDFCommessa() {
 }
 
 // ============================================
-// FUNZIONI EXTRA
+// ⭐ MOSTRA TOTALI MESE — filtrato per utente (Problema 1)
 // ============================================
 function mostraTotaliMese() {
   if (!utenteCorrente) return;
-  
+
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
   if (!mese || !anno) return;
-  
+
   const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
     'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
-  
+
   let totaleGenerale = 0;
-  
-  dati.registrazioni.forEach(r => {
-    if (r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
-      totaleGenerale += r.ore || 0;
-    }
-  });
-  
+  let dipendentiDaContare = 0;
+
+  if (utenteCorrente.ruolo === 'admin') {
+    dati.registrazioni.forEach(r => {
+      if (r.tipo === 'lavoro' && r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+        totaleGenerale += r.ore || 0;
+      }
+    });
+    dipendentiDaContare = dati.utenti.filter(u => u.ruolo === 'dipendente').length;
+  } else {
+    dati.registrazioni.forEach(r => {
+      if (r.utente_id === utenteCorrente.username &&
+          r.tipo === 'lavoro' &&
+          r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+        totaleGenerale += r.ore || 0;
+      }
+    });
+    dipendentiDaContare = 1;
+  }
+
   const container = document.getElementById('calendario-output');
   if (container) {
+    const labelSoggetto = utenteCorrente.ruolo === 'admin'
+      ? `Dipendenti attivi: ${dipendentiDaContare}`
+      : `Le tue ore del mese`;
+
     const totaliHTML = `
       <div style="background:#e8f5e9;border:2px solid #4CAF50;border-radius:10px;padding:15px;margin-bottom:20px;text-align:center;">
         <h4 style="color:#2e7d32;margin:0;">📊 TOTALE MESE: ${meseNome} ${anno}</h4>
-        <p style="margin:5px 0;font-size:1.2em;"><strong>${totaleGenerale.toFixed(2)} ore</strong> lavorate totali</p>
-        <small style="color:#666;">Dipendenti attivi: ${dati.utenti.filter(u => u.ruolo === 'dipendente').length}</small>
+        <p style="margin:5px 0;font-size:1.2em;"><strong>${totaleGenerale.toFixed(2)} ore</strong> lavorate</p>
+        <small style="color:#666;">${labelSoggetto}</small>
       </div>
     `;
     container.innerHTML = totaliHTML + container.innerHTML;
@@ -2711,42 +2549,306 @@ function aggiornaRichiesteManuale() {
 }
 
 // ============================================
+// ⭐ APPROVA RICHIESTA — con weekend + rileggi Firestore + await
+// ============================================
+async function approvaRichiesta(id) {
+  // ⭐ Rileggi Firestore prima di operare
+  try {
+    const datiFreschi = await caricaDaFirestore();
+    if (datiFreschi) {
+      dati = datiFreschi;
+      if (!dati.utenti) dati.utenti = [];
+      if (!dati.registrazioni) dati.registrazioni = [];
+      if (!dati.richieste) dati.richieste = [];
+      if (!dati.notifiche) dati.notifiche = [];
+    }
+  } catch (e) {
+    console.warn('⚠️ Impossibile rileggere Firestore prima di approvare:', e);
+  }
+
+  const richiesta = dati.richieste.find(r => r.id === id);
+  if (!richiesta) {
+    alert('❌ Richiesta non trovata');
+    return;
+  }
+
+  if (richiesta.stato !== 'pending') {
+    alert('⚠️ Questa richiesta è già stata processata.');
+    return;
+  }
+
+  richiesta.stato = 'approvata';
+
+  // ⭐ Blocco weekend per notifica push
+  if (isWeekendOggi()) {
+    console.log('📵 Weekend: notifica push approvazione NON inviata');
+  } else {
+    try {
+      await db.collection('richieste_trigger').add({
+        richiesta_id: richiesta.id,
+        utente_id: richiesta.utente_id,
+        tipo: richiesta.tipo,
+        azione: 'approvata',
+        data_inizio: richiesta.data_inizio || null,
+        data_fine: richiesta.data_fine || null,
+        data: richiesta.data || null,
+        ora_inizio: richiesta.ora_inizio || null,
+        ora_fine: richiesta.ora_fine || null,
+        creato_il: new Date().toISOString()
+      });
+      console.log('✅ Aggiornamento approvazione salvato per notifica');
+    } catch (err) {
+      console.warn('⚠️ Errore salvataggio trigger approvazione:', err);
+    }
+  }
+
+  const utenteIdCorretto = richiesta.utente_id;
+
+  if (richiesta.tipo === 'recupero_ore') {
+    const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
+    const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
+    let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+
+    if (oreLavorate <= 0 || oreLavorate > 12) {
+      alert('❌ ERRORE DATI: Orario non valido per la richiesta di recupero. Controlla le ore inserite.');
+      richiesta.stato = 'pending';
+      return;
+    }
+
+    const ferieEsistenti = dati.registrazioni.filter(r =>
+      r.utente_id === utenteIdCorretto &&
+      r.data === richiesta.data &&
+      r.tipo === 'ferie'
+    );
+
+    const oreEsistenti = dati.registrazioni.filter(r =>
+      r.utente_id === utenteIdCorretto &&
+      r.data === richiesta.data &&
+      r.tipo === 'lavoro' &&
+      r.ora_inizio && r.ora_fine &&
+      !(richiesta.ora_fine <= r.ora_inizio || richiesta.ora_inizio >= r.ora_fine)
+    );
+    if (oreEsistenti.length > 0) {
+      alert('❌ Impossibile approvare: ci sono già ore registrate in questa fascia (' +
+            oreEsistenti[0].ora_inizio + ' - ' + oreEsistenti[0].ora_fine + ').');
+      richiesta.stato = 'pending';
+      return;
+    }
+
+    if (ferieEsistenti.length > 0) {
+      const conferma = confirm(
+        '⚠️ ATTENZIONE!\n\n' +
+        'Il dipendente ha FERIE il ' + richiesta.data + '.\n\n' +
+        'Approvando queste ore (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + '), la ferie verrà sostituita da:\n' +
+        '• Lavoro dalle ' + richiesta.ora_inizio + ' alle ' + richiesta.ora_fine + '\n' +
+        '• Permesso per il resto della giornata\n\n' +
+        'Confermi l\'approvazione?'
+      );
+      if (!conferma) {
+        richiesta.stato = 'pending';
+        alert('❌ Approvazione annullata.');
+        return;
+      }
+
+      dati.registrazioni = dati.registrazioni.filter(r =>
+        !(r.utente_id === utenteIdCorretto &&
+          r.data === richiesta.data &&
+          r.tipo === 'ferie')
+      );
+
+      const orePermesso = 8 - oreLavorate;
+
+      if (orePermesso > 0) {
+        const hInizio = parseInt(richiesta.ora_inizio.split(':')[0]);
+
+        let permessoInizio, permessoFine;
+
+        if (hInizio < 12) {
+          permessoInizio = '13:00';
+          permessoFine = String(13 + orePermesso).padStart(2, '0') + ':00';
+        } else {
+          permessoInizio = '08:00';
+          permessoFine = String(8 + orePermesso).padStart(2, '0') + ':00';
+        }
+
+        dati.registrazioni.push({
+          id: prossimoId++,
+          utente_id: utenteIdCorretto,
+          commessa_id: null,
+          data: richiesta.data,
+          ora_inizio: permessoInizio,
+          ora_fine: permessoFine,
+          descrizione: 'Permesso (per recupero ore)',
+          tipo: 'permesso',
+          ore: orePermesso
+        });
+      }
+    }
+
+    dati.registrazioni.push({
+      id: prossimoId++,
+      utente_id: utenteIdCorretto,
+      commessa_id: richiesta.commessa_id || null,
+      data: richiesta.data,
+      ora_inizio: richiesta.ora_inizio,
+      ora_fine: richiesta.ora_fine,
+      descrizione: richiesta.descrizione_lavoro || 'Recupero ore',
+      tipo: 'lavoro',
+      recupero: true,
+      ore: oreLavorate
+    });
+
+    aggiungiNotifica(
+      utenteIdCorretto,
+      'recupero_approvato',
+      '✅ Le tue ore del ' + richiesta.data + ' (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + ') sono state APPROVATE e inserite!' +
+      (ferieEsistenti.length > 0 ? ' La ferie è stata sostituita da permesso.' : ''),
+      '#'
+    );
+
+  } else {
+    dati.registrazioni.push({
+      id: prossimoId++,
+      utente_id: utenteIdCorretto,
+      commessa_id: null,
+      data: richiesta.data_inizio,
+      ora_inizio: '00:00',
+      ora_fine: '00:00',
+      descrizione: richiesta.tipo + ' (approvata)',
+      tipo: richiesta.tipo,
+      richiesta_id: richiesta.id
+    });
+
+    if (richiesta.data_inizio !== richiesta.data_fine) {
+      let dataCorrente = new Date(richiesta.data_inizio);
+      const dataFine = new Date(richiesta.data_fine);
+      while (dataCorrente < dataFine) {
+        dataCorrente.setDate(dataCorrente.getDate() + 1);
+        const dataStr = dataCorrente.toISOString().split('T')[0];
+        dati.registrazioni.push({
+          id: prossimoId++,
+          utente_id: utenteIdCorretto,
+          commessa_id: null,
+          data: dataStr,
+          ora_inizio: '00:00',
+          ora_fine: '00:00',
+          descrizione: richiesta.tipo + ' (approvata)',
+          tipo: richiesta.tipo,
+          richiesta_id: richiesta.id
+        });
+      }
+    }
+
+    const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+    aggiungiNotifica(
+      utenteIdCorretto,
+      'approvazione',
+      emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata APPROVATA ✅',
+      '#'
+    );
+  }
+
+  await salvaDati();
+
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  caricaRichiesteDipendente();
+  aggiornaBadgeNotifiche();
+
+  alert('✅ Richiesta approvata! Notifica inviata al dipendente.');
+}
+
+// ============================================
+// ⭐ RIFIUTA RICHIESTA — con weekend + rileggi Firestore + await
+// ============================================
+async function rifiutaRichiesta(id) {
+  try {
+    const datiFreschi = await caricaDaFirestore();
+    if (datiFreschi) {
+      dati = datiFreschi;
+      if (!dati.utenti) dati.utenti = [];
+      if (!dati.registrazioni) dati.registrazioni = [];
+      if (!dati.richieste) dati.richieste = [];
+      if (!dati.notifiche) dati.notifiche = [];
+    }
+  } catch (e) {
+    console.warn('⚠️ Impossibile rileggere Firestore prima di rifiutare:', e);
+  }
+
+  const richiesta = dati.richieste.find(r => r.id === id);
+  if (!richiesta) {
+    alert('❌ Richiesta non trovata');
+    return;
+  }
+
+  richiesta.stato = 'rifiutata';
+
+  if (isWeekendOggi()) {
+    console.log('📵 Weekend: notifica push rifiuto NON inviata');
+  } else {
+    try {
+      await db.collection('richieste_trigger').add({
+        richiesta_id: richiesta.id,
+        utente_id: richiesta.utente_id,
+        tipo: richiesta.tipo,
+        azione: 'rifiutata',
+        data_inizio: richiesta.data_inizio || null,
+        data_fine: richiesta.data_fine || null,
+        data: richiesta.data || null,
+        ora_inizio: richiesta.ora_inizio || null,
+        ora_fine: richiesta.ora_fine || null,
+        creato_il: new Date().toISOString()
+      });
+      console.log('✅ Aggiornamento rifiuto salvato per notifica');
+    } catch (err) {
+      console.warn('⚠️ Errore salvataggio trigger rifiuto:', err);
+    }
+  }
+
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  aggiungiNotifica(
+    richiesta.utente_id,
+    'rifiuto',
+    emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata RIFIUTATA ❌',
+    '#'
+  );
+
+  await salvaDati();
+
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  caricaRichiesteDipendente();
+  aggiornaBadgeNotifiche();
+  alert('❌ Richiesta rifiutata. Notifica inviata al dipendente.');
+}
+
+// ============================================
 // AVVIO
 // ============================================
 
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-notifiche');
-  if (e.target === modal) {
-    chiudiNotifiche();
-  }
+  if (e.target === modal) chiudiNotifiche();
 });
 
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-password');
-  if (e.target === modal) {
-    chiudiModificaPassword();
-  }
+  if (e.target === modal) chiudiModificaPassword();
 });
 
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-aziende');
-  if (e.target === modal) {
-    chiudiModalAziende();
-  }
+  if (e.target === modal) chiudiModalAziende();
 });
 
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-backup');
-  if (e.target === modal) {
-    chiudiModalBackup();
-  }
+  if (e.target === modal) chiudiModalBackup();
 });
 
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-dettaglio-commessa');
-  if (e.target === modal) {
-    chiudiDettaglioCommessa();
-  }
+  if (e.target === modal) chiudiDettaglioCommessa();
 });
 
 // ============================================
@@ -2766,9 +2868,9 @@ function apriDettaglioDipendente(username) {
     alert('❌ Dipendente non trovato');
     return;
   }
-  
+
   dipendenteCorrenteDettaglio = username;
-  
+
   const oggi = new Date();
   filtriDipendente = {
     vista: 'mese',
@@ -2776,26 +2878,26 @@ function apriDettaglioDipendente(username) {
     mese: oggi.getMonth() + 1,
     anno: oggi.getFullYear()
   };
-  
+
   document.getElementById('dettaglio-dipendente-nome').textContent = utente.nome + ' ' + utente.cognome;
   document.getElementById('dettaglio-dipendente-ruolo').textContent = 'Ruolo: ' + utente.ruolo + ' | Username: ' + utente.username;
-  
+
   document.getElementById('filtro-vista-dipendente').value = 'mese';
   document.getElementById('filtro-giorno').value = filtriDipendente.giorno;
   document.getElementById('filtro-mese').value = filtriDipendente.mese;
   document.getElementById('filtro-anno').value = filtriDipendente.anno;
-  
+
   cambiaVistaDipendente();
-  
+
   document.getElementById('modal-dettaglio-dipendente').classList.add('active');
-  
+
   applicaFiltriDipendente();
 }
 
 function cambiaVistaDipendente() {
   const vista = document.getElementById('filtro-vista-dipendente').value;
   filtriDipendente.vista = vista;
-  
+
   if (vista === 'giorno') {
     document.getElementById('gruppo-filtro-giorno').style.display = 'block';
     document.getElementById('gruppo-filtro-mese').style.display = 'none';
@@ -2805,81 +2907,77 @@ function cambiaVistaDipendente() {
     document.getElementById('gruppo-filtro-mese').style.display = 'block';
     document.getElementById('gruppo-filtro-anno').style.display = 'block';
   }
-  
+
   applicaFiltriDipendente();
 }
 
 function applicaFiltriDipendente() {
   if (!dipendenteCorrenteDettaglio) return;
-  
+
   const vista = document.getElementById('filtro-vista-dipendente').value;
   filtriDipendente.vista = vista;
-  
+
   const output = document.getElementById('dettaglio-dipendente-output');
-  
+
   if (vista === 'giorno') {
     const giorno = document.getElementById('filtro-giorno').value;
     filtriDipendente.giorno = giorno;
-    
+
     if (!giorno) {
       output.innerHTML = '<p class="text-muted">Seleziona un giorno</p>';
       return;
     }
-    
-    const registrazioni = dati.registrazioni.filter(r => 
-      r.utente_id === dipendenteCorrenteDettaglio && 
+
+    const registrazioni = dati.registrazioni.filter(r =>
+      r.utente_id === dipendenteCorrenteDettaglio &&
       r.data === giorno
     );
-    
-    const richiesta = dati.richieste.find(r => 
-      r.utente_id === dipendenteCorrenteDettaglio && 
+
+    const richiesta = dati.richieste.find(r =>
+      r.utente_id === dipendenteCorrenteDettaglio &&
       r.stato === 'approvata' &&
       r.data_inizio <= giorno && r.data_fine >= giorno
     );
-    
-    document.getElementById('dettaglio-dipendente-contatore').textContent = 
+
+    document.getElementById('dettaglio-dipendente-contatore').textContent =
       `📊 ${registrazioni.length} registrazioni`;
-    
+
     if (registrazioni.length === 0 && !richiesta) {
       output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo giorno.</p>';
       return;
     }
-    
+
     const dataFormattata = new Date(giorno + 'T00:00:00').toLocaleDateString('it-IT', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric'
     });
-    
+
     let html = '';
     let totaleGiorno = 0;
-    
+
     html += `<div class="gruppo-giorno">`;
     html += `<div class="gruppo-giorno-header">`;
     html += `<h4><i class="fas fa-calendar-day"></i> ${dataFormattata}</h4>`;
-    
+
     if (richiesta) {
       const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
       const tipo = richiesta.tipo.toUpperCase();
       html += `<span class="subtotale-giorno">${emoji[richiesta.tipo] || '📌'} ${tipo}</span>`;
       html += `</div>`;
       html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-      html += `<table>`;
-      html += `<tbody>`;
+      html += `<table><tbody>`;
       html += `<tr class="riga-speciale ${richiesta.tipo}">`;
       html += `<td><span class="icona-tipo">${emoji[richiesta.tipo] || '📌'}</span> <strong>${tipo}</strong>`;
-      if (richiesta.note) {
-        html += ` - ${richiesta.note}`;
-      }
-      html += `</td>`;
-      html += `</tr>`;
+      if (richiesta.note) html += ` - ${richiesta.note}`;
+      html += `</td></tr>`;
       html += `</tbody></table></div>`;
       html += `</div>`;
       output.innerHTML = html;
       return;
     }
-    
+
     registrazioni.forEach(r => {
       if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
         const [h1, m1] = r.ora_inizio.split(':').map(Number);
@@ -2887,10 +2985,10 @@ function applicaFiltriDipendente() {
         totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
       }
     });
-    
+
     html += `<span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span>`;
     html += `</div>`;
-    
+
     html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
     html += `<table>`;
     html += `<thead><tr>
@@ -2901,18 +2999,18 @@ function applicaFiltriDipendente() {
       <th>Descrizione</th>
     </tr></thead>`;
     html += `<tbody>`;
-    
+
     registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
-    
+
     registrazioni.forEach(r => {
       const commessa = dati.commesse.find(c => c.id === r.commessa_id);
       const [h1, m1] = r.ora_inizio.split(':').map(Number);
       const [h2, m2] = r.ora_fine.split(':').map(Number);
       const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-      
+
       const isStraordinario = r.straordinario ? ' ⭐' : '';
       const isRecupero = r.recupero ? ' ⏰' : '';
-      
+
       html += `<tr>`;
       html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
       html += `<td>${r.ora_inizio || '-'}</td>`;
@@ -2921,58 +3019,56 @@ function applicaFiltriDipendente() {
       html += `<td>${r.descrizione || '-'}</td>`;
       html += `</tr>`;
     });
-    
+
     html += `</tbody></table></div>`;
     html += `</div>`;
-    
+
     output.innerHTML = html;
-    
+
   } else {
     const mese = parseInt(document.getElementById('filtro-mese').value);
     const anno = parseInt(document.getElementById('filtro-anno').value);
-    
+
     filtriDipendente.mese = mese;
     filtriDipendente.anno = anno;
-    
+
     if (!mese || !anno) {
       output.innerHTML = '<p class="text-muted">Seleziona mese e anno</p>';
       return;
     }
-    
+
     const giorniMese = new Date(anno, mese, 0).getDate();
     const mesePadded = String(mese).padStart(2, '0');
     const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
       'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
-    
+
     let html = '';
     let totaleMese = 0;
     let registrazioniTotali = 0;
-    
+
     for (let g = 1; g <= giorniMese; g++) {
       const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
       const dataObj = new Date(data + 'T00:00:00');
       const giornoSett = dataObj.getDay();
       const isWeekend = giornoSett === 0 || giornoSett === 6;
-      
-      const registrazioni = dati.registrazioni.filter(r => 
-        r.utente_id === dipendenteCorrenteDettaglio && 
+
+      const registrazioni = dati.registrazioni.filter(r =>
+        r.utente_id === dipendenteCorrenteDettaglio &&
         r.data === data
       );
-      
-      const richiesta = dati.richieste.find(r => 
-        r.utente_id === dipendenteCorrenteDettaglio && 
+
+      const richiesta = dati.richieste.find(r =>
+        r.utente_id === dipendenteCorrenteDettaglio &&
         r.stato === 'approvata' &&
         r.data_inizio <= data && r.data_fine >= data
-    );
-      
-      if (isWeekend && registrazioni.length === 0 && !richiesta) {
-        continue;
-      }
-      
+      );
+
+      if (isWeekend && registrazioni.length === 0 && !richiesta) continue;
+
       if (registrazioni.length === 0 && !richiesta && !isWeekend) {
         const oggi = new Date();
         oggi.setHours(0, 0, 0, 0);
-        
+
         if (dataObj < oggi) {
           html += `<div class="gruppo-giorno">`;
           html += `<div class="gruppo-giorno-header">`;
@@ -2983,12 +3079,12 @@ function applicaFiltriDipendente() {
         }
         continue;
       }
-      
+
       if (richiesta && registrazioni.length === 0) {
         const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
         const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
         const emojiChar = emoji[richiesta.tipo] || '📌';
-        
+
         html += `<div class="gruppo-giorno">`;
         html += `<div class="gruppo-giorno-header">`;
         html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
@@ -3004,10 +3100,10 @@ function applicaFiltriDipendente() {
         html += `</div>`;
         continue;
       }
-      
+
       let totaleGiorno = 0;
       registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
-      
+
       registrazioni.forEach(r => {
         if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
           const [h1, m1] = r.ora_inizio.split(':').map(Number);
@@ -3015,16 +3111,16 @@ function applicaFiltriDipendente() {
           totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
         }
       });
-      
+
       registrazioniTotali += registrazioni.length;
       totaleMese += totaleGiorno;
-      
+
       html += `<div class="gruppo-giorno">`;
       html += `<div class="gruppo-giorno-header">`;
       html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
       html += `<span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span>`;
       html += `</div>`;
-      
+
       html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
       html += `<table>`;
       html += `<thead><tr>
@@ -3035,16 +3131,16 @@ function applicaFiltriDipendente() {
         <th>Descrizione</th>
       </tr></thead>`;
       html += `<tbody>`;
-      
+
       registrazioni.forEach(r => {
         const commessa = dati.commesse.find(c => c.id === r.commessa_id);
         const [h1, m1] = r.ora_inizio.split(':').map(Number);
         const [h2, m2] = r.ora_fine.split(':').map(Number);
         const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-        
+
         const isStraordinario = r.straordinario ? ' ⭐' : '';
         const isRecupero = r.recupero ? ' ⏰' : '';
-        
+
         html += `<tr>`;
         html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
         html += `<td>${r.ora_inizio || '-'}</td>`;
@@ -3053,19 +3149,19 @@ function applicaFiltriDipendente() {
         html += `<td>${r.descrizione || '-'}</td>`;
         html += `</tr>`;
       });
-      
+
       html += `</tbody></table></div>`;
       html += `</div>`;
     }
-    
-    document.getElementById('dettaglio-dipendente-contatore').textContent = 
+
+    document.getElementById('dettaglio-dipendente-contatore').textContent =
       `📊 ${registrazioniTotali} registrazioni nel mese`;
-    
+
     if (html === '') {
       output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
       return;
     }
-    
+
     const headerHTML = `
       <div class="dipendente-info-box">
         <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
@@ -3075,7 +3171,7 @@ function applicaFiltriDipendente() {
         </div>
       </div>
     `;
-    
+
     output.innerHTML = headerHTML + html;
   }
 }
@@ -3088,12 +3184,12 @@ function resetFiltriDipendente() {
     mese: oggi.getMonth() + 1,
     anno: oggi.getFullYear()
   };
-  
+
   document.getElementById('filtro-vista-dipendente').value = 'mese';
   document.getElementById('filtro-giorno').value = filtriDipendente.giorno;
   document.getElementById('filtro-mese').value = filtriDipendente.mese;
   document.getElementById('filtro-anno').value = filtriDipendente.anno;
-  
+
   cambiaVistaDipendente();
 }
 
@@ -3107,25 +3203,25 @@ async function esportaPDFDipendente() {
     alert('❌ Nessun dipendente selezionato');
     return;
   }
-  
+
   const utente = dati.utenti.find(u => u.username === dipendenteCorrenteDettaglio);
   if (!utente) return;
-  
+
   const content = document.getElementById('dettaglio-dipendente-output').innerHTML;
-  
+
   if (!content || content.includes('Nessuna registrazione')) {
     alert('⚠️ Nessuna registrazione da esportare');
     return;
   }
-  
-  const logoHTML = document.querySelector('.logo-small') ? 
+
+  const logoHTML = document.querySelector('.logo-small') ?
     document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
-  
+
   const vista = filtriDipendente.vista;
   let periodo = '';
   const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
     'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][filtriDipendente.mese - 1];
-  
+
   if (vista === 'giorno') {
     periodo = new Date(filtriDipendente.giorno + 'T00:00:00').toLocaleDateString('it-IT', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
@@ -3133,7 +3229,7 @@ async function esportaPDFDipendente() {
   } else {
     periodo = `${meseNome} ${filtriDipendente.anno}`;
   }
-  
+
   const fullHTML = `
     <!DOCTYPE html>
     <html>
@@ -3187,14 +3283,9 @@ async function esportaPDFDipendente() {
 
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('modal-dettaglio-dipendente');
-  if (e.target === modal) {
-    chiudiDettaglioDipendente();
-  }
+  if (e.target === modal) chiudiDettaglioDipendente();
 });
 
-// ============================================
-// CALENDARIO DETTAGLIATO (solo dipendenti)
-// ============================================
 function cambiaVistaCalendario() {
   caricaCalendario();
 }
@@ -3203,53 +3294,51 @@ function caricaCalendarioDettagliato() {
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
   const output = document.getElementById('calendario-output');
-  
+
   if (!mese || !anno) {
     output.innerHTML = '<p class="text-muted">Seleziona mese e anno</p>';
     return;
   }
-  
+
   const username = utenteCorrente.username;
   const utente = dati.utenti.find(u => u.username === username);
   if (!utente) {
     output.innerHTML = '<p class="text-muted">Utente non trovato</p>';
     return;
   }
-  
+
   const giorniMese = new Date(anno, mese, 0).getDate();
   const mesePadded = String(mese).padStart(2, '0');
   const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
     'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
-  
+
   let html = '';
   let totaleMese = 0;
   let registrazioniTotali = 0;
   let giorniLavorati = 0;
-  
+
   for (let g = 1; g <= giorniMese; g++) {
     const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
     const dataObj = new Date(data + 'T00:00:00');
     const giornoSett = dataObj.getDay();
     const isWeekend = giornoSett === 0 || giornoSett === 6;
-    
-    const registrazioni = dati.registrazioni.filter(r => 
+
+    const registrazioni = dati.registrazioni.filter(r =>
       r.utente_id === username && r.data === data
     );
-    
-    const richiesta = dati.richieste.find(r => 
-      r.utente_id === username && 
+
+    const richiesta = dati.richieste.find(r =>
+      r.utente_id === username &&
       r.stato === 'approvata' &&
       r.data_inizio <= data && r.data_fine >= data
     );
-    
-    if (isWeekend && registrazioni.length === 0 && !richiesta) {
-      continue;
-    }
-    
+
+    if (isWeekend && registrazioni.length === 0 && !richiesta) continue;
+
     if (!isWeekend && registrazioni.length === 0 && !richiesta) {
       const oggi = new Date();
       oggi.setHours(0, 0, 0, 0);
-      
+
       if (dataObj < oggi) {
         html += `<div class="giorno-dettaglio">`;
         html += `<div class="giorno-dettaglio-header">`;
@@ -3260,12 +3349,12 @@ function caricaCalendarioDettagliato() {
       }
       continue;
     }
-    
+
     if (richiesta && registrazioni.length === 0) {
       const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
       const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
       const emojiChar = emoji[richiesta.tipo] || '📌';
-      
+
       html += `<div class="giorno-dettaglio">`;
       html += `<div class="giorno-dettaglio-header">`;
       html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
@@ -3281,10 +3370,10 @@ function caricaCalendarioDettagliato() {
       html += `</div>`;
       continue;
     }
-    
+
     let totaleGiorno = 0;
     registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
-    
+
     registrazioni.forEach(r => {
       if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
         const [h1, m1] = r.ora_inizio.split(':').map(Number);
@@ -3292,20 +3381,20 @@ function caricaCalendarioDettagliato() {
         totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
       }
     });
-    
+
     registrazioniTotali += registrazioni.length;
     totaleMese += totaleGiorno;
     if (totaleGiorno > 0) giorniLavorati++;
-    
+
     const isOltre8 = totaleGiorno > 8;
     const bgHeader = isOltre8 ? '#b71c1c' : '#00695C';
-    
+
     html += `<div class="giorno-dettaglio">`;
     html += `<div class="giorno-dettaglio-header" style="background:${bgHeader};">`;
     html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
     html += `<span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span>`;
     html += `</div>`;
-    
+
     html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
     html += `<table>`;
     html += `<thead><tr>
@@ -3316,16 +3405,16 @@ function caricaCalendarioDettagliato() {
       <th>Descrizione</th>
     </tr></thead>`;
     html += `<tbody>`;
-    
+
     registrazioni.forEach(r => {
       const commessa = dati.commesse.find(c => c.id === r.commessa_id);
       const [h1, m1] = r.ora_inizio.split(':').map(Number);
       const [h2, m2] = r.ora_fine.split(':').map(Number);
       const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-      
+
       const isStraordinario = r.straordinario ? ' ⭐' : '';
       const isRecupero = r.recupero ? ' ⏰' : '';
-      
+
       html += `<tr>`;
       html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
       html += `<td>${r.ora_inizio || '-'}</td>`;
@@ -3334,16 +3423,16 @@ function caricaCalendarioDettagliato() {
       html += `<td>${r.descrizione || '-'}</td>`;
       html += `</tr>`;
     });
-    
+
     html += `</tbody></table></div>`;
     html += `</div>`;
   }
-  
+
   if (html === '') {
     output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
     return;
   }
-  
+
   const headerHTML = `
     <div class="calendario-dettagliato-info">
       <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
@@ -3354,15 +3443,12 @@ function caricaCalendarioDettagliato() {
       </div>
     </div>
   `;
-  
+
   output.innerHTML = headerHTML + html;
 }
 
 // ============================================
-// RICORDAMI - Carica credenziali salvate
-// ============================================
-// ============================================
-// SESSIONE PERSISTENTE — Ricorda l'utente loggato
+// SESSIONE PERSISTENTE
 // ============================================
 function salvaSessione(username) {
   if (!username) return;
@@ -3379,16 +3465,16 @@ function leggiSessione() {
 
 function caricaCredenzialiSalvate() {
   const ricordamiAttivo = localStorage.getItem('ricordami_attivo');
-  
+
   if (ricordamiAttivo === 'true') {
     const username = localStorage.getItem('ricordami_username');
     const password = localStorage.getItem('ricordami_password');
-    
+
     if (username && password) {
       document.getElementById('username').value = username;
       document.getElementById('password').value = password;
       document.getElementById('ricordami').checked = true;
-      
+
       setTimeout(() => {
         document.querySelector('.login-box button').focus();
       }, 100);
@@ -3397,13 +3483,19 @@ function caricaCredenzialiSalvate() {
 }
 
 // ============================================
-// LOGOUT - Reset completo dello stato
+// ⭐ LOGOUT — con disattivazione realtime
 // ============================================
 function logout() {
   cancellaSessione();
   utenteCorrente = null;
 
-  // Reset dei sotto-pannelli Commesse (evita che restino aperti dopo il logout)
+  // ⭐ Ferma ascolto realtime
+  if (_unsubscribeSnapshot) {
+    _unsubscribeSnapshot();
+    _unsubscribeSnapshot = null;
+    console.log('⏹️ Ascolto realtime fermato');
+  }
+
   const menuC = document.getElementById('commesse-menu');
   const aggC  = document.getElementById('commesse-aggiungi');
   const anaC  = document.getElementById('commesse-analizza');
@@ -3411,16 +3503,13 @@ function logout() {
   if (aggC)  aggC.style.display  = 'none';
   if (anaC)  anaC.style.display  = 'none';
 
-  // Chiudi eventuali modali aperte
   document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
 
   document.getElementById('login-page').style.display = 'block';
   document.getElementById('main-page').style.display = 'none';
 
-  // Ricarica le credenziali salvate (se "ricordami" è attivo)
   caricaCredenzialiSalvate();
 
-  // Se NON è ricordami, svuota i campi
   if (localStorage.getItem('ricordami_attivo') !== 'true') {
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
@@ -3428,37 +3517,33 @@ function logout() {
 }
 
 // ============================================
-// AVVIO - Carica credenziali all'apertura
+// ⭐ AVVIO — con attivazione realtime
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
   caricaCredenzialiSalvate();
-  
+
   caricaDati().then(() => {
     const adesso = new Date();
     document.getElementById('cal-mese').value = adesso.getMonth() + 1;
     document.getElementById('cal-anno').value = adesso.getFullYear();
 
-    // 🔑 Controlla se c'è una sessione salvata
     const usernameSalvato = leggiSessione();
     if (usernameSalvato) {
       const utente = dati.utenti.find(u => u.username === usernameSalvato);
       if (utente) {
-        // Utente valido → ricrea il login automaticamente
         utenteCorrente = utente;
 
-        // Ricordami: popola il form (ma verrà nascosto subito)
         document.getElementById('username').value = utente.username;
-        
-        // Applica il login come se l'utente avesse appena cliccato "Entra"
+
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('main-page').style.display = 'block';
         document.getElementById('errore').style.display = 'none';
-        
+
         document.getElementById('user-nome').textContent = utente.nome + ' ' + utente.cognome;
         const ruoloBadge = document.getElementById('user-ruolo');
         ruoloBadge.textContent = utente.ruolo;
         ruoloBadge.className = 'badge ' + utente.ruolo;
-        
+
         if (utente.ruolo === 'admin') {
           document.getElementById('tab-registra').style.display = 'none';
           document.getElementById('tab-richiedi').style.display = 'none';
@@ -3471,7 +3556,7 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('btn-password').style.display = 'flex';
           document.getElementById('azienda-container').style.display = 'inline-block';
           document.getElementById('cal-vista-selector').style.display = 'none';
-          
+
           caricaSelectAziende();
           caricaSelectAziendeCommesse();
           caricaSelectDipendentiModifica();
@@ -3494,12 +3579,11 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('cal-vista-selector').style.display = 'flex';
           showTab('registra');
         }
-        
+
         document.getElementById('notifiche-container').style.display = 'inline-block';
         aggiornaBadgeNotifiche();
         caricaDarkMode();
 
-        // Imposta il mese e l'anno correnti nel calendario
         const adesso = new Date();
         document.getElementById('cal-mese').value = adesso.getMonth() + 1;
         document.getElementById('cal-anno').value = adesso.getFullYear();
@@ -3510,26 +3594,25 @@ document.addEventListener('DOMContentLoaded', function() {
         dataReg.disabled = true;
         dataReg.style.backgroundColor = '#f0f0f0';
         dataReg.style.cursor = 'not-allowed';
-        
+
         document.getElementById('richiesta-data-inizio').value = oggi;
         document.getElementById('richiesta-data-fine').value = oggi;
         document.getElementById('modifica-data').value = oggi;
         document.getElementById('recupero-data').value = oggi;
-        
+
         caricaSelectRecuperoCommesse();
-        
-document.getElementById('tipo-richiesta').addEventListener('change', function() {
-  const tipo = this.value;
-  document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
-  document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
-  document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
-  
-  // 🕐 Mostra i campi orari SOLO per ferie e permesso (non per malattia)
-  const mostraOrari = (tipo === 'ferie' || tipo === 'permesso');
-  document.getElementById('riga-orari-opzionali').style.display = mostraOrari ? 'flex' : 'none';
-  document.getElementById('hint-orari-opzionali').style.display = mostraOrari ? 'block' : 'none';
-});
-        
+
+        document.getElementById('tipo-richiesta').addEventListener('change', function() {
+          const tipo = this.value;
+          document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
+          document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
+          document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
+
+          const mostraOrari = (tipo === 'ferie' || tipo === 'permesso');
+          document.getElementById('riga-orari-opzionali').style.display = mostraOrari ? 'flex' : 'none';
+          document.getElementById('hint-orari-opzionali').style.display = mostraOrari ? 'block' : 'none';
+        });
+
         if (utente.ruolo === 'dipendente') {
           const oraInizio = document.getElementById('ora-inizio');
           const ora = new Date();
@@ -3551,37 +3634,37 @@ document.getElementById('tipo-richiesta').addEventListener('change', function() 
               caricaUltimaRegistrazione();
             }
           });
-          
+
           caricaUltimaRegistrazione();
         }
-        
+
         const menuC = document.getElementById('commesse-menu');
         const aggC  = document.getElementById('commesse-aggiungi');
         const anaC  = document.getElementById('commesse-analizza');
         if (menuC) menuC.style.display = 'block';
         if (aggC)  aggC.style.display  = 'none';
         if (anaC)  anaC.style.display  = 'none';
-        
+
         caricaSelectCommesse();
         caricaListaCommesse();
         caricaRichiesteDipendente();
         caricaSelectDipendentiModifica();
         caricaSelectDipendentiCalendario();
-        
-        // Re-inizializza lo smart-time (importante!)
+
         ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine', 'richiesta-ora-inizio', 'richiesta-ora-fine'].forEach(id => {
           const el = document.getElementById(id);
           if (el) initSmartTime(el);
         });
-        
+
+        // ⭐ Attiva ascolto realtime dopo auto-login
+        attivaAscoltoRealtime();
+
         return;
       } else {
-        // Utente non più esistente → cancella sessione e mostra login
         cancellaSessione();
       }
     }
-    
-    // Nessuna sessione valida → mostra login
+
     document.getElementById('login-page').style.display = 'block';
     document.getElementById('main-page').style.display = 'none';
   }).catch((err) => {
@@ -3592,7 +3675,7 @@ document.getElementById('tipo-richiesta').addEventListener('change', function() 
 });
 
 // ============================================
-// HELPER: Scarica o Condividi file (funziona su mobile)
+// HELPER: Scarica o Condividi file
 // ============================================
 async function scaricaOCondividiFile(htmlContent, fileNameBase) {
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
@@ -3627,10 +3710,6 @@ async function scaricaOCondividiFile(htmlContent, fileNameBase) {
   }
 }
 
-// ============================================
-// BACKUP ZIP (solo admin)
-// ============================================
-
 function apriModalBackup() {
   if (utenteCorrente?.ruolo !== 'admin') {
     alert('Solo gli amministratori possono scaricare il backup');
@@ -3660,7 +3739,6 @@ async function eseguiBackup() {
     const nomeCartella = `MEC-ROY_Backup_${dataOggi}`;
     const root = zip.folder(nomeCartella);
 
-    // ---------- STILI CONDIVISI ----------
     const stiliComuni = `
       <style>
         * { box-sizing: border-box; }
@@ -3713,7 +3791,6 @@ async function eseguiBackup() {
 
     const headHTML = (titolo) => `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${titolo}</title>${stiliComuni}</head><body><div class="container">`;
 
-    // ---------- FUNZIONE: RENDER ORE MENSILI (riepilogo tutti) ----------
     function renderRiepilogoMensile(anno, mese) {
       const giorniMese = new Date(anno, mese, 0).getDate();
       const mesePadded = String(mese).padStart(2, '0');
@@ -3801,7 +3878,6 @@ async function eseguiBackup() {
       </div></body></html>`;
     }
 
-    // ---------- FUNZIONE: RENDER DIPENDENTE MENSILE (singolo) ----------
     function renderDipendenteMensile(dip, anno, mese, registrazioni) {
       const giorniMese = new Date(anno, mese, 0).getDate();
       const mesePadded = String(mese).padStart(2, '0');
@@ -3935,9 +4011,6 @@ async function eseguiBackup() {
       </div></body></html>`;
     }
 
-    // ============================================
-    // 1. ORE MENSILI (riepilogo + un file per ogni dipendente, per mese)
-    // ============================================
     if (tipo === 'tutto' || tipo === 'ore') {
       const cartellaOre = root.folder('Ore_Mensili');
 
@@ -3958,11 +4031,9 @@ async function eseguiBackup() {
 
         const cartellaMese = cartellaOre.folder(annoMese);
 
-        // 1a. Riepilogo mensile con tutti i dipendenti
         const htmlRiepilogo = renderRiepilogoMensile(anno, mese);
         cartellaMese.file(`Riepilogo_${meseNome}_${anno}.html`, htmlRiepilogo);
 
-        // 1b. Un file per ogni dipendente con ore in questo mese
         for (const dip of dipendentiOrdinati) {
           const regs = dati.registrazioni.filter(r =>
             r.utente_id === dip.username && r.data.startsWith(annoMese)
@@ -3975,9 +4046,6 @@ async function eseguiBackup() {
       }
     }
 
-    // ============================================
-    // 2. DIPENDENTI (un file per dipendente, dettaglio completo)
-    // ============================================
     if (tipo === 'tutto') {
       const cartellaDip = root.folder('Dipendenti');
       const dipendenti = dati.utenti.filter(u => u.ruolo === 'dipendente')
@@ -4052,9 +4120,6 @@ async function eseguiBackup() {
       }
     }
 
-    // ============================================
-    // 3. COMMESSE (un file per commessa)
-    // ============================================
     if (tipo === 'tutto' || tipo === 'commesse') {
       const cartellaComm = root.folder('Commesse');
 
@@ -4119,9 +4184,6 @@ async function eseguiBackup() {
       }
     }
 
-    // ============================================
-    // 4. Genera ZIP
-    // ============================================
     msg.innerHTML = '<div class="info-msg">📦 Creazione ZIP in corso...</div>';
 
     const blob = await zip.generateAsync({ type: 'blob' });
@@ -4160,17 +4222,10 @@ async function eseguiBackup() {
     msg.innerHTML = '<div class="error">❌ Errore durante il backup: ' + err.message + '</div>';
   }
 }
-// ============================================
-// SMART TIME INPUT — Gestione intelligente ore
-// ============================================
-// Logica:
-// - L'utente digita solo cifre
-// - Ore valide: 0-24  |  Minuti validi: 0-59
-// - Quando completi le ore → focus si sposta alla parte minuti (stesso campo)
-// - Quando completi i minuti → focus passa al campo successivo
-// - Backspace cancella l'ultima cifra
-// ============================================
 
+// ============================================
+// SMART TIME INPUT
+// ============================================
 const SMART_TIME_DEFS = {
   'ora-inizio': { next: 'ora-fine' },
   'ora-fine': { next: 'descrizione' },
@@ -4182,13 +4237,11 @@ function initSmartTime(input) {
   if (!input || input.dataset.smartInit === '1') return;
   input.dataset.smartInit = '1';
 
-  // Stato interno: 'ore' o 'minuti'
   input.dataset.smartPhase = 'ore';
   input.dataset.smartOre = '';
   input.dataset.smartMinuti = '';
 
   input.addEventListener('focus', () => {
-    // Se ci sono già 4 cifre complete, riparte dalla fase ore quando riselezioni
     if (input.dataset.smartOre.length === 2 && input.dataset.smartMinuti.length === 2) {
       input.dataset.smartPhase = 'ore';
       input.dataset.smartOre = '';
@@ -4198,7 +4251,6 @@ function initSmartTime(input) {
   });
 
   input.addEventListener('keydown', (e) => {
-    // Blocca caratteri non numerici (eccetto controlli)
     const controllo = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'];
     if (controllo.includes(e.key)) {
       if (e.key === 'Backspace') {
@@ -4207,7 +4259,6 @@ function initSmartTime(input) {
       }
       if (e.key === 'Enter') {
         e.preventDefault();
-        // Completa il campo e salta
         saltaAlProssimo(input);
       }
       return;
@@ -4220,9 +4271,7 @@ function initSmartTime(input) {
     gestisciCifra(input, e.key);
   });
 
-  // Per mobile (input event)
   input.addEventListener('input', (e) => {
-    // Rimuovi caratteri non numerici che potrebbero essere inseriti
     const pulito = input.value.replace(/[^\d]/g, '');
     if (pulito.length < 4) {
       input.value = formattaSmartTime(pulito);
@@ -4236,81 +4285,62 @@ function gestisciCifra(input, cifra) {
   let minuti = input.dataset.smartMinuti;
 
   if (fase === 'ore') {
-    // Ore: 0-24
-    const tentativo = ore + cifra; // es. '0' + '8' = '08', oppure '1' + '5' = '15'
+    const tentativo = ore + cifra;
 
-    // Prima cifra: se è 3-9, capiamo che l'ora è completa (es. 8 → 08)
     if (ore === '') {
       if (cifra >= '3' && cifra <= '9') {
-        // Unica cifra: diventa '0' + cifra
         ore = '0' + cifra;
         input.dataset.smartOre = ore;
-        // Passa ai minuti
         input.dataset.smartPhase = 'minuti';
         input.value = formattaSmartTime(ore + ':' + '');
         return;
       } else {
-        // 0, 1, 2 → aspetta la seconda cifra
         ore = cifra;
         input.dataset.smartOre = ore;
         input.value = formattaSmartTime(ore + ':');
         return;
       }
     } else {
-      // Seconda cifra delle ore
       const oreNum = parseInt(tentativo, 10);
       if (oreNum >= 0 && oreNum <= 24) {
-        // Ore valide (00-24)
         let oreFinali;
-        if (oreNum === 24) {
-          oreFinali = '24';
-        } else {
-          oreFinali = tentativo.padStart(2, '0');
-        }
+        if (oreNum === 24) oreFinali = '24';
+        else oreFinali = tentativo.padStart(2, '0');
         input.dataset.smartOre = oreFinali;
         input.dataset.smartPhase = 'minuti';
         input.value = formattaSmartTime(oreFinali + ':');
         return;
       } else {
-        // Ore > 24 → non valido, ignora la seconda cifra
-        // Resta in fase ore con la prima cifra
         return;
       }
     }
   }
 
   if (fase === 'minuti') {
-    const tentativo = minuti + cifra; // es. '3' + '0' = '30'
+    const tentativo = minuti + cifra;
 
-    // Prima cifra dei minuti
     if (minuti === '') {
       if (cifra >= '6' && cifra <= '9') {
-        // Unica cifra: diventa '0' + cifra
         minuti = '0' + cifra;
         input.dataset.smartMinuti = minuti;
-        // Completa e salta
         input.value = formattaSmartTime(input.dataset.smartOre + ':' + minuti);
         saltaAlProssimo(input);
         return;
       } else {
-        // 0-5 → aspetta seconda cifra
         minuti = cifra;
         input.dataset.smartMinuti = minuti;
         input.value = formattaSmartTime(input.dataset.smartOre + ':' + minuti);
         return;
       }
     } else {
-      // Seconda cifra dei minuti
       const minNum = parseInt(tentativo, 10);
       if (minNum >= 0 && minNum <= 59) {
         const minFinali = tentativo.padStart(2, '0');
         input.dataset.smartMinuti = minFinali;
         input.value = formattaSmartTime(input.dataset.smartOre + ':' + minFinali);
-        // Completa e salta
         saltaAlProssimo(input);
         return;
       } else {
-        // > 59, ignora
         return;
       }
     }
@@ -4328,7 +4358,6 @@ function gestisciBackspace(input) {
       input.dataset.smartMinuti = minuti;
       input.value = formattaSmartTime(ore + ':' + minuti);
     } else {
-      // Torna alla fase ore
       input.dataset.smartPhase = 'ore';
       if (ore.length > 0) {
         ore = ore.slice(0, -1);
@@ -4346,11 +4375,8 @@ function gestisciBackspace(input) {
 }
 
 function formattaSmartTime(valore) {
-  // valore è tipo '08:' oppure '08:3' oppure '08:30'
   if (!valore) return '';
-  if (valore.endsWith(':')) {
-    return valore;
-  }
+  if (valore.endsWith(':')) return valore;
   return valore;
 }
 
@@ -4368,7 +4394,6 @@ function saltaAlProssimo(input) {
   }
 }
 
-// Inizializza al caricamento
 document.addEventListener('DOMContentLoaded', () => {
   ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
     const el = document.getElementById(id);
@@ -4376,7 +4401,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Reinizializza nel caso i campi vengano creati dopo (sicurezza)
 setTimeout(() => {
   ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
     const el = document.getElementById(id);
@@ -4387,11 +4411,8 @@ setTimeout(() => {
 // ============================================
 // NOTIFICHE PUSH (Firebase Cloud Messaging)
 // ============================================
-
-// Chiave VAPID pubblica generata da Firebase Console
 const VAPID_KEY = 'BGDim7zjRi-WXyIDYoKnZjAX92fChXCHo1uUZKOef9l2cHSu6FJrInHrB4IEFAJewF8TrJCDzTsNR1BANwLUml0';
 
-// Chiedi il permesso e salva il token dell'utente
 async function chiediPermessoNotifiche() {
   if (!utenteCorrente) return;
 
@@ -4414,22 +4435,18 @@ async function chiediPermessoNotifiche() {
   }
 
   try {
-    // 1. Registra il service worker di Firebase ESPLICITAMENTE
-    //    e ASPETTA che sia pronto
     console.log('📝 Registrazione firebase-messaging-sw.js...');
-    
+
     const swReg = await navigator.serviceWorker.register(
       './firebase-messaging-sw.js',
       { scope: './firebase-cloud-messaging-push-scope' }
     );
-    
+
     console.log('✅ SW Firebase registrato:', swReg);
 
-    // 2. ASPETTA che il SW sia effettivamente attivo
     await navigator.serviceWorker.ready;
     console.log('✅ Service worker pronto');
 
-    // 3. Ora ottieni il token passando la registrazione
     const messaging = firebase.messaging();
     const token = await messaging.getToken({
       vapidKey: VAPID_KEY,
@@ -4444,7 +4461,6 @@ async function chiediPermessoNotifiche() {
     console.log('✅ Token FCM ottenuto:', token);
     window._tokenFCMDebug = token;
 
-    // 4. Salva il token nell'utente su Firestore
     const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
     if (!utente) return;
 
@@ -4463,10 +4479,8 @@ async function chiediPermessoNotifiche() {
   }
 }
 
-// Ascolta i cambi automatici del token (Firebase può rigenerarlo)
 async function ascoltaRinnovoToken() {
   if (!utenteCorrente) return;
-  // if (utenteCorrente.ruolo !== 'dipendente') return;  // commentato per test
 
   try {
     const messaging = firebase.messaging();
