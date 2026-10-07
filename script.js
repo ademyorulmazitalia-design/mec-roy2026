@@ -3662,6 +3662,8 @@ async function nmCondividiCartella() {
       colonneHTML += '</div>';
     }
 
+    const dataGenerazione = new Date().toLocaleDateString('it-IT');
+
     const html = `
       <!DOCTYPE html>
       <html lang="it">
@@ -3672,25 +3674,71 @@ async function nmCondividiCartella() {
           @page { size: A4 portrait; margin: 0; }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { font-family: Arial, Helvetica, sans-serif; background: white; padding: 0; }
-          .a4-foglio { width: 21cm; height: 29.7cm; padding: 1.5cm 1cm; margin: 0 auto; background: white; display: flex; flex-direction: column; }
-          .a4-header { text-align: center; padding-bottom: 0.5cm; border-bottom: 2px solid #00695C; margin-bottom: 0.8cm; }
-          .a4-header h1 { font-size: 16pt; color: #00695C; margin-bottom: 0.3cm; }
-          .a4-header .a4-sottotitolo { font-size: 11pt; color: #555; }
-          .a4-header .a4-data { font-size: 9pt; color: #888; margin-top: 0.2cm; }
+          .a4-foglio { width: 21cm; height: 29.7cm; padding: 1.2cm 1.2cm; margin: 0 auto; background: white; display: flex; flex-direction: column; }
+
+          /* Intestazione: logo + nome + data */
+          .a4-intestazione {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5cm;
+            padding-bottom: 0.5cm;
+            border-bottom: 2px solid #00695C;
+            margin-bottom: 0.6cm;
+          }
+          .a4-intestazione-sinistra {
+            display: flex;
+            align-items: center;
+            gap: 0.4cm;
+          }
+          .a4-logo {
+            height: 1.6cm;
+            width: auto;
+            object-fit: contain;
+          }
+          .a4-nome-azienda {
+            font-size: 16pt;
+            font-weight: 700;
+            color: #00695C;
+            letter-spacing: 0.5px;
+          }
+          .a4-data {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+          }
+
+          /* Titolo */
+          .a4-titolo {
+            font-size: 15pt;
+            font-weight: 700;
+            color: #00695C;
+            margin-bottom: 0.8cm;
+            letter-spacing: 0.5px;
+          }
+
+          /* Colonne scritte */
           .a4-colonne { display: flex; gap: 0.5cm; flex: 1; overflow: hidden; }
           .a4-colonna { flex: 1; border-right: 1px dashed #ddd; padding-right: 0.4cm; min-height: 0; overflow: hidden; }
           .a4-colonna:last-child { border-right: none; }
           .a4-riga { font-size: 13pt; line-height: 1.6; color: #222; padding: 1px 0; word-wrap: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-          @media print { .a4-foglio { margin: 0; padding: 1.5cm 1cm; } body { padding: 0; } }
+
+          @media print { .a4-foglio { margin: 0; padding: 1.2cm; } body { padding: 0; } }
         </style>
       </head>
       <body>
         <div class="a4-foglio">
-          <div class="a4-header">
-            <h1>${commessa.codice} - ${NM_CARTELLE_LABEL[nmCartellaCorrente]}</h1>
-            <div class="a4-sottotitolo">MEC-ROY srls - Numeri Mancanti</div>
-            <div class="a4-data">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})}</div>
+          <div class="a4-intestazione">
+            <div class="a4-intestazione-sinistra">
+              <img src="images/logo.png" alt="MEC-ROY" class="a4-logo" />
+              <span class="a4-nome-azienda">MEC-ROY SRLS</span>
+            </div>
+            <div class="a4-data">${dataGenerazione}</div>
           </div>
+
+          <div class="a4-titolo">${commessa.codice} - ${NM_CARTELLE_LABEL[nmCartellaCorrente]}</div>
+
           <div class="a4-colonne">${colonneHTML}</div>
         </div>
       </body>
@@ -3768,6 +3816,8 @@ async function nmCondividiTuttaCommessa() {
       `;
     });
 
+    const dataGenerazione = new Date().toLocaleDateString('it-IT');
+
     const html = `
       <!DOCTYPE html>
       <html lang="it">
@@ -3775,14 +3825,54 @@ async function nmCondividiTuttaCommessa() {
         <meta charset="UTF-8">
         <title>${commessa.codice} - Numeri Mancanti</title>
         <style>
-          @page { size: A4 portrait; margin: 1.5cm 1cm; }
+          @page { size: A4 portrait; margin: 1.2cm; }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { font-family: Arial, Helvetica, sans-serif; background: white; padding: 0; }
-          .a4-foglio { width: 21cm; min-height: 29.7cm; padding: 1.5cm 1cm; margin: 0 auto; background: white; }
-          .a4-header { text-align: center; padding-bottom: 0.5cm; border-bottom: 2px solid #00695C; margin-bottom: 1cm; }
-          .a4-header h1 { font-size: 16pt; color: #00695C; margin-bottom: 0.3cm; }
-          .a4-header .a4-sottotitolo { font-size: 11pt; color: #555; }
-          .a4-header .a4-data { font-size: 9pt; color: #888; margin-top: 0.2cm; }
+          .a4-foglio { width: 21cm; min-height: 29.7cm; padding: 1.2cm; margin: 0 auto; background: white; }
+
+          /* Intestazione: logo + nome + data */
+          .a4-intestazione {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5cm;
+            padding-bottom: 0.5cm;
+            border-bottom: 2px solid #00695C;
+            margin-bottom: 0.6cm;
+          }
+          .a4-intestazione-sinistra {
+            display: flex;
+            align-items: center;
+            gap: 0.4cm;
+          }
+          .a4-logo {
+            height: 1.6cm;
+            width: auto;
+            object-fit: contain;
+          }
+          .a4-nome-azienda {
+            font-size: 16pt;
+            font-weight: 700;
+            color: #00695C;
+            letter-spacing: 0.5px;
+          }
+          .a4-data {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+          }
+
+          /* Titolo */
+          .a4-titolo {
+            font-size: 15pt;
+            font-weight: 700;
+            color: #00695C;
+            margin-bottom: 0.8cm;
+            letter-spacing: 0.5px;
+          }
+
+          /* Sezioni cartelle */
           .a4-sezione { margin-bottom: 1cm; page-break-inside: avoid; }
           .a4-sezione-header { display: flex; justify-content: space-between; align-items: center; background: #00695C; color: white; padding: 8px 14px; border-radius: 6px 6px 0 0; margin-bottom: 0.4cm; }
           .a4-sezione-header h2 { font-size: 13pt; color: white; margin: 0; letter-spacing: 0.5px; }
@@ -3791,16 +3881,22 @@ async function nmCondividiTuttaCommessa() {
           .a4-colonna { flex: 1; border-right: 1px dashed #ddd; padding-right: 0.4cm; min-height: 0; }
           .a4-colonna:last-child { border-right: none; }
           .a4-riga { font-size: 12pt; line-height: 1.5; color: #222; padding: 1px 0; word-wrap: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-          @media print { .a4-foglio { margin: 0; padding: 1.5cm 1cm; } body { padding: 0; } }
+
+          @media print { .a4-foglio { margin: 0; padding: 1.2cm; } body { padding: 0; } }
         </style>
       </head>
       <body>
         <div class="a4-foglio">
-          <div class="a4-header">
-            <h1>${commessa.codice} - Numeri Mancanti</h1>
-            <div class="a4-sottotitolo">MEC-ROY srls</div>
-            <div class="a4-data">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})}</div>
+          <div class="a4-intestazione">
+            <div class="a4-intestazione-sinistra">
+              <img src="images/logo.png" alt="MEC-ROY" class="a4-logo" />
+              <span class="a4-nome-azienda">MEC-ROY SRLS</span>
+            </div>
+            <div class="a4-data">${dataGenerazione}</div>
           </div>
+
+          <div class="a4-titolo">${commessa.codice} - NUMERI MANCANTI</div>
+
           ${sezioniHTML}
         </div>
       </body>
