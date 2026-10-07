@@ -1,4 +1,6 @@
 // ============================================
+// MEC-ROY — script.js
+// ============================================
 // CONFIGURAZIONE FIREBASE
 // ============================================
 const firebaseConfig = {
@@ -11,9 +13,7 @@ const firebaseConfig = {
   measurementId: "G-1WHW3Z3RT6"
 };
 
-// Inizializza Firebase
 firebase.initializeApp(firebaseConfig);
-
 const db = firebase.firestore();
 
 db.enablePersistence()
@@ -27,15 +27,19 @@ db.enablePersistence()
     }
   });
 
+// ============================================
+// VARIABILI GLOBALI
+// ============================================
 let dati = {};
 let utenteCorrente = null;
 let prossimoId = 1;
 let commessaCorrenteDettaglio = null;
 
-// ⭐ NUOVO: variabili per ascolto realtime (Problema 4)
+// Realtime
 let _stoSalvando = false;
 let _unsubscribeSnapshot = null;
 
+// Filtri
 let filtriCommessa = {
   dataInizio: '',
   dataFine: '',
@@ -43,14 +47,50 @@ let filtriCommessa = {
   dipendenti: []
 };
 
+let dipendenteCorrenteDettaglio = null;
+let filtriDipendente = {
+  vista: 'mese',
+  giorno: '',
+  mese: new Date().getMonth() + 1,
+  anno: new Date().getFullYear()
+};
+
+// Numeri Mancanti
+const NM_CARTELLE_LABEL = {
+  filo: 'FILO',
+  cavo: 'CAVO',
+  adesive: 'ADESIVE',
+  targhette: 'TARGHETTE GIALLE',
+  morsetti: 'MORSETTI'
+};
+
+const NM_CARTELLE_COLONNE = {
+  filo: 3,
+  cavo: 2,
+  adesive: 4,
+  targhette: 6,
+  morsetti: 6
+};
+
+let nmCommessaCorrente = null;
+let nmCartellaCorrente = null;
+let nmCommessaDaCancellare = null;
+let nmCommesseCache = {};
+
+function nmGetCollection() {
+  return db.collection('numeri_mancanti_commesse');
+}
+
+// ============================================
+// CARICAMENTO / SALVATAGGIO FIRESTORE
+// ============================================
 async function caricaDaFirestore() {
   try {
     console.log('🔄 Caricamento dati da Firestore...');
     const snapshot = await db.collection('dati').doc('main').get();
     if (snapshot.exists) {
-      const datiFirestore = snapshot.data();
       console.log('✅ Dati caricati da Firestore');
-      return datiFirestore;
+      return snapshot.data();
     } else {
       console.log('⚠️ Nessun dato in Firestore, uso default');
       return null;
@@ -122,21 +162,19 @@ async function caricaDati() {
   return dati;
 }
 
-// ⭐ MODIFICATA: aggiunto flag _stoSalvando per il realtime
 async function salvaDati() {
   _stoSalvando = true;
   try {
     localStorage.setItem('datiLavoroV2', JSON.stringify(dati));
   } catch (e) {
-    console.warn('⚠️ Salvataggio locale bloccato, salvo solo su Cloud.');
+    console.warn('⚠️ Salvataggio locale bloccato.');
   }
   await salvaSuFirestore(dati);
-  // Aspetta un attimo prima di riattivare l'ascolto (dà tempo a Firestore)
   setTimeout(() => { _stoSalvando = false; }, 800);
 }
 
 // ============================================
-// ⭐ NUOVO — ASCOLTO REALTIME FIRESTORE (Problema 4)
+// ASCOLTO REALTIME
 // ============================================
 function attivaAscoltoRealtime() {
   if (_unsubscribeSnapshot) {
@@ -148,7 +186,6 @@ function attivaAscoltoRealtime() {
 
   _unsubscribeSnapshot = db.collection('dati').doc('main').onSnapshot((snapshot) => {
     if (!snapshot.exists) return;
-
     if (_stoSalvando) {
       console.log('⏸️ Snapshot ignorato (stiamo salvando)');
       return;
@@ -156,7 +193,6 @@ function attivaAscoltoRealtime() {
 
     const datiNuovi = snapshot.data();
     if (!datiNuovi) return;
-
     if (JSON.stringify(datiNuovi) === JSON.stringify(dati)) return;
 
     console.log('🔄 Dati aggiornati da Firestore (realtime)');
@@ -201,11 +237,11 @@ function aggiornaUIDopoRealtime() {
 }
 
 // ============================================
-// ⭐ NUOVO — HELPER: controllo weekend (Problema 2)
+// HELPER WEEKEND
 // ============================================
 function isWeekendOggi() {
   const oggi = new Date();
-  const giorno = oggi.getDay(); // 0 = domenica, 6 = sabato
+  const giorno = oggi.getDay();
   return giorno === 0 || giorno === 6;
 }
 
@@ -235,15 +271,12 @@ function controllaSovrapposizioni(username, data, ora_inizio, ora_fine, tipo) {
     if (r.stato === 'rifiutata') return false;
 
     if (r.tipo === 'recupero_ore' && ora_inizio && ora_fine && r.ora_inizio && r.ora_fine) {
-      return r.data === data &&
-             !(ora_fine <= r.ora_inizio || ora_inizio >= r.ora_fine);
+      return r.data === data && !(ora_fine <= r.ora_inizio || ora_inizio >= r.ora_fine);
     }
 
     if (r.tipo !== 'recupero_ore') {
       if (data >= r.data_inizio && data <= r.data_fine) {
-        if (r.tipo === 'ferie' && tipo === 'recupero_ore') {
-          return false;
-        }
+        if (r.tipo === 'ferie' && tipo === 'recupero_ore') return false;
         return true;
       }
     }
@@ -272,9 +305,7 @@ function controllaSovrapposizioni(username, data, ora_inizio, ora_fine, tipo) {
 
 function calcolaOreGiornata(username, data) {
   const registrazioni = dati.registrazioni.filter(r =>
-    r.utente_id === username &&
-    r.data === data &&
-    r.tipo === 'lavoro'
+    r.utente_id === username && r.data === data && r.tipo === 'lavoro'
   );
 
   let totaleOre = 0;
@@ -291,22 +322,12 @@ function calcolaOreGiornata(username, data) {
 }
 
 function isOltre20() {
-  const ora = new Date();
-  const ore = ora.getHours();
-  return ore >= 20;
+  return new Date().getHours() >= 20;
 }
 
-async function init() {
-  await caricaDati();
-  document.getElementById('login-page').style.display = 'block';
-  document.getElementById('main-page').style.display = 'none';
-  const adesso = new Date();
-  document.getElementById('cal-mese').value = adesso.getMonth() + 1;
-  document.getElementById('cal-anno').value = adesso.getFullYear();
-}
-
+console.log('✅ script.js — PARTE 1/6 caricata');
 // ============================================
-// LOGIN — con attivazione ascolto realtime
+// LOGIN
 // ============================================
 function login() {
   const username = document.getElementById('username').value;
@@ -357,10 +378,10 @@ function login() {
       document.getElementById('tab-commesse').style.display = 'inline-block';
       document.getElementById('tab-dipendenti').style.display = 'inline-block';
       document.getElementById('tab-calendario').style.display = 'inline-block';
+      document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
       document.getElementById('cal-filtro-dipendente').style.display = 'block';
       document.getElementById('btn-password').style.display = 'flex';
       document.getElementById('azienda-container').style.display = 'inline-block';
-
       document.getElementById('cal-vista-selector').style.display = 'none';
 
       caricaSelectAziende();
@@ -380,10 +401,10 @@ function login() {
       document.getElementById('tab-commesse').style.display = 'none';
       document.getElementById('tab-dipendenti').style.display = 'none';
       document.getElementById('tab-calendario').style.display = 'inline-block';
+      document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
       document.getElementById('cal-filtro-dipendente').style.display = 'none';
       document.getElementById('btn-password').style.display = 'none';
       document.getElementById('azienda-container').style.display = 'none';
-
       document.getElementById('cal-vista-selector').style.display = 'flex';
 
       showTab('registra');
@@ -464,7 +485,6 @@ function login() {
     caricaSelectDipendentiModifica();
     caricaSelectDipendentiCalendario();
 
-    // ⭐ Attiva ascolto realtime
     attivaAscoltoRealtime();
 
   } else {
@@ -479,6 +499,9 @@ function login() {
   }
 }
 
+// ============================================
+// SHOW TAB
+// ============================================
 function showTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -497,8 +520,17 @@ function showTab(tab) {
     aggiornaBadgeRichieste();
   }
   if (tab === 'richiedi') caricaRichiesteDipendente();
+  if (tab === 'numeri-mancanti') {
+    nmMostraSchermataCommesse();
+    nmCommessaCorrente = null;
+    nmCartellaCorrente = null;
+    nmCaricaListaCommesse();
+  }
 }
 
+// ============================================
+// DARK MODE
+// ============================================
 function toggleDarkMode() {
   const container = document.getElementById('app-container');
   const body = document.body;
@@ -530,8 +562,12 @@ function caricaDarkMode() {
   }
 }
 
+// ============================================
+// SELECT AZIENDE
+// ============================================
 function caricaSelectAziende() {
   const select = document.getElementById('select-azienda');
+  if (!select) return;
   select.innerHTML = '<option value="0">-- Tutte --</option>';
   if (dati.aziende) {
     dati.aziende.forEach(a => {
@@ -542,6 +578,7 @@ function caricaSelectAziende() {
 
 function caricaSelectAziendeCommesse() {
   const select = document.getElementById('commessa-azienda');
+  if (!select) return;
   select.innerHTML = '<option value="0">-- Seleziona Azienda --</option>';
   if (dati.aziende) {
     dati.aziende.forEach(a => {
@@ -552,6 +589,7 @@ function caricaSelectAziendeCommesse() {
 
 function caricaSelectRecuperoCommesse() {
   const select = document.getElementById('recupero-commessa');
+  if (!select) return;
   select.innerHTML = '<option value="">-- Seleziona --</option>';
   dati.commesse.forEach(c => {
     select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
@@ -583,6 +621,9 @@ function caricaCalendarioFiltrato(usernames) {
   caricaCalendario();
 }
 
+// ============================================
+// MODALE AZIENDE
+// ============================================
 function apriModalAziende() {
   if (utenteCorrente?.ruolo !== 'admin') {
     alert('Solo gli amministratori possono gestire le aziende');
@@ -592,17 +633,12 @@ function apriModalAziende() {
   if (modal) {
     modal.classList.add('active');
     caricaListaAziende();
-  } else {
-    console.error('❌ Modale aziende non trovato');
-    alert('Errore: modale aziende non trovato');
   }
 }
 
 function chiudiModalAziende() {
   const modal = document.getElementById('modal-aziende');
-  if (modal) {
-    modal.classList.remove('active');
-  }
+  if (modal) modal.classList.remove('active');
 }
 
 function aggiungiAzienda() {
@@ -630,11 +666,7 @@ function aggiungiAzienda() {
 
 function caricaListaAziende() {
   const div = document.getElementById('lista-aziende');
-
-  if (!div) {
-    console.error('❌ Elemento lista-aziende non trovato');
-    return;
-  }
+  if (!div) return;
 
   if (!dati.aziende || dati.aziende.length === 0) {
     div.innerHTML = '<p class="text-muted">Nessuna azienda</p>';
@@ -670,7 +702,6 @@ function eliminaAzienda(id) {
   dati.registrazioni = dati.registrazioni.filter(r => !usernames.includes(r.utente_id));
   dati.richieste = dati.richieste.filter(r => !usernames.includes(r.utente_id));
   dati.notifiche = dati.notifiche.filter(n => !usernames.includes(n.utente_id));
-
   dati.aziende = dati.aziende.filter(a => a.id !== id);
 
   salvaDati();
@@ -681,6 +712,9 @@ function eliminaAzienda(id) {
   alert('🗑️ Azienda eliminata');
 }
 
+// ============================================
+// ULTIMA REGISTRAZIONE
+// ============================================
 function caricaUltimaRegistrazione() {
   if (utenteCorrente?.ruolo === 'admin') return;
 
@@ -744,7 +778,7 @@ function caricaUltimaRegistrazione() {
     const oraCorrenteMinuti = oraCorrente.getHours() * 60 + oraCorrente.getMinutes();
     const inizioMinuti = parseInt(oraInizio.value.split(':')[0]) * 60 + parseInt(oraInizio.value.split(':')[1] || 0);
     if (inizioMinuti > oraCorrenteMinuti) {
-        oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
+      oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
     }
 
     const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
@@ -780,8 +814,12 @@ function caricaUltimaRegistrazione() {
   </div>`;
 }
 
+// ============================================
+// SELECT COMMESSE
+// ============================================
 function caricaSelectCommesse() {
   const select = document.getElementById('commessa');
+  if (!select) return;
   select.innerHTML = '<option value="">-- Seleziona una commessa --</option>';
 
   if (dati.commesse.length === 0) {
@@ -794,6 +832,10 @@ function caricaSelectCommesse() {
   });
 }
 
+console.log('✅ script.js — PARTE 2/6 caricata');
+// ============================================
+// COMMESSE - CRUD
+// ============================================
 function aggiungiCommessa() {
   const nome = document.getElementById('commessa-nome').value.trim();
   const azienda_id = parseInt(document.getElementById('commessa-azienda').value);
@@ -833,6 +875,7 @@ function aggiungiCommessa() {
 
 function caricaListaCommesse() {
   const div = document.getElementById('lista-commesse');
+  if (!div) return;
 
   if (dati.commesse.length === 0) {
     div.innerHTML = '<p class="text-muted">📭 Nessuna commessa creata</p>';
@@ -886,6 +929,9 @@ function eliminaCommessa(id) {
   alert('🗑️ Commessa eliminata');
 }
 
+// ============================================
+// SALVA REGISTRAZIONE ORE
+// ============================================
 function salvaRegistrazione() {
   if (utenteCorrente?.ruolo === 'admin') {
     alert('Gli amministratori non possono registrare ore qui');
@@ -1025,7 +1071,7 @@ function salvaRegistrazione() {
 }
 
 // ============================================
-// ⭐ INVIA RICHIESTA — con blocco weekend COMPLETO
+// INVIA RICHIESTA
 // ============================================
 async function inviaRichiesta() {
   if (utenteCorrente?.ruolo === 'admin') {
@@ -1033,7 +1079,6 @@ async function inviaRichiesta() {
     return;
   }
 
-  // ⭐ Rileggi Firestore prima di operare (fix Problema 4)
   try {
     const datiFreschi = await caricaDaFirestore();
     if (datiFreschi) {
@@ -1074,11 +1119,7 @@ async function inviaRichiesta() {
     }
 
     const sovrapposizione = controllaSovrapposizioni(
-      utenteCorrente.username,
-      data,
-      ora_inizio,
-      ora_fine,
-      'recupero_ore'
+      utenteCorrente.username, data, ora_inizio, ora_fine, 'recupero_ore'
     );
     if (sovrapposizione) {
       msg.innerHTML = '<div class="error">❌ ' + sovrapposizione.messaggio + '</div>';
@@ -1101,7 +1142,6 @@ async function inviaRichiesta() {
     dati.richieste.push(richiesta);
     await salvaDati();
 
-    // ⭐ Blocco weekend
     if (isWeekendOggi()) {
       console.log('📵 Weekend: notifica push NON inviata');
     } else {
@@ -1117,9 +1157,9 @@ async function inviaRichiesta() {
           descrizione_lavoro: richiesta.descrizione_lavoro || null,
           creato_il: new Date().toISOString()
         });
-        console.log('✅ Richiesta recupero salvata nella collection di trigger');
+        console.log('✅ Richiesta recupero salvata nel trigger');
       } catch (err) {
-        console.warn('⚠️ Errore salvataggio collection trigger:', err);
+        console.warn('⚠️ Errore trigger:', err);
       }
     }
 
@@ -1134,9 +1174,7 @@ async function inviaRichiesta() {
     return;
   }
 
-  // ============================================
-  // Rami ferie / permesso / malattia
-  // ============================================
+  // Ferie / permesso / malattia
   const data_inizio = document.getElementById('richiesta-data-inizio').value;
   const data_fine = document.getElementById('richiesta-data-fine').value;
   const note = document.getElementById('richiesta-note').value.trim();
@@ -1168,11 +1206,7 @@ async function inviaRichiesta() {
 
   for (const giorno of giorniDaControllare) {
     const sovrapposizione = controllaSovrapposizioni(
-      utenteCorrente.username,
-      giorno,
-      oraInizioCheck,
-      oraFineCheck,
-      tipo
+      utenteCorrente.username, giorno, oraInizioCheck, oraFineCheck, tipo
     );
     if (sovrapposizione) {
       msg.innerHTML = '<div class="error">❌ ' + sovrapposizione.messaggio + '</div>';
@@ -1199,7 +1233,6 @@ async function inviaRichiesta() {
   dati.richieste.push(richiesta);
   await salvaDati();
 
-  // ⭐ Blocco weekend (secondo blocco: ferie/permesso/malattia)
   if (isWeekendOggi()) {
     console.log('📵 Weekend: notifica push NON inviata');
   } else {
@@ -1213,9 +1246,9 @@ async function inviaRichiesta() {
         note: richiesta.note || null,
         creato_il: new Date().toISOString()
       });
-      console.log('✅ Richiesta salvata nella collection di trigger');
+      console.log('✅ Richiesta salvata nel trigger');
     } catch (err) {
-      console.warn('⚠️ Errore salvataggio collection trigger:', err);
+      console.warn('⚠️ Errore trigger:', err);
     }
   }
 
@@ -1228,8 +1261,13 @@ async function inviaRichiesta() {
   aggiornaBadgeRichieste();
 }
 
+// ============================================
+// LISTA RICHIESTE DIPENDENTE
+// ============================================
 function caricaRichiesteDipendente() {
   const div = document.getElementById('lista-richieste-dipendente');
+  if (!div) return;
+
   const richieste = dati.richieste.filter(r => r.utente_id === utenteCorrente.username);
 
   if (richieste.length === 0) {
@@ -1273,8 +1311,12 @@ function caricaRichiesteDipendente() {
   div.innerHTML = html;
 }
 
+// ============================================
+// LISTA RICHIESTE ADMIN
+// ============================================
 function caricaRichiesteAdmin() {
   const div = document.getElementById('lista-richieste-admin');
+  if (!div) return;
 
   const richieste = dati.richieste.filter(r => r.stato === 'pending');
 
@@ -1324,6 +1366,7 @@ function caricaRichiesteAdmin() {
 function aggiornaBadgeRichieste() {
   const pending = dati.richieste.filter(r => r.stato === 'pending').length;
   const badge = document.getElementById('badge-richieste');
+  if (!badge) return;
 
   if (pending > 0) {
     badge.style.display = 'inline-block';
@@ -1337,6 +1380,28 @@ function mostraRichieste() {
   showTab('richieste');
 }
 
+// ============================================
+// AGGIORNA RICHIESTE MANUALE
+// ============================================
+function aggiornaRichiesteManuale() {
+  caricaDati().then(() => {
+    if (utenteCorrente && utenteCorrente.ruolo === 'admin') {
+      caricaRichiesteAdmin();
+      aggiornaBadgeRichieste();
+      alert('✅ Richieste aggiornate!');
+    } else {
+      alert('⚠️ Non sei autorizzato a vedere le richieste.');
+    }
+  }).catch((err) => {
+    console.error('❌ Errore aggiornamento:', err);
+    alert('❌ Errore: ' + err.message);
+  });
+}
+
+console.log('✅ script.js — PARTE 3/6 caricata');
+// ============================================
+// NOTIFICHE INTERNE
+// ============================================
 function aggiungiNotifica(utente_id, tipo, messaggio, link) {
   dati.notifiche.push({
     id: prossimoId++,
@@ -1359,6 +1424,8 @@ function aggiornaBadgeNotifiche() {
   ).length;
 
   const badge = document.getElementById('badge-notifiche');
+  if (!badge) return;
+
   if (nonLette > 0) {
     badge.style.display = 'inline-block';
     badge.textContent = nonLette;
@@ -1413,6 +1480,9 @@ function chiudiNotifiche() {
   document.getElementById('modal-notifiche').classList.remove('active');
 }
 
+// ============================================
+// MODALE PASSWORD
+// ============================================
 function apriModificaPassword() {
   if (utenteCorrente?.ruolo !== 'admin') {
     alert('Solo gli amministratori possono cambiare la password');
@@ -1456,6 +1526,9 @@ function salvaNuovaPassword() {
   }, 1500);
 }
 
+// ============================================
+// EXPORT ORE MESE (CSV/Excel)
+// ============================================
 function esportaOreMese() {
   if (utenteCorrente?.ruolo !== 'admin') {
     alert('Solo gli amministratori possono esportare');
@@ -1580,6 +1653,9 @@ function esportaOreMese() {
   alert('✅ File esportato con successo!');
 }
 
+// ============================================
+// EXPORT PDF CALENDARIO
+// ============================================
 async function esportaPDF() {
   const output = document.getElementById('calendario-output');
   const content = output.innerHTML;
@@ -1597,7 +1673,12 @@ async function esportaPDF() {
     <html>
     <head>
       <meta charset="utf-8">
-      <style>/* ... i tuoi stili per il PDF ... */</style>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        th { background: #00695C; color: white; font-weight: bold; }
+      </style>
     </head>
     <body>
       <div style="text-align:center;padding:20px;">${logoHTML}</div>
@@ -1635,6 +1716,9 @@ async function esportaPDF() {
   URL.revokeObjectURL(url);
 }
 
+// ============================================
+// DIPENDENTI - CRUD
+// ============================================
 function aggiungiDipendente() {
   const nome = document.getElementById('dip-nome').value.trim();
   const cognome = document.getElementById('dip-cognome').value.trim();
@@ -1676,6 +1760,7 @@ function aggiungiDipendente() {
 
 function caricaListaDipendenti() {
   const div = document.getElementById('lista-dipendenti');
+  if (!div) return;
 
   if (dati.utenti.length === 0) {
     div.innerHTML = '<p class="text-muted">📭 Nessun dipendente</p>';
@@ -1808,16 +1893,31 @@ function eliminaDipendente(username) {
 
 function caricaSelectDipendentiModifica() {
   const select = document.getElementById('modifica-dipendente');
+  if (!select) return;
   select.innerHTML = '<option value="">-- Seleziona --</option>';
   dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
     select.innerHTML += '<option value="' + u.username + '">' + u.nome + ' ' + u.cognome + '</option>';
   });
 }
 
+function caricaSelectDipendentiCalendario() {
+  const select = document.getElementById('cal-dipendente');
+  if (!select) return;
+  select.innerHTML = '<option value="">-- Tutti --</option>';
+  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
+    select.innerHTML += '<option value="' + u.username + '">' + u.nome + ' ' + u.cognome + '</option>';
+  });
+}
+
+console.log('✅ script.js — PARTE 4/6 caricata');
+// ============================================
+// CARICA REGISTRAZIONI MODIFICA (admin)
+// ============================================
 function caricaRegistrazioniModifica() {
   const username = document.getElementById('modifica-dipendente').value;
   const data = document.getElementById('modifica-data').value;
   const div = document.getElementById('modifica-lista');
+  if (!div) return;
 
   if (!username || !data) {
     div.innerHTML = '<p class="text-muted">Seleziona dipendente e data</p>';
@@ -1922,18 +2022,14 @@ function eliminaRegistrazione(id) {
   alert('🗑️ Registrazione eliminata');
 }
 
-function caricaSelectDipendentiCalendario() {
-  const select = document.getElementById('cal-dipendente');
-  select.innerHTML = '<option value="">-- Tutti --</option>';
-  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
-    select.innerHTML += '<option value="' + u.username + '">' + u.nome + ' ' + u.cognome + '</option>';
-  });
-}
-
+// ============================================
+// CARICA CALENDARIO (vista mensile)
+// ============================================
 function caricaCalendario() {
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
   const output = document.getElementById('calendario-output');
+  if (!output) return;
 
   if (!anno) {
     output.innerHTML = '<p class="text-muted">Inserisci un anno valido</p>';
@@ -2030,16 +2126,10 @@ function caricaCalendario() {
         const haStraordinario = registrazioni.some(r => r.straordinario === true);
         const haLavoro = registrazioni.some(r => r.tipo === 'lavoro');
 
-        if (haFerie) {
-          cella = 'F';
-          bgColor = '#E3F2FD';
-        } else if (haPermesso) {
-          cella = 'P';
-          bgColor = '#FFF3E0';
-        } else if (haMalattia) {
-          cella = 'M';
-          bgColor = '#FFEBEE';
-        } else if (haRecupero) {
+        if (haFerie) { cella = 'F'; bgColor = '#E3F2FD'; }
+        else if (haPermesso) { cella = 'P'; bgColor = '#FFF3E0'; }
+        else if (haMalattia) { cella = 'M'; bgColor = '#FFEBEE'; }
+        else if (haRecupero) {
           let oreGiorno = 0;
           registrazioni.forEach(r => {
             if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
@@ -2136,8 +2226,189 @@ function caricaCalendario() {
 
   html += '</tbody></table></div>';
   output.innerHTML = html;
+
+  // Aggiungi totale mese
+  setTimeout(() => {
+    if (output && !output.innerHTML.includes('📊 TOTALE MESE')) {
+      mostraTotaliMese();
+    }
+  }, 50);
 }
 
+// ============================================
+// TOTALI MESE (filtrato per utente)
+// ============================================
+function mostraTotaliMese() {
+  if (!utenteCorrente) return;
+
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+  if (!mese || !anno) return;
+
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+
+  let totaleGenerale = 0;
+  let dipendentiDaContare = 0;
+
+  if (utenteCorrente.ruolo === 'admin') {
+    dati.registrazioni.forEach(r => {
+      if (r.tipo === 'lavoro' && r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+        totaleGenerale += r.ore || 0;
+      }
+    });
+    dipendentiDaContare = dati.utenti.filter(u => u.ruolo === 'dipendente').length;
+  } else {
+    dati.registrazioni.forEach(r => {
+      if (r.utente_id === utenteCorrente.username &&
+          r.tipo === 'lavoro' &&
+          r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+        totaleGenerale += r.ore || 0;
+      }
+    });
+    dipendentiDaContare = 1;
+  }
+
+  const container = document.getElementById('calendario-output');
+  if (container) {
+    const labelSoggetto = utenteCorrente.ruolo === 'admin'
+      ? `Dipendenti attivi: ${dipendentiDaContare}`
+      : `Le tue ore del mese`;
+
+    const totaliHTML = `
+      <div style="background:#e8f5e9;border:2px solid #4CAF50;border-radius:10px;padding:15px;margin-bottom:20px;text-align:center;">
+        <h4 style="color:#2e7d32;margin:0;">📊 TOTALE MESE: ${meseNome} ${anno}</h4>
+        <p style="margin:5px 0;font-size:1.2em;"><strong>${totaleGenerale.toFixed(2)} ore</strong> lavorate</p>
+        <small style="color:#666;">${labelSoggetto}</small>
+      </div>
+    `;
+    container.innerHTML = totaliHTML + container.innerHTML;
+  }
+}
+
+function cambiaVistaCalendario() {
+  caricaCalendario();
+}
+
+// ============================================
+// CALENDARIO DETTAGLIATO (vista dipendente)
+// ============================================
+function caricaCalendarioDettagliato() {
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+  const output = document.getElementById('calendario-output');
+
+  if (!mese || !anno) {
+    output.innerHTML = '<p class="text-muted">Seleziona mese e anno</p>';
+    return;
+  }
+
+  const username = utenteCorrente.username;
+  const giorniMese = new Date(anno, mese, 0).getDate();
+  const mesePadded = String(mese).padStart(2, '0');
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+
+  let html = '';
+  let totaleMese = 0;
+  let registrazioniTotali = 0;
+  let giorniLavorati = 0;
+
+  for (let g = 1; g <= giorniMese; g++) {
+    const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
+    const dataObj = new Date(data + 'T00:00:00');
+    const giornoSett = dataObj.getDay();
+    const isWeekend = giornoSett === 0 || giornoSett === 6;
+
+    const registrazioni = dati.registrazioni.filter(r =>
+      r.utente_id === username && r.data === data
+    );
+
+    const richiesta = dati.richieste.find(r =>
+      r.utente_id === username &&
+      r.stato === 'approvata' &&
+      r.data_inizio <= data && r.data_fine >= data
+    );
+
+    if (isWeekend && registrazioni.length === 0 && !richiesta) continue;
+
+    if (!isWeekend && registrazioni.length === 0 && !richiesta) {
+      const oggi = new Date();
+      oggi.setHours(0, 0, 0, 0);
+      if (dataObj < oggi) {
+        html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">⬜ ASSENTE</span></div></div>`;
+      }
+      continue;
+    }
+
+    if (richiesta && registrazioni.length === 0) {
+      const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+      const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
+      const emojiChar = emoji[richiesta.tipo] || '📌';
+
+      html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${richiesta.tipo}"><td>${emojiChar} <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}</td></tr></tbody></table></div></div>`;
+      continue;
+    }
+
+    let totaleGiorno = 0;
+    registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+
+    registrazioni.forEach(r => {
+      if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+        const [h1, m1] = r.ora_inizio.split(':').map(Number);
+        const [h2, m2] = r.ora_fine.split(':').map(Number);
+        totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+      }
+    });
+
+    registrazioniTotali += registrazioni.length;
+    totaleMese += totaleGiorno;
+    if (totaleGiorno > 0) giorniLavorati++;
+
+    const isOltre8 = totaleGiorno > 8;
+    const bgHeader = isOltre8 ? '#b71c1c' : '#00695C';
+
+    html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header" style="background:${bgHeader};"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span></div>`;
+
+    html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><thead><tr><th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
+
+    registrazioni.forEach(r => {
+      const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+      const [h1, m1] = r.ora_inizio.split(':').map(Number);
+      const [h2, m2] = r.ora_fine.split(':').map(Number);
+      const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+      const isStraordinario = r.straordinario ? ' ⭐' : '';
+      const isRecupero = r.recupero ? ' ⏰' : '';
+
+      html += `<tr><td><strong>${commessa?.nome || 'N/A'}</strong></td><td>${r.ora_inizio || '-'}</td><td>${r.ora_fine || '-'}</td><td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td><td>${r.descrizione || '-'}</td></tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+  }
+
+  if (html === '') {
+    output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
+    return;
+  }
+
+  const headerHTML = `
+    <div class="calendario-dettagliato-info">
+      <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
+      <div class="info-totali">
+        <span>📊 ${registrazioniTotali} registrazioni</span>
+        <span>📅 ${giorniLavorati} giorni lavorati</span>
+        <span>⏱️ Totale: ${totaleMese.toFixed(2)}h</span>
+      </div>
+    </div>
+  `;
+
+  output.innerHTML = headerHTML + html;
+}
+
+console.log('✅ script.js — PARTE 5/6 caricata');
+// ============================================
+// MODALE DETTAGLIO COMMESSA (admin)
+// ============================================
 function mostraAggiungiCommessa() {
   document.getElementById('commesse-menu').style.display = 'none';
   document.getElementById('commesse-aggiungi').style.display = 'block';
@@ -2178,12 +2449,7 @@ function apriDettaglioCommessa(id) {
 
   commessaCorrenteDettaglio = id;
 
-  filtriCommessa = {
-    dataInizio: '',
-    dataFine: '',
-    ricerca: '',
-    dipendenti: []
-  };
+  filtriCommessa = { dataInizio: '', dataFine: '', ricerca: '', dipendenti: [] };
 
   document.getElementById('dettaglio-commessa-nome').textContent = commessa.nome;
   const dataCreazione = commessa.data_creazione ?
@@ -2195,9 +2461,7 @@ function apriDettaglioCommessa(id) {
   document.getElementById('filtro-ricerca').value = '';
 
   popolaFiltroDipendenti();
-
   document.getElementById('modal-dettaglio-commessa').classList.add('active');
-
   applicaFiltriCommessa();
 }
 
@@ -2223,10 +2487,7 @@ function popolaFiltroDipendenti() {
     const item = document.createElement('div');
     item.className = 'filtro-dipendente-item';
     item.dataset.username = username;
-    item.innerHTML = `
-      <i class="fas fa-user"></i>
-      <span>${utente.nome} ${utente.cognome}</span>
-    `;
+    item.innerHTML = `<i class="fas fa-user"></i> <span>${utente.nome} ${utente.cognome}</span>`;
     item.onclick = function() {
       const idx = filtriCommessa.dipendenti.indexOf(username);
       if (idx > -1) {
@@ -2256,17 +2517,12 @@ function applicaFiltriCommessa() {
   if (filtriCommessa.dataInizio) {
     registrazioni = registrazioni.filter(r => r.data >= filtriCommessa.dataInizio);
   }
-
   if (filtriCommessa.dataFine) {
     registrazioni = registrazioni.filter(r => r.data <= filtriCommessa.dataFine);
   }
-
   if (filtriCommessa.dipendenti.length > 0) {
-    registrazioni = registrazioni.filter(r =>
-      filtriCommessa.dipendenti.includes(r.utente_id)
-    );
+    registrazioni = registrazioni.filter(r => filtriCommessa.dipendenti.includes(r.utente_id));
   }
-
   if (filtriCommessa.ricerca) {
     registrazioni = registrazioni.filter(r => {
       const utente = dati.utenti.find(u => u.username === r.utente_id);
@@ -2303,80 +2559,42 @@ function applicaFiltriCommessa() {
   Object.keys(perDipendente).forEach(username => {
     const utente = dati.utenti.find(u => u.username === username);
     const nomeDipendente = utente ? utente.nome + ' ' + utente.cognome : username;
-
     let totaleDipendente = 0;
 
     html += `<div class="gruppo-dipendente">`;
-    html += `<div class="gruppo-dipendente-header">`;
-    html += `<h4><i class="fas fa-user"></i> ${nomeDipendente}</h4>`;
+    html += `<div class="gruppo-dipendente-header"><h4><i class="fas fa-user"></i> ${nomeDipendente}</h4>`;
 
-    perDipendente[username].forEach(r => {
-      totaleDipendente += r.ore || 0;
-    });
+    perDipendente[username].forEach(r => { totaleDipendente += r.ore || 0; });
+    html += `<span class="subtotale">${totaleDipendente.toFixed(2)}h</span></div>`;
 
-    html += `<span class="subtotale">${totaleDipendente.toFixed(2)}h</span>`;
-    html += `</div>`;
-
-    html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-    html += `<table>`;
-    html += `<thead><tr>
-      <th>Data</th>
-      <th>Commessa</th>
-      <th>Inizio</th>
-      <th>Fine</th>
-      <th>Ore</th>
-      <th>Descrizione</th>
-    </tr></thead>`;
-    html += `<tbody>`;
+    html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><thead><tr><th>Data</th><th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
 
     perDipendente[username].forEach(r => {
       const commessa = dati.commesse.find(c => c.id === r.commessa_id);
       const [h1, m1] = r.ora_inizio.split(':').map(Number);
       const [h2, m2] = r.ora_fine.split(':').map(Number);
       const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-
       const isStraordinario = r.straordinario ? ' ⭐' : '';
       const isRecupero = r.recupero ? ' ⏰' : '';
 
-      html += `<tr>`;
-      html += `<td>${r.data}</td>`;
-      html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
-      html += `<td>${r.ora_inizio}</td>`;
-      html += `<td>${r.ora_fine}</td>`;
-      html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
-      html += `<td>${r.descrizione || '-'}</td>`;
-      html += `</tr>`;
+      html += `<tr><td>${r.data}</td><td><strong>${commessa?.nome || 'N/A'}</strong></td><td>${r.ora_inizio}</td><td>${r.ora_fine}</td><td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td><td>${r.descrizione || '-'}</td></tr>`;
     });
 
-    html += `</tbody></table></div>`;
-    html += `</div>`;
-
+    html += `</tbody></table></div></div>`;
     totaleGenerale += totaleDipendente;
   });
 
-  html += `<div class="totale-generale">
-    <i class="fas fa-calculator"></i> TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h
-  </div>`;
+  html += `<div class="totale-generale"><i class="fas fa-calculator"></i> TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h</div>`;
 
   output.innerHTML = html;
 }
 
 function resetFiltriCommessa() {
-  filtriCommessa = {
-    dataInizio: '',
-    dataFine: '',
-    ricerca: '',
-    dipendenti: []
-  };
-
+  filtriCommessa = { dataInizio: '', dataFine: '', ricerca: '', dipendenti: [] };
   document.getElementById('filtro-data-inizio').value = '';
   document.getElementById('filtro-data-fine').value = '';
   document.getElementById('filtro-ricerca').value = '';
-
-  document.querySelectorAll('.filtro-dipendente-item').forEach(item => {
-    item.classList.remove('attivo');
-  });
-
+  document.querySelectorAll('.filtro-dipendente-item').forEach(item => item.classList.remove('attivo'));
   applicaFiltriCommessa();
 }
 
@@ -2460,10 +2678,7 @@ async function esportaPDFCommessa() {
       </div>
       ${infoFiltri ? `<div class="info-filtri"><strong>🔍 Filtri applicati:</strong>${infoFiltri}</div>` : ''}
       <div style="margin-top:10px;">${content}</div>
-      <div class="footer">
-        MEC-ROY srls - Sistema di Gestione Lavoro<br>
-        Documento generato automaticamente
-      </div>
+      <div class="footer">MEC-ROY srls - Sistema di Gestione Lavoro<br>Documento generato automaticamente</div>
     </body>
     </html>
   `;
@@ -2472,396 +2687,8 @@ async function esportaPDFCommessa() {
 }
 
 // ============================================
-// ⭐ MOSTRA TOTALI MESE — filtrato per utente (Problema 1)
+// MODALE DETTAGLIO DIPENDENTE (admin)
 // ============================================
-function mostraTotaliMese() {
-  if (!utenteCorrente) return;
-
-  const mese = parseInt(document.getElementById('cal-mese').value);
-  const anno = parseInt(document.getElementById('cal-anno').value);
-  if (!mese || !anno) return;
-
-  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
-
-  let totaleGenerale = 0;
-  let dipendentiDaContare = 0;
-
-  if (utenteCorrente.ruolo === 'admin') {
-    dati.registrazioni.forEach(r => {
-      if (r.tipo === 'lavoro' && r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
-        totaleGenerale += r.ore || 0;
-      }
-    });
-    dipendentiDaContare = dati.utenti.filter(u => u.ruolo === 'dipendente').length;
-  } else {
-    dati.registrazioni.forEach(r => {
-      if (r.utente_id === utenteCorrente.username &&
-          r.tipo === 'lavoro' &&
-          r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
-        totaleGenerale += r.ore || 0;
-      }
-    });
-    dipendentiDaContare = 1;
-  }
-
-  const container = document.getElementById('calendario-output');
-  if (container) {
-    const labelSoggetto = utenteCorrente.ruolo === 'admin'
-      ? `Dipendenti attivi: ${dipendentiDaContare}`
-      : `Le tue ore del mese`;
-
-    const totaliHTML = `
-      <div style="background:#e8f5e9;border:2px solid #4CAF50;border-radius:10px;padding:15px;margin-bottom:20px;text-align:center;">
-        <h4 style="color:#2e7d32;margin:0;">📊 TOTALE MESE: ${meseNome} ${anno}</h4>
-        <p style="margin:5px 0;font-size:1.2em;"><strong>${totaleGenerale.toFixed(2)} ore</strong> lavorate</p>
-        <small style="color:#666;">${labelSoggetto}</small>
-      </div>
-    `;
-    container.innerHTML = totaliHTML + container.innerHTML;
-  }
-}
-
-const originalCaricaCalendario = caricaCalendario;
-caricaCalendario = function() {
-  originalCaricaCalendario();
-  setTimeout(() => {
-    const output = document.getElementById('calendario-output');
-    if (output && !output.innerHTML.includes('📊 TOTALE MESE')) {
-      mostraTotaliMese();
-    }
-  }, 100);
-};
-
-function aggiornaRichiesteManuale() {
-  caricaDati().then(() => {
-    if (utenteCorrente && utenteCorrente.ruolo === 'admin') {
-      caricaRichiesteAdmin();
-      aggiornaBadgeRichieste();
-      alert('✅ Richieste aggiornate!');
-    } else {
-      alert('⚠️ Non sei autorizzato a vedere le richieste.');
-    }
-  }).catch((err) => {
-    console.error('❌ Errore aggiornamento:', err);
-    alert('❌ Errore: ' + err.message);
-  });
-}
-
-// ============================================
-// ⭐ APPROVA RICHIESTA — con weekend + rileggi Firestore + await
-// ============================================
-async function approvaRichiesta(id) {
-  // ⭐ Rileggi Firestore prima di operare
-  try {
-    const datiFreschi = await caricaDaFirestore();
-    if (datiFreschi) {
-      dati = datiFreschi;
-      if (!dati.utenti) dati.utenti = [];
-      if (!dati.registrazioni) dati.registrazioni = [];
-      if (!dati.richieste) dati.richieste = [];
-      if (!dati.notifiche) dati.notifiche = [];
-    }
-  } catch (e) {
-    console.warn('⚠️ Impossibile rileggere Firestore prima di approvare:', e);
-  }
-
-  const richiesta = dati.richieste.find(r => r.id === id);
-  if (!richiesta) {
-    alert('❌ Richiesta non trovata');
-    return;
-  }
-
-  if (richiesta.stato !== 'pending') {
-    alert('⚠️ Questa richiesta è già stata processata.');
-    return;
-  }
-
-  richiesta.stato = 'approvata';
-
-  // ⭐ Blocco weekend per notifica push
-  if (isWeekendOggi()) {
-    console.log('📵 Weekend: notifica push approvazione NON inviata');
-  } else {
-    try {
-      await db.collection('richieste_trigger').add({
-        richiesta_id: richiesta.id,
-        utente_id: richiesta.utente_id,
-        tipo: richiesta.tipo,
-        azione: 'approvata',
-        data_inizio: richiesta.data_inizio || null,
-        data_fine: richiesta.data_fine || null,
-        data: richiesta.data || null,
-        ora_inizio: richiesta.ora_inizio || null,
-        ora_fine: richiesta.ora_fine || null,
-        creato_il: new Date().toISOString()
-      });
-      console.log('✅ Aggiornamento approvazione salvato per notifica');
-    } catch (err) {
-      console.warn('⚠️ Errore salvataggio trigger approvazione:', err);
-    }
-  }
-
-  const utenteIdCorretto = richiesta.utente_id;
-
-  if (richiesta.tipo === 'recupero_ore') {
-    const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
-    const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
-    let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-
-    if (oreLavorate <= 0 || oreLavorate > 12) {
-      alert('❌ ERRORE DATI: Orario non valido per la richiesta di recupero. Controlla le ore inserite.');
-      richiesta.stato = 'pending';
-      return;
-    }
-
-    const ferieEsistenti = dati.registrazioni.filter(r =>
-      r.utente_id === utenteIdCorretto &&
-      r.data === richiesta.data &&
-      r.tipo === 'ferie'
-    );
-
-    const oreEsistenti = dati.registrazioni.filter(r =>
-      r.utente_id === utenteIdCorretto &&
-      r.data === richiesta.data &&
-      r.tipo === 'lavoro' &&
-      r.ora_inizio && r.ora_fine &&
-      !(richiesta.ora_fine <= r.ora_inizio || richiesta.ora_inizio >= r.ora_fine)
-    );
-    if (oreEsistenti.length > 0) {
-      alert('❌ Impossibile approvare: ci sono già ore registrate in questa fascia (' +
-            oreEsistenti[0].ora_inizio + ' - ' + oreEsistenti[0].ora_fine + ').');
-      richiesta.stato = 'pending';
-      return;
-    }
-
-    if (ferieEsistenti.length > 0) {
-      const conferma = confirm(
-        '⚠️ ATTENZIONE!\n\n' +
-        'Il dipendente ha FERIE il ' + richiesta.data + '.\n\n' +
-        'Approvando queste ore (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + '), la ferie verrà sostituita da:\n' +
-        '• Lavoro dalle ' + richiesta.ora_inizio + ' alle ' + richiesta.ora_fine + '\n' +
-        '• Permesso per il resto della giornata\n\n' +
-        'Confermi l\'approvazione?'
-      );
-      if (!conferma) {
-        richiesta.stato = 'pending';
-        alert('❌ Approvazione annullata.');
-        return;
-      }
-
-      dati.registrazioni = dati.registrazioni.filter(r =>
-        !(r.utente_id === utenteIdCorretto &&
-          r.data === richiesta.data &&
-          r.tipo === 'ferie')
-      );
-
-      const orePermesso = 8 - oreLavorate;
-
-      if (orePermesso > 0) {
-        const hInizio = parseInt(richiesta.ora_inizio.split(':')[0]);
-
-        let permessoInizio, permessoFine;
-
-        if (hInizio < 12) {
-          permessoInizio = '13:00';
-          permessoFine = String(13 + orePermesso).padStart(2, '0') + ':00';
-        } else {
-          permessoInizio = '08:00';
-          permessoFine = String(8 + orePermesso).padStart(2, '0') + ':00';
-        }
-
-        dati.registrazioni.push({
-          id: prossimoId++,
-          utente_id: utenteIdCorretto,
-          commessa_id: null,
-          data: richiesta.data,
-          ora_inizio: permessoInizio,
-          ora_fine: permessoFine,
-          descrizione: 'Permesso (per recupero ore)',
-          tipo: 'permesso',
-          ore: orePermesso
-        });
-      }
-    }
-
-    dati.registrazioni.push({
-      id: prossimoId++,
-      utente_id: utenteIdCorretto,
-      commessa_id: richiesta.commessa_id || null,
-      data: richiesta.data,
-      ora_inizio: richiesta.ora_inizio,
-      ora_fine: richiesta.ora_fine,
-      descrizione: richiesta.descrizione_lavoro || 'Recupero ore',
-      tipo: 'lavoro',
-      recupero: true,
-      ore: oreLavorate
-    });
-
-    aggiungiNotifica(
-      utenteIdCorretto,
-      'recupero_approvato',
-      '✅ Le tue ore del ' + richiesta.data + ' (' + richiesta.ora_inizio + ' - ' + richiesta.ora_fine + ') sono state APPROVATE e inserite!' +
-      (ferieEsistenti.length > 0 ? ' La ferie è stata sostituita da permesso.' : ''),
-      '#'
-    );
-
-  } else {
-    dati.registrazioni.push({
-      id: prossimoId++,
-      utente_id: utenteIdCorretto,
-      commessa_id: null,
-      data: richiesta.data_inizio,
-      ora_inizio: '00:00',
-      ora_fine: '00:00',
-      descrizione: richiesta.tipo + ' (approvata)',
-      tipo: richiesta.tipo,
-      richiesta_id: richiesta.id
-    });
-
-    if (richiesta.data_inizio !== richiesta.data_fine) {
-      let dataCorrente = new Date(richiesta.data_inizio);
-      const dataFine = new Date(richiesta.data_fine);
-      while (dataCorrente < dataFine) {
-        dataCorrente.setDate(dataCorrente.getDate() + 1);
-        const dataStr = dataCorrente.toISOString().split('T')[0];
-        dati.registrazioni.push({
-          id: prossimoId++,
-          utente_id: utenteIdCorretto,
-          commessa_id: null,
-          data: dataStr,
-          ora_inizio: '00:00',
-          ora_fine: '00:00',
-          descrizione: richiesta.tipo + ' (approvata)',
-          tipo: richiesta.tipo,
-          richiesta_id: richiesta.id
-        });
-      }
-    }
-
-    const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-    aggiungiNotifica(
-      utenteIdCorretto,
-      'approvazione',
-      emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata APPROVATA ✅',
-      '#'
-    );
-  }
-
-  await salvaDati();
-
-  caricaRichiesteAdmin();
-  aggiornaBadgeRichieste();
-  caricaRichiesteDipendente();
-  aggiornaBadgeNotifiche();
-
-  alert('✅ Richiesta approvata! Notifica inviata al dipendente.');
-}
-
-// ============================================
-// ⭐ RIFIUTA RICHIESTA — con weekend + rileggi Firestore + await
-// ============================================
-async function rifiutaRichiesta(id) {
-  try {
-    const datiFreschi = await caricaDaFirestore();
-    if (datiFreschi) {
-      dati = datiFreschi;
-      if (!dati.utenti) dati.utenti = [];
-      if (!dati.registrazioni) dati.registrazioni = [];
-      if (!dati.richieste) dati.richieste = [];
-      if (!dati.notifiche) dati.notifiche = [];
-    }
-  } catch (e) {
-    console.warn('⚠️ Impossibile rileggere Firestore prima di rifiutare:', e);
-  }
-
-  const richiesta = dati.richieste.find(r => r.id === id);
-  if (!richiesta) {
-    alert('❌ Richiesta non trovata');
-    return;
-  }
-
-  richiesta.stato = 'rifiutata';
-
-  if (isWeekendOggi()) {
-    console.log('📵 Weekend: notifica push rifiuto NON inviata');
-  } else {
-    try {
-      await db.collection('richieste_trigger').add({
-        richiesta_id: richiesta.id,
-        utente_id: richiesta.utente_id,
-        tipo: richiesta.tipo,
-        azione: 'rifiutata',
-        data_inizio: richiesta.data_inizio || null,
-        data_fine: richiesta.data_fine || null,
-        data: richiesta.data || null,
-        ora_inizio: richiesta.ora_inizio || null,
-        ora_fine: richiesta.ora_fine || null,
-        creato_il: new Date().toISOString()
-      });
-      console.log('✅ Aggiornamento rifiuto salvato per notifica');
-    } catch (err) {
-      console.warn('⚠️ Errore salvataggio trigger rifiuto:', err);
-    }
-  }
-
-  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-  aggiungiNotifica(
-    richiesta.utente_id,
-    'rifiuto',
-    emoji[richiesta.tipo] + ' La tua richiesta di ' + richiesta.tipo + ' dal ' + richiesta.data_inizio + ' al ' + richiesta.data_fine + ' è stata RIFIUTATA ❌',
-    '#'
-  );
-
-  await salvaDati();
-
-  caricaRichiesteAdmin();
-  aggiornaBadgeRichieste();
-  caricaRichiesteDipendente();
-  aggiornaBadgeNotifiche();
-  alert('❌ Richiesta rifiutata. Notifica inviata al dipendente.');
-}
-
-// ============================================
-// AVVIO
-// ============================================
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-notifiche');
-  if (e.target === modal) chiudiNotifiche();
-});
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-password');
-  if (e.target === modal) chiudiModificaPassword();
-});
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-aziende');
-  if (e.target === modal) chiudiModalAziende();
-});
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-backup');
-  if (e.target === modal) chiudiModalBackup();
-});
-
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-dettaglio-commessa');
-  if (e.target === modal) chiudiDettaglioCommessa();
-});
-
-// ============================================
-// MODALE DETTAGLIO DIPENDENTE
-// ============================================
-let dipendenteCorrenteDettaglio = null;
-let filtriDipendente = {
-  vista: 'mese',
-  giorno: '',
-  mese: new Date().getMonth() + 1,
-  anno: new Date().getFullYear()
-};
-
 function apriDettaglioDipendente(username) {
   const utente = dati.utenti.find(u => u.username === username);
   if (!utente) {
@@ -2888,9 +2715,7 @@ function apriDettaglioDipendente(username) {
   document.getElementById('filtro-anno').value = filtriDipendente.anno;
 
   cambiaVistaDipendente();
-
   document.getElementById('modal-dettaglio-dipendente').classList.add('active');
-
   applicaFiltriDipendente();
 }
 
@@ -2929,8 +2754,7 @@ function applicaFiltriDipendente() {
     }
 
     const registrazioni = dati.registrazioni.filter(r =>
-      r.utente_id === dipendenteCorrenteDettaglio &&
-      r.data === giorno
+      r.utente_id === dipendenteCorrenteDettaglio && r.data === giorno
     );
 
     const richiesta = dati.richieste.find(r =>
@@ -2948,32 +2772,19 @@ function applicaFiltriDipendente() {
     }
 
     const dataFormattata = new Date(giorno + 'T00:00:00').toLocaleDateString('it-IT', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
 
     let html = '';
     let totaleGiorno = 0;
 
-    html += `<div class="gruppo-giorno">`;
-    html += `<div class="gruppo-giorno-header">`;
-    html += `<h4><i class="fas fa-calendar-day"></i> ${dataFormattata}</h4>`;
+    html += `<div class="gruppo-giorno"><div class="gruppo-giorno-header"><h4><i class="fas fa-calendar-day"></i> ${dataFormattata}</h4>`;
 
     if (richiesta) {
       const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
       const tipo = richiesta.tipo.toUpperCase();
-      html += `<span class="subtotale-giorno">${emoji[richiesta.tipo] || '📌'} ${tipo}</span>`;
-      html += `</div>`;
-      html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-      html += `<table><tbody>`;
-      html += `<tr class="riga-speciale ${richiesta.tipo}">`;
-      html += `<td><span class="icona-tipo">${emoji[richiesta.tipo] || '📌'}</span> <strong>${tipo}</strong>`;
-      if (richiesta.note) html += ` - ${richiesta.note}`;
-      html += `</td></tr>`;
-      html += `</tbody></table></div>`;
-      html += `</div>`;
+      html += `<span class="subtotale-giorno">${emoji[richiesta.tipo] || '📌'} ${tipo}</span></div>`;
+      html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale ${richiesta.tipo}"><td><span class="icona-tipo">${emoji[richiesta.tipo] || '📌'}</span> <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}</td></tr></tbody></table></div></div>`;
       output.innerHTML = html;
       return;
     }
@@ -2986,19 +2797,8 @@ function applicaFiltriDipendente() {
       }
     });
 
-    html += `<span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span>`;
-    html += `</div>`;
-
-    html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-    html += `<table>`;
-    html += `<thead><tr>
-      <th>Commessa</th>
-      <th>Inizio</th>
-      <th>Fine</th>
-      <th>Ore</th>
-      <th>Descrizione</th>
-    </tr></thead>`;
-    html += `<tbody>`;
+    html += `<span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span></div>`;
+    html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><thead><tr><th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
 
     registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
 
@@ -3007,22 +2807,13 @@ function applicaFiltriDipendente() {
       const [h1, m1] = r.ora_inizio.split(':').map(Number);
       const [h2, m2] = r.ora_fine.split(':').map(Number);
       const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-
       const isStraordinario = r.straordinario ? ' ⭐' : '';
       const isRecupero = r.recupero ? ' ⏰' : '';
 
-      html += `<tr>`;
-      html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
-      html += `<td>${r.ora_inizio || '-'}</td>`;
-      html += `<td>${r.ora_fine || '-'}</td>`;
-      html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
-      html += `<td>${r.descrizione || '-'}</td>`;
-      html += `</tr>`;
+      html += `<tr><td><strong>${commessa?.nome || 'N/A'}</strong></td><td>${r.ora_inizio || '-'}</td><td>${r.ora_fine || '-'}</td><td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td><td>${r.descrizione || '-'}</td></tr>`;
     });
 
-    html += `</tbody></table></div>`;
-    html += `</div>`;
-
+    html += `</tbody></table></div></div>`;
     output.innerHTML = html;
 
   } else {
@@ -3053,8 +2844,7 @@ function applicaFiltriDipendente() {
       const isWeekend = giornoSett === 0 || giornoSett === 6;
 
       const registrazioni = dati.registrazioni.filter(r =>
-        r.utente_id === dipendenteCorrenteDettaglio &&
-        r.data === data
+        r.utente_id === dipendenteCorrenteDettaglio && r.data === data
       );
 
       const richiesta = dati.richieste.find(r =>
@@ -3068,14 +2858,8 @@ function applicaFiltriDipendente() {
       if (registrazioni.length === 0 && !richiesta && !isWeekend) {
         const oggi = new Date();
         oggi.setHours(0, 0, 0, 0);
-
         if (dataObj < oggi) {
-          html += `<div class="gruppo-giorno">`;
-          html += `<div class="gruppo-giorno-header">`;
-          html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
-          html += `<span class="subtotale-giorno">⬜ ASSENTE</span>`;
-          html += `</div>`;
-          html += `</div>`;
+          html += `<div class="gruppo-giorno"><div class="gruppo-giorno-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="subtotale-giorno">⬜ ASSENTE</span></div></div>`;
         }
         continue;
       }
@@ -3085,19 +2869,7 @@ function applicaFiltriDipendente() {
         const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
         const emojiChar = emoji[richiesta.tipo] || '📌';
 
-        html += `<div class="gruppo-giorno">`;
-        html += `<div class="gruppo-giorno-header">`;
-        html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
-        html += `<span class="subtotale-giorno">${emojiChar} ${tipo}</span>`;
-        html += `</div>`;
-        html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-        html += `<table><tbody>`;
-        html += `<tr class="riga-speciale ${richiesta.tipo}">`;
-        html += `<td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>`;
-        if (richiesta.note) html += ` - ${richiesta.note}`;
-        html += `</td></tr>`;
-        html += `</tbody></table></div>`;
-        html += `</div>`;
+        html += `<div class="gruppo-giorno"><div class="gruppo-giorno-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="subtotale-giorno">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale ${richiesta.tipo}"><td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}</td></tr></tbody></table></div></div>`;
         continue;
       }
 
@@ -3115,43 +2887,21 @@ function applicaFiltriDipendente() {
       registrazioniTotali += registrazioni.length;
       totaleMese += totaleGiorno;
 
-      html += `<div class="gruppo-giorno">`;
-      html += `<div class="gruppo-giorno-header">`;
-      html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
-      html += `<span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span>`;
-      html += `</div>`;
-
-      html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-      html += `<table>`;
-      html += `<thead><tr>
-        <th>Commessa</th>
-        <th>Inizio</th>
-        <th>Fine</th>
-        <th>Ore</th>
-        <th>Descrizione</th>
-      </tr></thead>`;
-      html += `<tbody>`;
+      html += `<div class="gruppo-giorno"><div class="gruppo-giorno-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="subtotale-giorno">${totaleGiorno.toFixed(2)}h</span></div>`;
+      html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><thead><tr><th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
 
       registrazioni.forEach(r => {
         const commessa = dati.commesse.find(c => c.id === r.commessa_id);
         const [h1, m1] = r.ora_inizio.split(':').map(Number);
         const [h2, m2] = r.ora_fine.split(':').map(Number);
         const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-
         const isStraordinario = r.straordinario ? ' ⭐' : '';
         const isRecupero = r.recupero ? ' ⏰' : '';
 
-        html += `<tr>`;
-        html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
-        html += `<td>${r.ora_inizio || '-'}</td>`;
-        html += `<td>${r.ora_fine || '-'}</td>`;
-        html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
-        html += `<td>${r.descrizione || '-'}</td>`;
-        html += `</tr>`;
+        html += `<tr><td><strong>${commessa?.nome || 'N/A'}</strong></td><td>${r.ora_inizio || '-'}</td><td>${r.ora_fine || '-'}</td><td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td><td>${r.descrizione || '-'}</td></tr>`;
       });
 
-      html += `</tbody></table></div>`;
-      html += `</div>`;
+      html += `</tbody></table></div></div>`;
     }
 
     document.getElementById('dettaglio-dipendente-contatore').textContent =
@@ -3270,10 +3020,7 @@ async function esportaPDFDipendente() {
         <p style="color:#888;font-size:12px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
       </div>
       <div style="margin-top:10px;">${content}</div>
-      <div class="footer">
-        MEC-ROY srls - Sistema di Gestione Lavoro<br>
-        Documento generato automaticamente
-      </div>
+      <div class="footer">MEC-ROY srls - Sistema di Gestione Lavoro<br>Documento generato automaticamente</div>
     </body>
     </html>
   `;
@@ -3281,174 +3028,1044 @@ async function esportaPDFDipendente() {
   await scaricaOCondividiFile(fullHTML, `Report_${utente.nome}_${utente.cognome}`);
 }
 
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('modal-dettaglio-dipendente');
-  if (e.target === modal) chiudiDettaglioDipendente();
-});
-
-function cambiaVistaCalendario() {
-  caricaCalendario();
+// ============================================
+// MODALE BACKUP ZIP (admin)
+// ============================================
+function apriModalBackup() {
+  if (utenteCorrente?.ruolo !== 'admin') {
+    alert('Solo gli amministratori possono scaricare il backup');
+    return;
+  }
+  document.getElementById('msg-backup').innerHTML = '';
+  document.getElementById('modal-backup').classList.add('active');
 }
 
-function caricaCalendarioDettagliato() {
-  const mese = parseInt(document.getElementById('cal-mese').value);
-  const anno = parseInt(document.getElementById('cal-anno').value);
-  const output = document.getElementById('calendario-output');
+function chiudiModalBackup() {
+  document.getElementById('modal-backup').classList.remove('active');
+}
 
-  if (!mese || !anno) {
-    output.innerHTML = '<p class="text-muted">Seleziona mese e anno</p>';
-    return;
-  }
+async function eseguiBackup() {
+  if (utenteCorrente?.ruolo !== 'admin') return;
 
-  const username = utenteCorrente.username;
-  const utente = dati.utenti.find(u => u.username === username);
-  if (!utente) {
-    output.innerHTML = '<p class="text-muted">Utente non trovato</p>';
-    return;
-  }
+  const tipo = document.querySelector('input[name="backup-tipo"]:checked')?.value || 'tutto';
+  const msg = document.getElementById('msg-backup');
 
-  const giorniMese = new Date(anno, mese, 0).getDate();
-  const mesePadded = String(mese).padStart(2, '0');
-  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+  msg.innerHTML = '<div class="info-msg">⏳ Generazione backup in corso...</div>';
 
-  let html = '';
-  let totaleMese = 0;
-  let registrazioniTotali = 0;
-  let giorniLavorati = 0;
+  try {
+    await new Promise(r => setTimeout(r, 100));
 
-  for (let g = 1; g <= giorniMese; g++) {
-    const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
-    const dataObj = new Date(data + 'T00:00:00');
-    const giornoSett = dataObj.getDay();
-    const isWeekend = giornoSett === 0 || giornoSett === 6;
+    const zip = new JSZip();
+    const dataOggi = new Date().toISOString().split('T')[0];
+    const nomeCartella = `MEC-ROY_Backup_${dataOggi}`;
+    const root = zip.folder(nomeCartella);
 
-    const registrazioni = dati.registrazioni.filter(r =>
-      r.utente_id === username && r.data === data
-    );
+    const stiliComuni = `<style>
+      body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+      th { background: #00695C; color: white; }
+      h1, h2 { color: #00695C; }
+    </style>`;
 
-    const richiesta = dati.richieste.find(r =>
-      r.utente_id === username &&
-      r.stato === 'approvata' &&
-      r.data_inizio <= data && r.data_fine >= data
-    );
+    const headHTML = (titolo) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${titolo}</title>${stiliComuni}</head><body>`;
 
-    if (isWeekend && registrazioni.length === 0 && !richiesta) continue;
+    // Backup commesse ore
+    if (tipo === 'tutto' || tipo === 'commesse') {
+      const cartellaComm = root.folder('Commesse');
 
-    if (!isWeekend && registrazioni.length === 0 && !richiesta) {
-      const oggi = new Date();
-      oggi.setHours(0, 0, 0, 0);
+      for (const commessa of dati.commesse) {
+        const registrazioni = dati.registrazioni.filter(r =>
+          r.commessa_id === commessa.id && r.tipo === 'lavoro'
+        );
+        if (registrazioni.length === 0) continue;
 
-      if (dataObj < oggi) {
-        html += `<div class="giorno-dettaglio">`;
-        html += `<div class="giorno-dettaglio-header">`;
-        html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
-        html += `<span class="giorno-totale">⬜ ASSENTE</span>`;
-        html += `</div>`;
-        html += `</div>`;
+        let htmlContent = headHTML(`Commessa ${commessa.nome}`);
+        htmlContent += `<h1>${commessa.nome}</h1>`;
+        htmlContent += `<table><thead><tr><th>Data</th><th>Dipendente</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
+
+        registrazioni.forEach(r => {
+          const utente = dati.utenti.find(u => u.username === r.utente_id);
+          const nomeDip = utente ? `${utente.nome} ${utente.cognome}` : r.utente_id;
+          const [h1, m1] = r.ora_inizio.split(':').map(Number);
+          const [h2, m2] = r.ora_fine.split(':').map(Number);
+          const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+
+          htmlContent += `<tr><td>${r.data}</td><td>${nomeDip}</td><td>${r.ora_inizio}</td><td>${r.ora_fine}</td><td>${ore.toFixed(2)}h</td><td>${r.descrizione || '-'}</td></tr>`;
+        });
+
+        htmlContent += `</tbody></table></body></html>`;
+
+        const nomeFile = commessa.nome.replace(/[^a-zA-Z0-9_-]/g, '_');
+        cartellaComm.file(`${nomeFile}.html`, htmlContent);
       }
-      continue;
     }
 
-    if (richiesta && registrazioni.length === 0) {
-      const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-      const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
-      const emojiChar = emoji[richiesta.tipo] || '📌';
+    msg.innerHTML = '<div class="info-msg">📦 Creazione ZIP in corso...</div>';
 
-      html += `<div class="giorno-dettaglio">`;
-      html += `<div class="giorno-dettaglio-header">`;
-      html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
-      html += `<span class="giorno-totale">${emojiChar} ${tipo}</span>`;
-      html += `</div>`;
-      html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-      html += `<table><tbody>`;
-      html += `<tr class="riga-speciale-giorno ${richiesta.tipo}">`;
-      html += `<td>${emojiChar} <strong>${tipo}</strong>`;
-      if (richiesta.note) html += ` - ${richiesta.note}`;
-      html += `</td></tr>`;
-      html += `</tbody></table></div>`;
-      html += `</div>`;
-      continue;
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const nomeZip = `${nomeCartella}.zip`;
+
+    const file = new File([blob], nomeZip, { type: 'application/zip' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: nomeCartella, text: 'Backup MEC-ROY' });
+        msg.innerHTML = '<div class="success">✅ Backup generato e condiviso!</div>';
+        setTimeout(chiudiModalBackup, 1500);
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') { msg.innerHTML = ''; return; }
+      }
     }
 
-    let totaleGiorno = 0;
-    registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeZip;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 
-    registrazioni.forEach(r => {
-      if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
-        const [h1, m1] = r.ora_inizio.split(':').map(Number);
-        const [h2, m2] = r.ora_fine.split(':').map(Number);
-        totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-      }
-    });
+    msg.innerHTML = '<div class="success">✅ Backup scaricato con successo!</div>';
+    setTimeout(chiudiModalBackup, 1500);
 
-    registrazioniTotali += registrazioni.length;
-    totaleMese += totaleGiorno;
-    if (totaleGiorno > 0) giorniLavorati++;
-
-    const isOltre8 = totaleGiorno > 8;
-    const bgHeader = isOltre8 ? '#b71c1c' : '#00695C';
-
-    html += `<div class="giorno-dettaglio">`;
-    html += `<div class="giorno-dettaglio-header" style="background:${bgHeader};">`;
-    html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
-    html += `<span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span>`;
-    html += `</div>`;
-
-    html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
-    html += `<table>`;
-    html += `<thead><tr>
-      <th>Commessa</th>
-      <th>Inizio</th>
-      <th>Fine</th>
-      <th>Ore</th>
-      <th>Descrizione</th>
-    </tr></thead>`;
-    html += `<tbody>`;
-
-    registrazioni.forEach(r => {
-      const commessa = dati.commesse.find(c => c.id === r.commessa_id);
-      const [h1, m1] = r.ora_inizio.split(':').map(Number);
-      const [h2, m2] = r.ora_fine.split(':').map(Number);
-      const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-
-      const isStraordinario = r.straordinario ? ' ⭐' : '';
-      const isRecupero = r.recupero ? ' ⏰' : '';
-
-      html += `<tr>`;
-      html += `<td><strong>${commessa?.nome || 'N/A'}</strong></td>`;
-      html += `<td>${r.ora_inizio || '-'}</td>`;
-      html += `<td>${r.ora_fine || '-'}</td>`;
-      html += `<td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td>`;
-      html += `<td>${r.descrizione || '-'}</td>`;
-      html += `</tr>`;
-    });
-
-    html += `</tbody></table></div>`;
-    html += `</div>`;
+  } catch (err) {
+    console.error('❌ Errore backup:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
   }
-
-  if (html === '') {
-    output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
-    return;
-  }
-
-  const headerHTML = `
-    <div class="calendario-dettagliato-info">
-      <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
-      <div class="info-totali">
-        <span>📊 ${registrazioniTotali} registrazioni</span>
-        <span>📅 ${giorniLavorati} giorni lavorati</span>
-        <span>⏱️ Totale: ${totaleMese.toFixed(2)}h</span>
-      </div>
-    </div>
-  `;
-
-  output.innerHTML = headerHTML + html;
 }
 
 // ============================================
-// SESSIONE PERSISTENTE
+// NUMERI MANCANTI — apertura da login
+// ============================================
+function apriNumeriMancanti() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('main-page').style.display = 'block';
+
+  document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+
+  const tabNM = document.getElementById('tab-numeri-mancanti');
+  if (tabNM) {
+    tabNM.style.display = 'inline-block';
+    tabNM.classList.add('active');
+  }
+
+  const panelNM = document.getElementById('panel-numeri-mancanti');
+  if (panelNM) panelNM.classList.add('active');
+
+  const btnLogout = document.querySelector('.btn-logout');
+  if (btnLogout) {
+    btnLogout.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+    btnLogout.onclick = function() {
+      document.getElementById('login-page').style.display = 'block';
+      document.getElementById('main-page').style.display = 'none';
+      btnLogout.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
+      btnLogout.onclick = logout;
+      document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
+    };
+  }
+
+  nmMostraSchermataCommesse();
+  nmCommessaCorrente = null;
+  nmCartellaCorrente = null;
+  nmCaricaListaCommesse();
+}
+
+function nmMostraSchermataCommesse() {
+  const s1 = document.getElementById('nm-schermata-commesse');
+  const s2 = document.getElementById('nm-schermata-cartelle');
+  if (s1) s1.style.display = 'block';
+  if (s2) s2.style.display = 'none';
+}
+
+function nmMostraSchermataCartelle() {
+  const s1 = document.getElementById('nm-schermata-commesse');
+  const s2 = document.getElementById('nm-schermata-cartelle');
+  if (s1) s1.style.display = 'none';
+  if (s2) s2.style.display = 'block';
+}
+
+async function nmCaricaListaCommesse() {
+  const div = document.getElementById('nm-lista-commesse');
+  if (!div) return;
+
+  div.innerHTML = '<p class="text-muted">⏳ Caricamento commesse...</p>';
+
+  try {
+    const snapshot = await nmGetCollection().orderBy('data_modifica', 'desc').get();
+
+    if (snapshot.empty) {
+      div.innerHTML = '<p class="text-muted">Nessuna commessa creata. Clicca "Crea Nuova Commessa" per iniziare.</p>';
+      return;
+    }
+
+    let html = '<div class="nm-commesse-grid">';
+
+    snapshot.forEach(doc => {
+      const commessa = doc.data();
+      const id = doc.id;
+
+      let totNumeri = 0;
+      if (commessa.cartelle) {
+        Object.keys(commessa.cartelle).forEach(k => {
+          if (Array.isArray(commessa.cartelle[k])) {
+            totNumeri += commessa.cartelle[k].length;
+          }
+        });
+      }
+
+      const dataMod = commessa.data_modifica
+        ? new Date(commessa.data_modifica).toLocaleDateString('it-IT', {
+            day: '2-digit', month: '2-digit', year: 'numeric'
+          })
+        : 'N/D';
+
+      const isAdmin = utenteCorrente && utenteCorrente.ruolo === 'admin';
+
+      html += `
+        <div class="nm-commessa-card">
+          <div class="nm-commessa-header" onclick="nmApriCommessa('${id}')">
+            <i class="fas fa-folder"></i>
+            <div class="nm-commessa-info">
+              <div class="nm-commessa-codice">${commessa.codice || id}</div>
+              <div class="nm-commessa-meta">${totNumeri} numeri · ${dataMod}</div>
+            </div>
+          </div>
+          ${isAdmin ? `<button class="nm-btn-cancella-commessa" onclick="event.stopPropagation(); nmRichiediCancellazione('${id}')" title="Cancella commessa"><i class="fas fa-trash"></i></button>` : ''}
+        </div>
+      `;
+    });
+
+    html += '</div>';
+    div.innerHTML = html;
+
+    snapshot.forEach(doc => {
+      nmCommesseCache[doc.id] = doc.data();
+    });
+
+  } catch (err) {
+    console.error('❌ Errore caricamento commesse:', err);
+    div.innerHTML = '<p class="error">Errore nel caricamento: ' + err.message + '</p>';
+  }
+}
+
+function nmApriCreaCommessa() {
+  document.getElementById('nm-input-4cifre').value = '';
+  document.getElementById('nm-input-6char').value = '';
+  document.getElementById('nm-msg-crea-commessa').innerHTML = '';
+  nmAggiornaPreview();
+  document.getElementById('nm-modal-crea-commessa').classList.add('active');
+  setTimeout(() => { document.getElementById('nm-input-4cifre').focus(); }, 200);
+}
+
+function nmChiudiCreaCommessa() {
+  document.getElementById('nm-modal-crea-commessa').classList.remove('active');
+}
+
+function nmAggiornaPreview() {
+  const cifre = document.getElementById('nm-input-4cifre').value;
+  const chars = document.getElementById('nm-input-6char').value;
+  const preview = document.getElementById('nm-preview-commessa');
+  if (!preview) return;
+
+  const cifreLabel = cifre.padEnd(4, '0') || '0000';
+  const charsLabel = chars.toUpperCase().padEnd(6, 'X') || 'XXXXXX';
+
+  preview.textContent = 'Anteprima: CC' + cifreLabel + '-A-' + charsLabel;
+}
+
+async function nmSalvaNuovaCommessa() {
+  const cifre = document.getElementById('nm-input-4cifre').value.trim();
+  const chars = document.getElementById('nm-input-6char').value.trim().toUpperCase();
+  const msg = document.getElementById('nm-msg-crea-commessa');
+
+  if (cifre.length !== 4) {
+    msg.innerHTML = '<div class="error">❌ Inserisci esattamente 4 cifre</div>';
+    return;
+  }
+  if (chars.length !== 6) {
+    msg.innerHTML = '<div class="error">❌ Inserisci esattamente 6 caratteri</div>';
+    return;
+  }
+
+  const codiceCompleto = 'CC' + cifre + '-A-' + chars;
+  msg.innerHTML = '<div class="info-msg">⏳ Verifica...</div>';
+
+  try {
+    const doc = await nmGetCollection().doc(codiceCompleto).get();
+    if (doc.exists) {
+      msg.innerHTML = '<div class="error">❌ Esiste già una commessa con questo codice</div>';
+      return;
+    }
+
+    const nuovaCommessa = {
+      id: codiceCompleto,
+      codice: codiceCompleto,
+      data_creazione: new Date().toISOString(),
+      data_modifica: new Date().toISOString(),
+      cartelle: { filo: [], cavo: [], adesive: [], targhette: [], morsetti: [] }
+    };
+
+    await nmGetCollection().doc(codiceCompleto).set(nuovaCommessa);
+
+    console.log('✅ Commessa creata:', codiceCompleto);
+    msg.innerHTML = '<div class="success">✅ Commessa creata!</div>';
+
+    setTimeout(() => {
+      nmChiudiCreaCommessa();
+      nmCaricaListaCommesse();
+    }, 800);
+
+  } catch (err) {
+    console.error('❌ Errore creazione commessa:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+}
+
+function nmApriCommessa(idCommessa) {
+  nmCommessaCorrente = idCommessa;
+  const titolo = document.getElementById('nm-commessa-corrente-titolo');
+  if (titolo) titolo.textContent = idCommessa;
+  nmAggiornaConteggiCartelle();
+  nmMostraSchermataCartelle();
+}
+
+async function nmAggiornaConteggiCartelle() {
+  if (!nmCommessaCorrente) return;
+
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) return;
+
+    const commessa = doc.data();
+    const cartelle = commessa.cartelle || {};
+
+    ['filo', 'cavo', 'adesive', 'targhette', 'morsetti'].forEach(tipo => {
+      const count = (cartelle[tipo] || []).length;
+      const el = document.getElementById('nm-count-' + tipo);
+      if (el) el.textContent = count;
+    });
+
+  } catch (err) {
+    console.error('❌ Errore conteggi:', err);
+  }
+}
+
+function nmTornaAlleCommesse() {
+  nmCommessaCorrente = null;
+  nmCartellaCorrente = null;
+  nmMostraSchermataCommesse();
+  nmCaricaListaCommesse();
+}
+
+async function nmApriCartella(tipo) {
+  if (!nmCommessaCorrente) return;
+
+  nmCartellaCorrente = tipo;
+
+  document.getElementById('nm-popup-titolo').textContent = NM_CARTELLE_LABEL[tipo];
+
+  // Mostra/nascondi i 2 tipi di input in base alla cartella
+  const inputSingolo = document.getElementById('nm-input-singolo');
+  const inputDoppio = document.getElementById('nm-input-doppio');
+
+  if (tipo === 'cavo') {
+    // CAVO → mostra doppio input
+    inputSingolo.style.display = 'none';
+    inputDoppio.style.display = 'flex';
+    document.getElementById('nm-cavo-sinistra').value = '';
+    document.getElementById('nm-cavo-destra').value = '';
+  } else {
+    // Altre cartelle → input singolo
+    inputSingolo.style.display = 'flex';
+    inputDoppio.style.display = 'none';
+    document.getElementById('nm-input-numero').value = '';
+  }
+
+  document.getElementById('nm-modal-popup').classList.add('active');
+
+  await nmCaricaNumeriCartella();
+
+  setTimeout(() => {
+    if (tipo === 'cavo') {
+      document.getElementById('nm-cavo-sinistra').focus();
+    } else {
+      document.getElementById('nm-input-numero').focus();
+    }
+  }, 200);
+}
+
+function nmChiudiPopup() {
+  document.getElementById('nm-modal-popup').classList.remove('active');
+  nmCartellaCorrente = null;
+  nmAggiornaConteggiCartelle();
+}
+
+async function nmCaricaNumeriCartella() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) return;
+
+  const div = document.getElementById('nm-lista-numeri');
+  div.innerHTML = '<p class="text-muted">⏳ Caricamento...</p>';
+
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) {
+      div.innerHTML = '<p class="error">Commessa non trovata</p>';
+      return;
+    }
+
+    const commessa = doc.data();
+    const numeri = (commessa.cartelle && commessa.cartelle[nmCartellaCorrente]) || [];
+
+    if (numeri.length === 0) {
+      div.innerHTML = '<p class="text-muted">Nessun numero inserito</p>';
+      return;
+    }
+
+    let html = '';
+    numeri.forEach((numero) => {
+      html += `
+        <div class="nm-numero-item" data-id="${numero.id}">
+          <span class="nm-numero-testo">- ${nmEscapaHtml(numero.testo)}</span>
+          <div class="nm-numero-azioni">
+            <button class="nm-btn-azione nm-btn-modifica" onclick="nmModificaNumero('${numero.id}')" title="Modifica"><i class="fas fa-edit"></i></button>
+            <button class="nm-btn-azione nm-btn-cancella" onclick="nmCancellaNumero('${numero.id}')" title="Cancella"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      `;
+    });
+
+    div.innerHTML = html;
+
+  } catch (err) {
+    console.error('❌ Errore caricamento numeri:', err);
+    div.innerHTML = '<p class="error">Errore: ' + err.message + '</p>';
+  }
+}
+
+async function nmAggiungiNumero() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) return;
+
+  let testo = '';
+
+  if (nmCartellaCorrente === 'cavo') {
+    // CAVO → leggi dalle 2 caselle
+    const sinistraInput = document.getElementById('nm-cavo-sinistra');
+    const destraInput = document.getElementById('nm-cavo-destra');
+    const sinistra = sinistraInput.value.trim().toUpperCase();
+    const destra = destraInput.value.trim().toUpperCase();
+
+    if (!sinistra && !destra) {
+      alert('⚠️ Compila entrambe le caselle');
+      sinistraInput.focus();
+      return;
+    }
+
+    if (!sinistra) {
+      alert('⚠️ Compila la casella sinistra');
+      sinistraInput.focus();
+      return;
+    }
+
+    if (!destra) {
+      alert('⚠️ Compila la casella destra');
+      destraInput.focus();
+      return;
+    }
+
+    testo = '-' + sinistra + '/-' + destra;
+
+  } else {
+    // Altre cartelle → 1 casella
+    const input = document.getElementById('nm-input-numero');
+    testo = input.value.trim().toUpperCase();
+
+    if (!testo) { input.focus(); return; }
+  }
+
+  try {
+    const docRef = nmGetCollection().doc(nmCommessaCorrente);
+    const doc = await docRef.get();
+    if (!doc.exists) { alert('❌ Commessa non trovata'); return; }
+
+    const commessa = doc.data();
+    if (!commessa.cartelle) commessa.cartelle = {};
+    if (!Array.isArray(commessa.cartelle[nmCartellaCorrente])) {
+      commessa.cartelle[nmCartellaCorrente] = [];
+    }
+
+    const nuovoNumero = {
+      id: 'n_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      testo: testo,
+      ordine: commessa.cartelle[nmCartellaCorrente].length,
+      data_aggiunta: new Date().toISOString()
+    };
+
+    commessa.cartelle[nmCartellaCorrente].push(nuovoNumero);
+    commessa.data_modifica = new Date().toISOString();
+
+    await docRef.set(commessa);
+
+    // Svuota gli input corretti
+    if (nmCartellaCorrente === 'cavo') {
+      document.getElementById('nm-cavo-sinistra').value = '';
+      document.getElementById('nm-cavo-destra').value = '';
+      document.getElementById('nm-cavo-sinistra').focus();
+    } else {
+      document.getElementById('nm-input-numero').value = '';
+      document.getElementById('nm-input-numero').focus();
+    }
+
+    await nmCaricaNumeriCartella();
+    console.log('✅ Numero aggiunto:', testo);
+
+  } catch (err) {
+    console.error('❌ Errore aggiunta numero:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
+async function nmModificaNumero(idNumero) {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) return;
+
+  try {
+    const docRef = nmGetCollection().doc(nmCommessaCorrente);
+    const doc = await docRef.get();
+    if (!doc.exists) return;
+
+    const commessa = doc.data();
+    const numeri = commessa.cartelle[nmCartellaCorrente] || [];
+    const numero = numeri.find(n => n.id === idNumero);
+    if (!numero) return;
+
+    let nuovoTesto = '';
+
+    if (nmCartellaCorrente === 'cavo') {
+      // CAVO → prompt separato per sinistra e destra
+      // Estrai i 2 pezzi dal testo attuale
+      // Formato attuale: -SINISTRA/-DESTRA
+      const parti = numero.testo.replace(/^-/, '').split('/-');
+      const sinistraAttuale = parti[0] || '';
+      const destraAttuale = parti[1] || '';
+
+      const nuovaSinistra = prompt('Modifica scritta SINISTRA:', sinistraAttuale);
+      if (nuovaSinistra === null) return;
+      if (!nuovaSinistra.trim()) { alert('❌ La scritta sinistra non può essere vuota'); return; }
+
+      const nuovaDestra = prompt('Modifica scritta DESTRA:', destraAttuale);
+      if (nuovaDestra === null) return;
+      if (!nuovaDestra.trim()) { alert('❌ La scritta destra non può essere vuota'); return; }
+
+      nuovoTesto = '-' + nuovaSinistra.trim().toUpperCase() + '/-' + nuovaDestra.trim().toUpperCase();
+
+    } else {
+      // Altre cartelle → prompt singolo
+      const nuovo = prompt('Modifica il numero:', numero.testo);
+      if (nuovo === null) return;
+      if (!nuovo.trim()) { alert('❌ Il numero non può essere vuoto'); return; }
+
+      nuovoTesto = nuovo.trim().toUpperCase();
+    }
+
+    numero.testo = nuovoTesto;
+    commessa.data_modifica = new Date().toISOString();
+
+    await docRef.set(commessa);
+    await nmCaricaNumeriCartella();
+    console.log('✅ Numero modificato:', nuovoTesto);
+
+  } catch (err) {
+    console.error('❌ Errore modifica:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+async function nmCancellaNumero(idNumero) {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) return;
+  if (!confirm('Cancellare questo numero?')) return;
+
+  try {
+    const docRef = nmGetCollection().doc(nmCommessaCorrente);
+    const doc = await docRef.get();
+    if (!doc.exists) return;
+
+    const commessa = doc.data();
+    commessa.cartelle[nmCartellaCorrente] = (commessa.cartelle[nmCartellaCorrente] || [])
+      .filter(n => n.id !== idNumero);
+    commessa.data_modifica = new Date().toISOString();
+
+    await docRef.set(commessa);
+    await nmCaricaNumeriCartella();
+    console.log('✅ Numero cancellato');
+
+  } catch (err) {
+    console.error('❌ Errore cancellazione:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
+async function nmCondividiCartella() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) return;
+
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) return;
+
+    const commessa = doc.data();
+    const numeri = (commessa.cartelle && commessa.cartelle[nmCartellaCorrente]) || [];
+
+    if (numeri.length === 0) {
+      alert('⚠️ Nessun numero da condividere');
+      return;
+    }
+
+    const numColonne = NM_CARTELLE_COLONNE[nmCartellaCorrente] || 3;
+    const righePerColonna = 38;
+
+    let colonneHTML = '';
+    for (let c = 0; c < numColonne; c++) {
+      const start = c * righePerColonna;
+      const end = start + righePerColonna;
+      const numeriColonna = numeri.slice(start, end);
+
+      colonneHTML += '<div class="a4-colonna">';
+      if (numeriColonna.length === 0) {
+        colonneHTML += '&nbsp;';
+      } else {
+        numeriColonna.forEach(num => {
+          colonneHTML += `<div class="a4-riga">- ${nmEscapaHtml(num.testo)}</div>`;
+        });
+      }
+      colonneHTML += '</div>';
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+        <meta charset="UTF-8">
+        <title>${commessa.codice} - ${NM_CARTELLE_LABEL[nmCartellaCorrente]}</title>
+        <style>
+          @page { size: A4 portrait; margin: 0; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: Arial, Helvetica, sans-serif; background: white; padding: 0; }
+          .a4-foglio { width: 21cm; height: 29.7cm; padding: 1.5cm 1cm; margin: 0 auto; background: white; display: flex; flex-direction: column; }
+          .a4-header { text-align: center; padding-bottom: 0.5cm; border-bottom: 2px solid #00695C; margin-bottom: 0.8cm; }
+          .a4-header h1 { font-size: 16pt; color: #00695C; margin-bottom: 0.3cm; }
+          .a4-header .a4-sottotitolo { font-size: 11pt; color: #555; }
+          .a4-header .a4-data { font-size: 9pt; color: #888; margin-top: 0.2cm; }
+          .a4-colonne { display: flex; gap: 0.5cm; flex: 1; overflow: hidden; }
+          .a4-colonna { flex: 1; border-right: 1px dashed #ddd; padding-right: 0.4cm; min-height: 0; overflow: hidden; }
+          .a4-colonna:last-child { border-right: none; }
+          .a4-riga { font-size: 13pt; line-height: 1.6; color: #222; padding: 1px 0; word-wrap: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          @media print { .a4-foglio { margin: 0; padding: 1.5cm 1cm; } body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="a4-foglio">
+          <div class="a4-header">
+            <h1>${commessa.codice} - ${NM_CARTELLE_LABEL[nmCartellaCorrente]}</h1>
+            <div class="a4-sottotitolo">MEC-ROY srls - Numeri Mancanti</div>
+            <div class="a4-data">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})}</div>
+          </div>
+          <div class="a4-colonne">${colonneHTML}</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const nomeFile = `${commessa.codice}_${NM_CARTELLE_LABEL[nmCartellaCorrente]}`.replace(/\s+/g, '_');
+    await scaricaOCondividiFile(html, nomeFile);
+
+  } catch (err) {
+    console.error('❌ Errore condivisione:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
+async function nmCondividiTuttaCommessa() {
+  if (!nmCommessaCorrente) { alert('⚠️ Nessuna commessa selezionata'); return; }
+
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) { alert('❌ Commessa non trovata'); return; }
+
+    const commessa = doc.data();
+    const cartelle = commessa.cartelle || {};
+
+    const ordine = ['filo', 'cavo', 'adesive', 'targhette', 'morsetti'];
+    const cartelleDaStampare = [];
+
+    ordine.forEach(tipo => {
+      const numeri = cartelle[tipo] || [];
+      if (numeri.length > 0) {
+        cartelleDaStampare.push({ tipo, numeri });
+      }
+    });
+
+    if (cartelleDaStampare.length === 0) {
+      alert('⚠️ Nessun numero inserito in questa commessa');
+      return;
+    }
+
+    let sezioniHTML = '';
+
+    cartelleDaStampare.forEach((cartella) => {
+      const tipo = cartella.tipo;
+      const numeri = cartella.numeri;
+      const label = NM_CARTELLE_LABEL[tipo];
+      const numColonne = NM_CARTELLE_COLONNE[tipo] || 3;
+      const righePerColonna = 38;
+
+      let colonneHTML = '';
+      for (let c = 0; c < numColonne; c++) {
+        const start = c * righePerColonna;
+        const end = start + righePerColonna;
+        const numeriColonna = numeri.slice(start, end);
+
+        colonneHTML += '<div class="a4-colonna">';
+        if (numeriColonna.length === 0) {
+          colonneHTML += '&nbsp;';
+        } else {
+          numeriColonna.forEach(num => {
+            colonneHTML += `<div class="a4-riga">- ${nmEscapaHtml(num.testo)}</div>`;
+          });
+        }
+        colonneHTML += '</div>';
+      }
+
+      sezioniHTML += `
+        <div class="a4-sezione">
+          <div class="a4-sezione-header">
+            <h2>${nmEscapaHtml(label)}</h2>
+            <span class="a4-sezione-count">${numeri.length} numeri</span>
+          </div>
+          <div class="a4-colonne">${colonneHTML}</div>
+        </div>
+      `;
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+        <meta charset="UTF-8">
+        <title>${commessa.codice} - Numeri Mancanti</title>
+        <style>
+          @page { size: A4 portrait; margin: 1.5cm 1cm; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: Arial, Helvetica, sans-serif; background: white; padding: 0; }
+          .a4-foglio { width: 21cm; min-height: 29.7cm; padding: 1.5cm 1cm; margin: 0 auto; background: white; }
+          .a4-header { text-align: center; padding-bottom: 0.5cm; border-bottom: 2px solid #00695C; margin-bottom: 1cm; }
+          .a4-header h1 { font-size: 16pt; color: #00695C; margin-bottom: 0.3cm; }
+          .a4-header .a4-sottotitolo { font-size: 11pt; color: #555; }
+          .a4-header .a4-data { font-size: 9pt; color: #888; margin-top: 0.2cm; }
+          .a4-sezione { margin-bottom: 1cm; page-break-inside: avoid; }
+          .a4-sezione-header { display: flex; justify-content: space-between; align-items: center; background: #00695C; color: white; padding: 8px 14px; border-radius: 6px 6px 0 0; margin-bottom: 0.4cm; }
+          .a4-sezione-header h2 { font-size: 13pt; color: white; margin: 0; letter-spacing: 0.5px; }
+          .a4-sezione-count { font-size: 10pt; background: rgba(255,255,255,0.25); padding: 2px 10px; border-radius: 10px; }
+          .a4-colonne { display: flex; gap: 0.5cm; }
+          .a4-colonna { flex: 1; border-right: 1px dashed #ddd; padding-right: 0.4cm; min-height: 0; }
+          .a4-colonna:last-child { border-right: none; }
+          .a4-riga { font-size: 12pt; line-height: 1.5; color: #222; padding: 1px 0; word-wrap: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          @media print { .a4-foglio { margin: 0; padding: 1.5cm 1cm; } body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="a4-foglio">
+          <div class="a4-header">
+            <h1>${commessa.codice} - Numeri Mancanti</h1>
+            <div class="a4-sottotitolo">MEC-ROY srls</div>
+            <div class="a4-data">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})}</div>
+          </div>
+          ${sezioniHTML}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const nomeFile = `${commessa.codice}_Numeri_Mancanti`;
+    await scaricaOCondividiFile(html, nomeFile);
+
+  } catch (err) {
+    console.error('❌ Errore condivisione commessa:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
+function nmRichiediCancellazione(idCommessa) {
+  if (!utenteCorrente || utenteCorrente.ruolo !== 'admin') {
+    alert('❌ Non sei autorizzato.\n\nSolo un amministratore può cancellare una commessa.');
+    return;
+  }
+
+  nmCommessaDaCancellare = idCommessa;
+  document.getElementById('nm-admin-password').value = '';
+  document.getElementById('nm-msg-admin').innerHTML = '';
+  document.getElementById('nm-modal-admin').classList.add('active');
+
+  setTimeout(() => {
+    document.getElementById('nm-admin-password').focus();
+  }, 200);
+}
+
+function nmChiudiAdmin() {
+  document.getElementById('nm-modal-admin').classList.remove('active');
+  nmCommessaDaCancellare = null;
+}
+
+async function nmConfermaCancellazione() {
+  if (!nmCommessaDaCancellare) return;
+
+  const password = document.getElementById('nm-admin-password').value;
+  const msg = document.getElementById('nm-msg-admin');
+
+  if (!password) {
+    msg.innerHTML = '<div class="error">Inserisci la password</div>';
+    return;
+  }
+
+  if (!utenteCorrente || utenteCorrente.ruolo !== 'admin') {
+    msg.innerHTML = '<div class="error">❌ Non sei autorizzato</div>';
+    return;
+  }
+
+  if (utenteCorrente.password !== password) {
+    msg.innerHTML = '<div class="error">❌ Password errata</div>';
+    return;
+  }
+
+  msg.innerHTML = '<div class="info-msg">⏳ Cancellazione...</div>';
+
+  try {
+    await nmGetCollection().doc(nmCommessaDaCancellare).delete();
+    console.log('✅ Commessa cancellata:', nmCommessaDaCancellare);
+
+    msg.innerHTML = '<div class="success">✅ Commessa cancellata!</div>';
+
+    setTimeout(() => {
+      nmChiudiAdmin();
+      nmCaricaListaCommesse();
+    }, 800);
+
+  } catch (err) {
+    console.error('❌ Errore cancellazione commessa:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+}
+
+function nmEscapaHtml(testo) {
+  if (!testo) return '';
+  return String(testo)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ============================================
+// APPROVA / RIFIUTA RICHIESTA
+// ============================================
+async function approvaRichiesta(id) {
+  try {
+    const datiFreschi = await caricaDaFirestore();
+    if (datiFreschi) {
+      dati = datiFreschi;
+      if (!dati.utenti) dati.utenti = [];
+      if (!dati.registrazioni) dati.registrazioni = [];
+      if (!dati.richieste) dati.richieste = [];
+      if (!dati.notifiche) dati.notifiche = [];
+    }
+  } catch (e) {
+    console.warn('⚠️ Impossibile rileggere Firestore:', e);
+  }
+
+  const richiesta = dati.richieste.find(r => r.id === id);
+  if (!richiesta) { alert('❌ Richiesta non trovata'); return; }
+
+  if (richiesta.stato !== 'pending') {
+    alert('⚠️ Questa richiesta è già stata processata.');
+    return;
+  }
+
+  richiesta.stato = 'approvata';
+
+  if (isWeekendOggi()) {
+    console.log('📵 Weekend: notifica push approvazione NON inviata');
+  } else {
+    try {
+      await db.collection('richieste_trigger').add({
+        richiesta_id: richiesta.id,
+        utente_id: richiesta.utente_id,
+        tipo: richiesta.tipo,
+        azione: 'approvata',
+        data_inizio: richiesta.data_inizio || null,
+        data_fine: richiesta.data_fine || null,
+        data: richiesta.data || null,
+        ora_inizio: richiesta.ora_inizio || null,
+        ora_fine: richiesta.ora_fine || null,
+        creato_il: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('⚠️ Errore trigger approvazione:', err);
+    }
+  }
+
+  const utenteIdCorretto = richiesta.utente_id;
+
+  if (richiesta.tipo === 'recupero_ore') {
+    const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
+    const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
+    let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+
+    if (oreLavorate <= 0 || oreLavorate > 12) {
+      alert('❌ ERRORE DATI: Orario non valido.');
+      richiesta.stato = 'pending';
+      return;
+    }
+
+    const ferieEsistenti = dati.registrazioni.filter(r =>
+      r.utente_id === utenteIdCorretto && r.data === richiesta.data && r.tipo === 'ferie'
+    );
+
+    const oreEsistenti = dati.registrazioni.filter(r =>
+      r.utente_id === utenteIdCorretto &&
+      r.data === richiesta.data &&
+      r.tipo === 'lavoro' &&
+      r.ora_inizio && r.ora_fine &&
+      !(richiesta.ora_fine <= r.ora_inizio || richiesta.ora_inizio >= r.ora_fine)
+    );
+    if (oreEsistenti.length > 0) {
+      alert('❌ Impossibile approvare: ci sono già ore registrate in questa fascia.');
+      richiesta.stato = 'pending';
+      return;
+    }
+
+    if (ferieEsistenti.length > 0) {
+      const conferma = confirm('⚠️ Il dipendente ha FERIE il ' + richiesta.data + '.\n\nApprovare?');
+      if (!conferma) { richiesta.stato = 'pending'; return; }
+
+      dati.registrazioni = dati.registrazioni.filter(r =>
+        !(r.utente_id === utenteIdCorretto && r.data === richiesta.data && r.tipo === 'ferie')
+      );
+
+      const orePermesso = 8 - oreLavorate;
+      if (orePermesso > 0) {
+        const hInizio = parseInt(richiesta.ora_inizio.split(':')[0]);
+        let permessoInizio, permessoFine;
+        if (hInizio < 12) {
+          permessoInizio = '13:00';
+          permessoFine = String(13 + orePermesso).padStart(2, '0') + ':00';
+        } else {
+          permessoInizio = '08:00';
+          permessoFine = String(8 + orePermesso).padStart(2, '0') + ':00';
+        }
+        dati.registrazioni.push({
+          id: prossimoId++, utente_id: utenteIdCorretto, commessa_id: null,
+          data: richiesta.data, ora_inizio: permessoInizio, ora_fine: permessoFine,
+          descrizione: 'Permesso (per recupero ore)', tipo: 'permesso', ore: orePermesso
+        });
+      }
+    }
+
+    dati.registrazioni.push({
+      id: prossimoId++, utente_id: utenteIdCorretto,
+      commessa_id: richiesta.commessa_id || null, data: richiesta.data,
+      ora_inizio: richiesta.ora_inizio, ora_fine: richiesta.ora_fine,
+      descrizione: richiesta.descrizione_lavoro || 'Recupero ore',
+      tipo: 'lavoro', recupero: true, ore: oreLavorate
+    });
+
+    aggiungiNotifica(utenteIdCorretto, 'recupero_approvato',
+      '✅ Le tue ore del ' + richiesta.data + ' sono state APPROVATE!', '#');
+
+  } else {
+    dati.registrazioni.push({
+      id: prossimoId++, utente_id: utenteIdCorretto, commessa_id: null,
+      data: richiesta.data_inizio, ora_inizio: '00:00', ora_fine: '00:00',
+      descrizione: richiesta.tipo + ' (approvata)', tipo: richiesta.tipo, richiesta_id: richiesta.id
+    });
+
+    if (richiesta.data_inizio !== richiesta.data_fine) {
+      let dataCorrente = new Date(richiesta.data_inizio);
+      const dataFine = new Date(richiesta.data_fine);
+      while (dataCorrente < dataFine) {
+        dataCorrente.setDate(dataCorrente.getDate() + 1);
+        const dataStr = dataCorrente.toISOString().split('T')[0];
+        dati.registrazioni.push({
+          id: prossimoId++, utente_id: utenteIdCorretto, commessa_id: null,
+          data: dataStr, ora_inizio: '00:00', ora_fine: '00:00',
+          descrizione: richiesta.tipo + ' (approvata)', tipo: richiesta.tipo, richiesta_id: richiesta.id
+        });
+      }
+    }
+
+    const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+    aggiungiNotifica(utenteIdCorretto, 'approvazione',
+      emoji[richiesta.tipo] + ' Richiesta APPROVATA ✅', '#');
+  }
+
+  await salvaDati();
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  caricaRichiesteDipendente();
+  aggiornaBadgeNotifiche();
+  alert('✅ Richiesta approvata!');
+}
+
+async function rifiutaRichiesta(id) {
+  try {
+    const datiFreschi = await caricaDaFirestore();
+    if (datiFreschi) {
+      dati = datiFreschi;
+      if (!dati.richieste) dati.richieste = [];
+    }
+  } catch (e) {
+    console.warn('⚠️ Impossibile rileggere Firestore:', e);
+  }
+
+  const richiesta = dati.richieste.find(r => r.id === id);
+  if (!richiesta) { alert('❌ Richiesta non trovata'); return; }
+
+  richiesta.stato = 'rifiutata';
+
+  if (isWeekendOggi()) {
+    console.log('📵 Weekend: notifica push rifiuto NON inviata');
+  } else {
+    try {
+      await db.collection('richieste_trigger').add({
+        richiesta_id: richiesta.id,
+        utente_id: richiesta.utente_id,
+        tipo: richiesta.tipo,
+        azione: 'rifiutata',
+        data_inizio: richiesta.data_inizio || null,
+        data_fine: richiesta.data_fine || null,
+        data: richiesta.data || null,
+        ora_inizio: richiesta.ora_inizio || null,
+        ora_fine: richiesta.ora_fine || null,
+        creato_il: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('⚠️ Errore trigger rifiuto:', err);
+    }
+  }
+
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  aggiungiNotifica(richiesta.utente_id, 'rifiuto',
+    emoji[richiesta.tipo] + ' La tua richiesta è stata RIFIUTATA ❌', '#');
+
+  await salvaDati();
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  caricaRichiesteDipendente();
+  aggiornaBadgeNotifiche();
+  alert('❌ Richiesta rifiutata.');
+}
+
+// ============================================
+// SESSIONI
 // ============================================
 function salvaSessione(username) {
   if (!username) return;
@@ -3465,31 +4082,22 @@ function leggiSessione() {
 
 function caricaCredenzialiSalvate() {
   const ricordamiAttivo = localStorage.getItem('ricordami_attivo');
-
   if (ricordamiAttivo === 'true') {
     const username = localStorage.getItem('ricordami_username');
     const password = localStorage.getItem('ricordami_password');
-
     if (username && password) {
       document.getElementById('username').value = username;
       document.getElementById('password').value = password;
       document.getElementById('ricordami').checked = true;
-
-      setTimeout(() => {
-        document.querySelector('.login-box button').focus();
-      }, 100);
+      setTimeout(() => { document.querySelector('.login-box button').focus(); }, 100);
     }
   }
 }
 
-// ============================================
-// ⭐ LOGOUT — con disattivazione realtime
-// ============================================
 function logout() {
   cancellaSessione();
   utenteCorrente = null;
 
-  // ⭐ Ferma ascolto realtime
   if (_unsubscribeSnapshot) {
     _unsubscribeSnapshot();
     _unsubscribeSnapshot = null;
@@ -3517,7 +4125,239 @@ function logout() {
 }
 
 // ============================================
-// ⭐ AVVIO — con attivazione realtime
+// HELPER: Scarica o Condividi file
+// ============================================
+async function scaricaOCondividiFile(htmlContent, fileNameBase) {
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const fileName = `${fileNameBase}_${new Date().toISOString().split('T')[0]}.html`;
+  const file = new File([blob], fileName, { type: 'text/html' });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: fileNameBase, text: 'Report MEC-ROY' });
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      console.warn('Condivisione non disponibile, uso download...', error);
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    alert('📄 File scaricato!\n\nSu telefono:\n1. Apri il file "Download" o "File"\n2. Tocca il file appena scaricato\n3. Usa "Stampa" o "Condividi" per salvarlo come PDF');
+  }
+}
+
+// ============================================
+// SMART TIME INPUT
+// ============================================
+const SMART_TIME_DEFS = {
+  'ora-inizio': { next: 'ora-fine' },
+  'ora-fine': { next: 'descrizione' },
+  'recupero-ora-inizio': { next: 'recupero-ora-fine' },
+  'recupero-ora-fine': { next: 'recupero-motivo' }
+};
+
+function initSmartTime(input) {
+  if (!input || input.dataset.smartInit === '1') return;
+  input.dataset.smartInit = '1';
+
+  input.dataset.smartPhase = 'ore';
+  input.dataset.smartOre = '';
+  input.dataset.smartMinuti = '';
+
+  input.addEventListener('focus', () => {
+    if (input.dataset.smartOre.length === 2 && input.dataset.smartMinuti.length === 2) {
+      input.dataset.smartPhase = 'ore';
+      input.dataset.smartOre = '';
+      input.dataset.smartMinuti = '';
+      input.value = '';
+    }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const controllo = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'];
+    if (controllo.includes(e.key)) {
+      if (e.key === 'Backspace') { e.preventDefault(); gestisciBackspace(input); }
+      if (e.key === 'Enter') { e.preventDefault(); saltaAlProssimo(input); }
+      return;
+    }
+    if (!/^\d$/.test(e.key)) { e.preventDefault(); return; }
+    e.preventDefault();
+    gestisciCifra(input, e.key);
+  });
+}
+
+function gestisciCifra(input, cifra) {
+  const fase = input.dataset.smartPhase;
+  let ore = input.dataset.smartOre;
+  let minuti = input.dataset.smartMinuti;
+
+  if (fase === 'ore') {
+    const tentativo = ore + cifra;
+    if (ore === '') {
+      if (cifra >= '3' && cifra <= '9') {
+        ore = '0' + cifra;
+        input.dataset.smartOre = ore;
+        input.dataset.smartPhase = 'minuti';
+        input.value = ore + ':';
+        return;
+      } else {
+        ore = cifra;
+        input.dataset.smartOre = ore;
+        input.value = ore + ':';
+        return;
+      }
+    } else {
+      const oreNum = parseInt(tentativo, 10);
+      if (oreNum >= 0 && oreNum <= 24) {
+        let oreFinali;
+        if (oreNum === 24) oreFinali = '24';
+        else oreFinali = tentativo.padStart(2, '0');
+        input.dataset.smartOre = oreFinali;
+        input.dataset.smartPhase = 'minuti';
+        input.value = oreFinali + ':';
+        return;
+      }
+    }
+  }
+
+  if (fase === 'minuti') {
+    const tentativo = minuti + cifra;
+    if (minuti === '') {
+      if (cifra >= '6' && cifra <= '9') {
+        minuti = '0' + cifra;
+        input.dataset.smartMinuti = minuti;
+        input.value = input.dataset.smartOre + ':' + minuti;
+        saltaAlProssimo(input);
+        return;
+      } else {
+        minuti = cifra;
+        input.dataset.smartMinuti = minuti;
+        input.value = input.dataset.smartOre + ':' + minuti;
+        return;
+      }
+    } else {
+      const minNum = parseInt(tentativo, 10);
+      if (minNum >= 0 && minNum <= 59) {
+        const minFinali = tentativo.padStart(2, '0');
+        input.dataset.smartMinuti = minFinali;
+        input.value = input.dataset.smartOre + ':' + minFinali;
+        saltaAlProssimo(input);
+        return;
+      }
+    }
+  }
+}
+
+function gestisciBackspace(input) {
+  const fase = input.dataset.smartPhase;
+  let ore = input.dataset.smartOre;
+  let minuti = input.dataset.smartMinuti;
+
+  if (fase === 'minuti') {
+    if (minuti.length > 0) {
+      minuti = minuti.slice(0, -1);
+      input.dataset.smartMinuti = minuti;
+      input.value = ore + ':' + minuti;
+    } else {
+      input.dataset.smartPhase = 'ore';
+      if (ore.length > 0) {
+        ore = ore.slice(0, -1);
+        input.dataset.smartOre = ore;
+      }
+      input.value = ore + (ore ? ':' : '');
+    }
+  } else if (fase === 'ore') {
+    if (ore.length > 0) {
+      ore = ore.slice(0, -1);
+      input.dataset.smartOre = ore;
+      input.value = ore + (ore ? ':' : '');
+    }
+  }
+}
+
+function saltaAlProssimo(input) {
+  const id = input.id;
+  const def = SMART_TIME_DEFS[id];
+  if (def && def.next) {
+    const next = document.getElementById(def.next);
+    if (next) {
+      setTimeout(() => {
+        next.focus();
+        if (typeof next.select === 'function') next.select();
+      }, 50);
+    }
+  }
+}
+
+// ============================================
+// NOTIFICHE PUSH FCM
+// ============================================
+const VAPID_KEY = 'BGDim7zjRi-WXyIDYoKnZjAX92fChXCHo1uUZKOef9l2cHSu6FJrInHrB4IEFAJewF8TrJCDzTsNR1BANwLUml0';
+
+async function chiediPermessoNotifiche() {
+  if (!utenteCorrente) return;
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'denied') return;
+
+  if (Notification.permission === 'default') {
+    const permesso = await Notification.requestPermission();
+    if (permesso !== 'granted') return;
+  }
+
+  try {
+    const swReg = await navigator.serviceWorker.register(
+      './firebase-messaging-sw.js',
+      { scope: './firebase-cloud-messaging-push-scope' }
+    );
+
+    await navigator.serviceWorker.ready;
+
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: swReg
+    });
+
+    if (!token) return;
+
+    console.log('✅ Token FCM ottenuto:', token);
+    window._tokenFCMDebug = token;
+
+    const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
+    if (!utente) return;
+    if (utente.token_fcm === token) return;
+
+    utente.token_fcm = token;
+    await salvaDati();
+    console.log('✅ Token FCM salvato');
+
+  } catch (err) {
+    console.error('❌ Errore getToken:', err);
+  }
+}
+
+async function ascoltaRinnovoToken() {
+  if (!utenteCorrente) return;
+  try {
+    const messaging = firebase.messaging();
+    messaging.onTokenRefresh(async () => {
+      await chiediPermessoNotifiche();
+    });
+  } catch (err) {}
+}
+
+// ============================================
+// AVVIO + CLICK FUORI MODALI
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
   caricaCredenzialiSalvate();
@@ -3532,7 +4372,6 @@ document.addEventListener('DOMContentLoaded', function() {
       const utente = dati.utenti.find(u => u.username === usernameSalvato);
       if (utente) {
         utenteCorrente = utente;
-
         document.getElementById('username').value = utente.username;
 
         document.getElementById('login-page').style.display = 'none';
@@ -3552,6 +4391,7 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('tab-commesse').style.display = 'inline-block';
           document.getElementById('tab-dipendenti').style.display = 'inline-block';
           document.getElementById('tab-calendario').style.display = 'inline-block';
+          document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
           document.getElementById('cal-filtro-dipendente').style.display = 'block';
           document.getElementById('btn-password').style.display = 'flex';
           document.getElementById('azienda-container').style.display = 'inline-block';
@@ -3573,6 +4413,7 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('tab-commesse').style.display = 'none';
           document.getElementById('tab-dipendenti').style.display = 'none';
           document.getElementById('tab-calendario').style.display = 'inline-block';
+          document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
           document.getElementById('cal-filtro-dipendente').style.display = 'none';
           document.getElementById('btn-password').style.display = 'none';
           document.getElementById('azienda-container').style.display = 'none';
@@ -3583,10 +4424,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('notifiche-container').style.display = 'inline-block';
         aggiornaBadgeNotifiche();
         caricaDarkMode();
-
-        const adesso = new Date();
-        document.getElementById('cal-mese').value = adesso.getMonth() + 1;
-        document.getElementById('cal-anno').value = adesso.getFullYear();
 
         const oggi = new Date().toISOString().split('T')[0];
         const dataReg = document.getElementById('data-reg');
@@ -3625,11 +4462,6 @@ document.addEventListener('DOMContentLoaded', function() {
               oraInizio.disabled = false;
               oraInizio.style.backgroundColor = 'white';
               oraInizio.style.cursor = 'text';
-              document.getElementById('info-registrazione').innerHTML = `
-                <div class="info-msg" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;">
-                  ⏰ <strong>Modalità Straordinario attivata!</strong> Le ore oltre le 8 verranno segnate come straordinario.
-                </div>
-              `;
             } else {
               caricaUltimaRegistrazione();
             }
@@ -3637,13 +4469,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
           caricaUltimaRegistrazione();
         }
-
-        const menuC = document.getElementById('commesse-menu');
-        const aggC  = document.getElementById('commesse-aggiungi');
-        const anaC  = document.getElementById('commesse-analizza');
-        if (menuC) menuC.style.display = 'block';
-        if (aggC)  aggC.style.display  = 'none';
-        if (anaC)  anaC.style.display  = 'none';
 
         caricaSelectCommesse();
         caricaListaCommesse();
@@ -3656,9 +4481,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (el) initSmartTime(el);
         });
 
-        // ⭐ Attiva ascolto realtime dopo auto-login
         attivaAscoltoRealtime();
-
         return;
       } else {
         cancellaSessione();
@@ -3672,823 +4495,91 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('login-page').style.display = 'block';
     document.getElementById('main-page').style.display = 'none';
   });
-});
 
-// ============================================
-// HELPER: Scarica o Condividi file
-// ============================================
-async function scaricaOCondividiFile(htmlContent, fileNameBase) {
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  const fileName = `${fileNameBase}_${new Date().toISOString().split('T')[0]}.html`;
-  const file = new File([blob], fileName, { type: 'text/html' });
+  // Input listener Numeri Mancanti
+  const input4 = document.getElementById('nm-input-4cifre');
+  const input6 = document.getElementById('nm-input-6char');
 
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: fileNameBase,
-        text: 'Report MEC-ROY'
-      });
-      return;
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      console.warn('Condivisione non disponibile, uso download...', error);
-    }
-  }
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-    alert('📄 File scaricato!\n\nSu telefono:\n1. Apri il file "Download" o "File"\n2. Tocca il file appena scaricato\n3. Usa "Stampa" o "Condividi" per salvarlo come PDF');
-  }
-}
-
-function apriModalBackup() {
-  if (utenteCorrente?.ruolo !== 'admin') {
-    alert('Solo gli amministratori possono scaricare il backup');
-    return;
-  }
-  document.getElementById('msg-backup').innerHTML = '';
-  document.getElementById('modal-backup').classList.add('active');
-}
-
-function chiudiModalBackup() {
-  document.getElementById('modal-backup').classList.remove('active');
-}
-
-async function eseguiBackup() {
-  if (utenteCorrente?.ruolo !== 'admin') return;
-
-  const tipo = document.querySelector('input[name="backup-tipo"]:checked')?.value || 'tutto';
-  const msg = document.getElementById('msg-backup');
-
-  msg.innerHTML = '<div class="info-msg">⏳ Generazione backup in corso...</div>';
-
-  try {
-    await new Promise(r => setTimeout(r, 100));
-
-    const zip = new JSZip();
-    const dataOggi = new Date().toISOString().split('T')[0];
-    const nomeCartella = `MEC-ROY_Backup_${dataOggi}`;
-    const root = zip.folder(nomeCartella);
-
-    const stiliComuni = `
-      <style>
-        * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #333; background: #f5f5f5; margin: 0; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-        h1 { color: #00695C; margin: 5px 0; font-size: 1.6em; }
-        h2 { color: #00695C; margin: 5px 0; font-size: 1.2em; font-weight: 500; }
-        h3 { color: #333; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; table-layout: fixed; }
-        th, td { border: 1px solid #ddd; padding: 6px 4px; text-align: center; overflow: hidden; }
-        th { background: #00695C; color: white; font-weight: 600; font-size: 11px; }
-        td:first-child, th:first-child { text-align: left; padding-left: 10px; min-width: 130px; width: 130px; white-space: nowrap; }
-        tr:nth-child(even) td { background: #fafafa; }
-        .gruppo { margin-bottom: 25px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
-        .gruppo-header { background: linear-gradient(135deg, #00695C 0%, #004D40 100%); color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; }
-        .gruppo-header h4 { margin: 0; font-size: 1em; font-weight: 500; }
-        .totale { background: #fff3cd; border: 2px solid #ffc107; padding: 12px; text-align: center; font-weight: bold; border-radius: 8px; color: #856404; margin: 20px 0; }
-        .header-info { text-align: center; padding: 10px 0 15px 0; border-bottom: 2px solid #00695C; margin-bottom: 20px; }
-        .header-info h1 { border: none; margin: 5px 0; }
-        .header-info p { color: #888; margin: 3px 0; font-size: 12px; }
-        .footer { text-align: center; padding: 15px; color: #888; font-size: 11px; border-top: 2px solid #ddd; margin-top: 30px; }
-        .subtotale { background: rgba(255,255,255,0.25); padding: 3px 10px; border-radius: 10px; font-size: 12px; }
-        .badge { display: inline-block; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: bold; margin-left: 3px; }
-        .badge.straordinario { background: #d32f2f; color: white; }
-        .badge.recupero { background: #ffc107; color: #333; }
-        .legenda { margin: 15px 0; padding: 10px 15px; background: #f8f9fa; border-radius: 6px; font-size: 12px; color: #555; }
-        .wrap { overflow-x: auto; }
-        @media print {
-          body { background: white; padding: 0; }
-          .container { box-shadow: none; padding: 10px; }
-        }
-      </style>
-    `;
-
-    const intestazione = (titolo, sottotitolo) => `
-      <div class="header-info">
-        <h1>MEC-ROY srls</h1>
-        <h2>${titolo}</h2>
-        ${sottotitolo ? `<p>${sottotitolo}</p>` : ''}
-        <p>Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
-      </div>
-    `;
-
-    const pieDiPagina = `
-      <div class="footer">
-        MEC-ROY srls - Sistema di Gestione Lavoro<br>
-        Documento generato automaticamente dal backup
-      </div>
-    `;
-
-    const headHTML = (titolo) => `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${titolo}</title>${stiliComuni}</head><body><div class="container">`;
-
-    function renderRiepilogoMensile(anno, mese) {
-      const giorniMese = new Date(anno, mese, 0).getDate();
-      const mesePadded = String(mese).padStart(2, '0');
-      const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-        'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
-      const giorniSett = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
-
-      const dipendenti = dati.utenti.filter(u => u.ruolo === 'dipendente')
-        .sort((a,b) => (a.cognome || '').localeCompare(b.cognome || ''));
-
-      let html = `<table><thead><tr><th>Dipendente</th>`;
-      for (let g = 1; g <= giorniMese; g++) {
-        const giornoSett = new Date(anno, mese - 1, g).getDay();
-        const isWeekend = giornoSett === 0 || giornoSett === 6;
-        const bg = isWeekend ? '#004D40' : '#00695C';
-        html += `<th style="background:${bg};">${g}<br><span style="font-weight:400;font-size:10px;opacity:0.85;">${giorniSett[giornoSett]}</span></th>`;
+  if (input4) {
+    input4.addEventListener('input', function() {
+      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4);
+      nmAggiornaPreview();
+      if (this.value.length === 4) {
+        document.getElementById('nm-input-6char').focus();
       }
-      html += `<th style="background:#004D40;">Totale</th></tr></thead><tbody>`;
-
-      dipendenti.forEach(dip => {
-        html += `<tr><td><strong>${dip.cognome || ''} ${dip.nome || ''}</strong></td>`;
-        let totaleOre = 0;
-
-        for (let g = 1; g <= giorniMese; g++) {
-          const data = `${anno}-${mesePadded}-${String(g).padStart(2,'0')}`;
-          const giornoSett = new Date(anno, mese - 1, g).getDay();
-          const isWeekend = giornoSett === 0 || giornoSett === 6;
-
-          const regs = dati.registrazioni.filter(r =>
-            r.utente_id === dip.username && r.data === data
-          );
-
-          let cella = '';
-          let bg = 'white';
-
-          if (regs.length > 0) {
-            const haFerie = regs.some(r => r.tipo === 'ferie');
-            const haPermesso = regs.some(r => r.tipo === 'permesso');
-            const haMalattia = regs.some(r => r.tipo === 'malattia');
-            const haLavoro = regs.some(r => r.tipo === 'lavoro');
-            const haStraordinario = regs.some(r => r.straordinario === true);
-            const haRecupero = regs.some(r => r.recupero === true);
-
-            if (haFerie) { cella = 'F'; bg = '#E3F2FD'; }
-            else if (haPermesso) { cella = 'P'; bg = '#FFF3E0'; }
-            else if (haMalattia) { cella = 'M'; bg = '#FFEBEE'; }
-            else if (haLavoro) {
-              let oreG = 0;
-              regs.forEach(r => {
-                if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
-                  const [h1, m1] = r.ora_inizio.split(':').map(Number);
-                  const [h2, m2] = r.ora_fine.split(':').map(Number);
-                  oreG += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-                }
-              });
-              totaleOre += oreG;
-              if (haStraordinario) { cella = oreG.toFixed(1) + 'h★'; bg = '#ffebee'; }
-              else if (haRecupero) { cella = oreG.toFixed(1) + 'h⏰'; bg = '#fff3cd'; }
-              else { cella = oreG.toFixed(1) + 'h'; bg = '#E8F5E9'; }
-            }
-          } else {
-            if (isWeekend) { cella = '/'; bg = '#f5f5f5'; }
-            else {
-              const dataObj = new Date(data + 'T00:00:00');
-              const oggi = new Date(); oggi.setHours(0,0,0,0);
-              if (dataObj < oggi) { cella = 'A'; bg = '#f5f5f5'; }
-            }
-          }
-
-          html += `<td style="background:${bg};">${cella}</td>`;
-        }
-
-        html += `<td style="background:#e8f5e9;font-weight:bold;color:#2e7d32;">${totaleOre.toFixed(1)}h</td></tr>`;
-      });
-
-      html += `</tbody></table>`;
-
-      const legenda = `<div class="legenda"><strong>Legenda:</strong> F = Ferie · P = Permesso · M = Malattia · A = Assente · / = Weekend · Xh = Ore lavorate · ★ = Straordinario · ⏰ = Recupero</div>`;
-
-      return `${headHTML(`Riepilogo ${meseNome} ${anno}`)}
-        ${intestazione(`Riepilogo Mensile - ${meseNome} ${anno}`, `Tutti i dipendenti`)}
-        ${legenda}
-        <div class="wrap">${html}</div>
-        ${pieDiPagina}
-      </div></body></html>`;
-    }
-
-    function renderDipendenteMensile(dip, anno, mese, registrazioni) {
-      const giorniMese = new Date(anno, mese, 0).getDate();
-      const mesePadded = String(mese).padStart(2, '0');
-      const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-        'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
-      const giorniSett = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
-
-      const perGiorno = {};
-      registrazioni.forEach(r => {
-        if (!perGiorno[r.data]) perGiorno[r.data] = [];
-        perGiorno[r.data].push(r);
-      });
-
-      let htmlCalendario = `<div class="wrap"><table><thead><tr>`;
-      for (let g = 1; g <= giorniMese; g++) {
-        const giornoSett = new Date(anno, mese - 1, g).getDay();
-        const isWeekend = giornoSett === 0 || giornoSett === 6;
-        const bg = isWeekend ? '#004D40' : '#00695C';
-        htmlCalendario += `<th style="background:${bg};width:calc(100% / ${giorniMese});">${g}<br><span style="font-weight:400;font-size:10px;opacity:0.85;">${giorniSett[giornoSett]}</span></th>`;
-      }
-      htmlCalendario += `</tr></thead><tbody><tr>`;
-
-      let totaleMese = 0;
-
-      for (let g = 1; g <= giorniMese; g++) {
-        const data = `${anno}-${mesePadded}-${String(g).padStart(2,'0')}`;
-        const giornoSett = new Date(anno, mese - 1, g).getDay();
-        const isWeekend = giornoSett === 0 || giornoSett === 6;
-        const regs = perGiorno[data] || [];
-
-        let cella = '';
-        let bg = 'white';
-
-        if (regs.length > 0) {
-          const haFerie = regs.some(r => r.tipo === 'ferie');
-          const haPermesso = regs.some(r => r.tipo === 'permesso');
-          const haMalattia = regs.some(r => r.tipo === 'malattia');
-          const haLavoro = regs.some(r => r.tipo === 'lavoro');
-          const haStraordinario = regs.some(r => r.straordinario === true);
-          const haRecupero = regs.some(r => r.recupero === true);
-
-          if (haFerie) { cella = 'F'; bg = '#E3F2FD'; }
-          else if (haPermesso) { cella = 'P'; bg = '#FFF3E0'; }
-          else if (haMalattia) { cella = 'M'; bg = '#FFEBEE'; }
-          else if (haLavoro) {
-            let oreG = 0;
-            regs.forEach(r => {
-              if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
-                const [h1, m1] = r.ora_inizio.split(':').map(Number);
-                const [h2, m2] = r.ora_fine.split(':').map(Number);
-                oreG += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-              }
-            });
-            totaleMese += oreG;
-            if (haStraordinario) { cella = oreG.toFixed(1) + 'h★'; bg = '#ffebee'; }
-            else if (haRecupero) { cella = oreG.toFixed(1) + 'h⏰'; bg = '#fff3cd'; }
-            else { cella = oreG.toFixed(1) + 'h'; bg = '#E8F5E9'; }
-          }
-        } else {
-          if (isWeekend) { cella = '/'; bg = '#f5f5f5'; }
-          else {
-            const dataObj = new Date(data + 'T00:00:00');
-            const oggi = new Date(); oggi.setHours(0,0,0,0);
-            if (dataObj < oggi) { cella = 'A'; bg = '#f5f5f5'; }
-          }
-        }
-
-        htmlCalendario += `<td style="background:${bg};padding:8px 4px;">${cella}</td>`;
-      }
-
-      htmlCalendario += `</tr></tbody></table></div>`;
-
-      const giorniConRegs = Object.keys(perGiorno).sort();
-
-      let htmlDettaglio = '';
-      if (giorniConRegs.length > 0) {
-        htmlDettaglio += `<h3 style="margin-top:25px;">📋 Dettaglio giorno per giorno</h3>`;
-
-        for (const data of giorniConRegs) {
-          const regs = perGiorno[data].sort((a,b) => (a.ora_inizio||'').localeCompare(b.ora_inizio||''));
-          const dataObj = new Date(data + 'T00:00:00');
-          const dataFormattata = dataObj.toLocaleDateString('it-IT', {
-            weekday: 'long', day: 'numeric', month: 'long'
-          });
-
-          let totGiorno = 0;
-          regs.forEach(r => {
-            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
-              const [h1, m1] = r.ora_inizio.split(':').map(Number);
-              const [h2, m2] = r.ora_fine.split(':').map(Number);
-              totGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-            }
-          });
-
-          htmlDettaglio += `<div class="gruppo">`;
-          htmlDettaglio += `<div class="gruppo-header"><h4>📅 ${dataFormattata}</h4><span class="subtotale">${totGiorno.toFixed(2)}h</span></div>`;
-          htmlDettaglio += `<table><thead><tr><th style="text-align:left;width:auto;">Commessa</th><th style="width:80px;">Inizio</th><th style="width:80px;">Fine</th><th style="width:90px;">Ore</th><th style="text-align:left;width:auto;">Descrizione</th></tr></thead><tbody>`;
-
-          regs.forEach(r => {
-            const commessa = dati.commesse.find(c => c.id === r.commessa_id);
-            const [h1, m1] = r.ora_inizio.split(':').map(Number);
-            const [h2, m2] = r.ora_fine.split(':').map(Number);
-            const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-
-            let badge = '';
-            if (r.straordinario) badge += '<span class="badge straordinario">STRAORD.</span>';
-            if (r.recupero) badge += '<span class="badge recupero">RECUPERO</span>';
-
-            htmlDettaglio += `<tr>
-              <td style="text-align:left;"><strong>${commessa?.nome || 'N/A'}</strong></td>
-              <td>${r.ora_inizio || '-'}</td>
-              <td>${r.ora_fine || '-'}</td>
-              <td><strong>${ore.toFixed(2)}h</strong>${badge}</td>
-              <td style="text-align:left;">${r.descrizione || '-'}</td>
-            </tr>`;
-          });
-
-          htmlDettaglio += `</tbody></table></div>`;
-        }
-      }
-
-      const legenda = `<div class="legenda"><strong>Legenda:</strong> F = Ferie · P = Permesso · M = Malattia · A = Assente · / = Weekend · Xh = Ore lavorate · ★ = Straordinario · ⏰ = Recupero</div>`;
-
-      return `${headHTML(`Ore ${meseNome} ${anno} - ${dip.nome} ${dip.cognome}`)}
-        ${intestazione(`Ore Mensili - ${meseNome} ${anno}`, `${dip.cognome} ${dip.nome}`)}
-        ${legenda}
-        <div class="totale">📊 TOTALE MESE: ${totaleMese.toFixed(2)}h</div>
-        ${htmlCalendario}
-        ${htmlDettaglio}
-        ${pieDiPagina}
-      </div></body></html>`;
-    }
-
-    if (tipo === 'tutto' || tipo === 'ore') {
-      const cartellaOre = root.folder('Ore_Mensili');
-
-      const combinazioni = new Set();
-      dati.registrazioni.forEach(r => {
-        if (r.data && r.data.length >= 7) combinazioni.add(r.data.substring(0, 7));
-      });
-
-      const combinazioniOrdinate = [...combinazioni].sort();
-      const dipendentiOrdinati = dati.utenti
-        .filter(u => u.ruolo === 'dipendente')
-        .sort((a,b) => (a.cognome || '').localeCompare(b.cognome || ''));
-
-      for (const annoMese of combinazioniOrdinate) {
-        const [anno, mese] = annoMese.split('-').map(Number);
-        const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-          'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
-
-        const cartellaMese = cartellaOre.folder(annoMese);
-
-        const htmlRiepilogo = renderRiepilogoMensile(anno, mese);
-        cartellaMese.file(`Riepilogo_${meseNome}_${anno}.html`, htmlRiepilogo);
-
-        for (const dip of dipendentiOrdinati) {
-          const regs = dati.registrazioni.filter(r =>
-            r.utente_id === dip.username && r.data.startsWith(annoMese)
-          );
-          if (regs.length === 0) continue;
-
-          const htmlSingolo = renderDipendenteMensile(dip, anno, mese, regs);
-          cartellaMese.file(`${dip.cognome}_${dip.nome}.html`, htmlSingolo);
-        }
-      }
-    }
-
-    if (tipo === 'tutto') {
-      const cartellaDip = root.folder('Dipendenti');
-      const dipendenti = dati.utenti.filter(u => u.ruolo === 'dipendente')
-        .sort((a,b) => (a.cognome || '').localeCompare(b.cognome || ''));
-
-      for (const dip of dipendenti) {
-        const registrazioni = dati.registrazioni.filter(r => r.utente_id === dip.username);
-        if (registrazioni.length === 0) continue;
-
-        const perGiorno = {};
-        registrazioni.forEach(r => {
-          if (!perGiorno[r.data]) perGiorno[r.data] = [];
-          perGiorno[r.data].push(r);
-        });
-
-        const giorniOrdinati = Object.keys(perGiorno).sort();
-
-        let htmlGiorni = '';
-        let totaleGenerale = 0;
-
-        for (const data of giorniOrdinati) {
-          const regs = perGiorno[data].sort((a,b) => (a.ora_inizio||'').localeCompare(b.ora_inizio||''));
-          const dataObj = new Date(data + 'T00:00:00');
-          const dataFormattata = dataObj.toLocaleDateString('it-IT', {
-            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-          });
-
-          let totGiorno = 0;
-          regs.forEach(r => {
-            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
-              const [h1, m1] = r.ora_inizio.split(':').map(Number);
-              const [h2, m2] = r.ora_fine.split(':').map(Number);
-              totGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-            }
-          });
-          totaleGenerale += totGiorno;
-
-          htmlGiorni += `<div class="gruppo">`;
-          htmlGiorni += `<div class="gruppo-header"><h4>📅 ${dataFormattata}</h4><span class="subtotale">${totGiorno.toFixed(2)}h</span></div>`;
-          htmlGiorni += `<table><thead><tr><th style="width:auto;text-align:left;">Commessa</th><th style="width:80px;">Inizio</th><th style="width:80px;">Fine</th><th style="width:90px;">Ore</th><th style="width:auto;text-align:left;">Descrizione</th></tr></thead><tbody>`;
-
-          regs.forEach(r => {
-            const commessa = dati.commesse.find(c => c.id === r.commessa_id);
-            const [h1, m1] = r.ora_inizio.split(':').map(Number);
-            const [h2, m2] = r.ora_fine.split(':').map(Number);
-            const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-
-            let badge = '';
-            if (r.straordinario) badge += '<span class="badge straordinario">STRAORD.</span>';
-            if (r.recupero) badge += '<span class="badge recupero">RECUPERO</span>';
-
-            htmlGiorni += `<tr style="text-align:left;">
-              <td style="text-align:left;"><strong>${commessa?.nome || 'N/A'}</strong></td>
-              <td>${r.ora_inizio || '-'}</td>
-              <td>${r.ora_fine || '-'}</td>
-              <td><strong>${ore.toFixed(2)}h</strong>${badge}</td>
-              <td style="text-align:left;">${r.descrizione || '-'}</td>
-            </tr>`;
-          });
-
-          htmlGiorni += `</tbody></table></div>`;
-        }
-
-        const htmlCompleto = `${headHTML(`Dettaglio ${dip.nome} ${dip.cognome}`)}
-          ${intestazione(`Dettaglio Dipendente`, `${dip.cognome} ${dip.nome} · ${giorniOrdinati.length} giorni registrati`)}
-          <div class="totale">📊 TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h</div>
-          ${htmlGiorni}
-          ${pieDiPagina}
-        </div></body></html>`;
-
-        cartellaDip.file(`${dip.cognome}_${dip.nome}.html`, htmlCompleto);
-      }
-    }
-
-    if (tipo === 'tutto' || tipo === 'commesse') {
-      const cartellaComm = root.folder('Commesse');
-
-      for (const commessa of dati.commesse) {
-        const registrazioni = dati.registrazioni.filter(r =>
-          r.commessa_id === commessa.id && r.tipo === 'lavoro'
-        );
-        if (registrazioni.length === 0) continue;
-
-        const perDip = {};
-        registrazioni.forEach(r => {
-          if (!perDip[r.utente_id]) perDip[r.utente_id] = [];
-          perDip[r.utente_id].push(r);
-        });
-
-        let htmlDip = '';
-        let totaleGenerale = 0;
-
-        for (const username of Object.keys(perDip)) {
-          const utente = dati.utenti.find(u => u.username === username);
-          const nomeDip = utente ? `${utente.cognome || ''} ${utente.nome || ''}` : username;
-          const regs = perDip[username].sort((a,b) => a.data.localeCompare(b.data));
-
-          let totDip = 0;
-          regs.forEach(r => { totDip += r.ore || 0; });
-          totaleGenerale += totDip;
-
-          htmlDip += `<div class="gruppo">`;
-          htmlDip += `<div class="gruppo-header"><h4>👤 ${nomeDip}</h4><span class="subtotale">${totDip.toFixed(2)}h</span></div>`;
-          htmlDip += `<table><thead><tr><th style="width:100px;">Data</th><th style="width:80px;">Inizio</th><th style="width:80px;">Fine</th><th style="width:100px;">Ore</th><th style="text-align:left;">Descrizione</th></tr></thead><tbody>`;
-
-          regs.forEach(r => {
-            const [h1, m1] = r.ora_inizio.split(':').map(Number);
-            const [h2, m2] = r.ora_fine.split(':').map(Number);
-            const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-
-            let badge = '';
-            if (r.straordinario) badge += '<span class="badge straordinario">STRAORD.</span>';
-            if (r.recupero) badge += '<span class="badge recupero">RECUPERO</span>';
-
-            htmlDip += `<tr>
-              <td>${r.data}</td>
-              <td>${r.ora_inizio}</td>
-              <td>${r.ora_fine}</td>
-              <td><strong>${ore.toFixed(2)}h</strong>${badge}</td>
-              <td style="text-align:left;">${r.descrizione || '-'}</td>
-            </tr>`;
-          });
-
-          htmlDip += `</tbody></table></div>`;
-        }
-
-        const nomeFile = commessa.nome.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const htmlCompleto = `${headHTML(`Commessa ${commessa.nome}`)}
-          ${intestazione(`Report Commessa`, commessa.nome)}
-          <div class="totale">📊 TOTALE GENERALE: ${totaleGenerale.toFixed(2)}h</div>
-          ${htmlDip}
-          ${pieDiPagina}
-        </div></body></html>`;
-
-        cartellaComm.file(`${nomeFile}.html`, htmlCompleto);
-      }
-    }
-
-    msg.innerHTML = '<div class="info-msg">📦 Creazione ZIP in corso...</div>';
-
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const nomeZip = `${nomeCartella}.zip`;
-
-    const file = new File([blob], nomeZip, { type: 'application/zip' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          title: nomeCartella,
-          text: 'Backup MEC-ROY'
-        });
-        msg.innerHTML = '<div class="success">✅ Backup generato e condiviso!</div>';
-        setTimeout(chiudiModalBackup, 1500);
-        return;
-      } catch (error) {
-        if (error.name === 'AbortError') { msg.innerHTML = ''; return; }
-      }
-    }
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = nomeZip;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    msg.innerHTML = '<div class="success">✅ Backup scaricato con successo!</div>';
-    setTimeout(chiudiModalBackup, 1500);
-
-  } catch (err) {
-    console.error('❌ Errore backup:', err);
-    msg.innerHTML = '<div class="error">❌ Errore durante il backup: ' + err.message + '</div>';
-  }
-}
-
-// ============================================
-// SMART TIME INPUT
-// ============================================
-const SMART_TIME_DEFS = {
-  'ora-inizio': { next: 'ora-fine' },
-  'ora-fine': { next: 'descrizione' },
-  'recupero-ora-inizio': { next: 'recupero-ora-fine' },
-  'recupero-ora-fine': { next: 'recupero-motivo' }
-};
-
-function initSmartTime(input) {
-  if (!input || input.dataset.smartInit === '1') return;
-  input.dataset.smartInit = '1';
-
-  input.dataset.smartPhase = 'ore';
-  input.dataset.smartOre = '';
-  input.dataset.smartMinuti = '';
-
-  input.addEventListener('focus', () => {
-    if (input.dataset.smartOre.length === 2 && input.dataset.smartMinuti.length === 2) {
-      input.dataset.smartPhase = 'ore';
-      input.dataset.smartOre = '';
-      input.dataset.smartMinuti = '';
-      input.value = '';
-    }
-  });
-
-  input.addEventListener('keydown', (e) => {
-    const controllo = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'];
-    if (controllo.includes(e.key)) {
-      if (e.key === 'Backspace') {
-        e.preventDefault();
-        gestisciBackspace(input);
-      }
+    });
+    input4.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        saltaAlProssimo(input);
+        if (this.value.length === 4) document.getElementById('nm-input-6char').focus();
       }
-      return;
-    }
-    if (!/^\d$/.test(e.key)) {
-      e.preventDefault();
-      return;
-    }
-    e.preventDefault();
-    gestisciCifra(input, e.key);
-  });
-
-  input.addEventListener('input', (e) => {
-    const pulito = input.value.replace(/[^\d]/g, '');
-    if (pulito.length < 4) {
-      input.value = formattaSmartTime(pulito);
-    }
-  });
-}
-
-function gestisciCifra(input, cifra) {
-  const fase = input.dataset.smartPhase;
-  let ore = input.dataset.smartOre;
-  let minuti = input.dataset.smartMinuti;
-
-  if (fase === 'ore') {
-    const tentativo = ore + cifra;
-
-    if (ore === '') {
-      if (cifra >= '3' && cifra <= '9') {
-        ore = '0' + cifra;
-        input.dataset.smartOre = ore;
-        input.dataset.smartPhase = 'minuti';
-        input.value = formattaSmartTime(ore + ':' + '');
-        return;
-      } else {
-        ore = cifra;
-        input.dataset.smartOre = ore;
-        input.value = formattaSmartTime(ore + ':');
-        return;
-      }
-    } else {
-      const oreNum = parseInt(tentativo, 10);
-      if (oreNum >= 0 && oreNum <= 24) {
-        let oreFinali;
-        if (oreNum === 24) oreFinali = '24';
-        else oreFinali = tentativo.padStart(2, '0');
-        input.dataset.smartOre = oreFinali;
-        input.dataset.smartPhase = 'minuti';
-        input.value = formattaSmartTime(oreFinali + ':');
-        return;
-      } else {
-        return;
-      }
-    }
+    });
   }
 
-  if (fase === 'minuti') {
-    const tentativo = minuti + cifra;
-
-    if (minuti === '') {
-      if (cifra >= '6' && cifra <= '9') {
-        minuti = '0' + cifra;
-        input.dataset.smartMinuti = minuti;
-        input.value = formattaSmartTime(input.dataset.smartOre + ':' + minuti);
-        saltaAlProssimo(input);
-        return;
-      } else {
-        minuti = cifra;
-        input.dataset.smartMinuti = minuti;
-        input.value = formattaSmartTime(input.dataset.smartOre + ':' + minuti);
-        return;
-      }
-    } else {
-      const minNum = parseInt(tentativo, 10);
-      if (minNum >= 0 && minNum <= 59) {
-        const minFinali = tentativo.padStart(2, '0');
-        input.dataset.smartMinuti = minFinali;
-        input.value = formattaSmartTime(input.dataset.smartOre + ':' + minFinali);
-        saltaAlProssimo(input);
-        return;
-      } else {
-        return;
-      }
-    }
+  if (input6) {
+    input6.addEventListener('input', function() {
+      this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      nmAggiornaPreview();
+    });
+    input6.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); nmSalvaNuovaCommessa(); }
+    });
   }
-}
 
-function gestisciBackspace(input) {
-  const fase = input.dataset.smartPhase;
-  let ore = input.dataset.smartOre;
-  let minuti = input.dataset.smartMinuti;
+  const inputPopup = document.getElementById('nm-input-numero');
+  if (inputPopup) {
+    inputPopup.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); nmAggiungiNumero(); }
+    });
+  }
 
-  if (fase === 'minuti') {
-    if (minuti.length > 0) {
-      minuti = minuti.slice(0, -1);
-      input.dataset.smartMinuti = minuti;
-      input.value = formattaSmartTime(ore + ':' + minuti);
-    } else {
-      input.dataset.smartPhase = 'ore';
-      if (ore.length > 0) {
-        ore = ore.slice(0, -1);
-        input.dataset.smartOre = ore;
+  // Listener per le 2 caselle CAVO
+  const cavoSinistra = document.getElementById('nm-cavo-sinistra');
+  const cavoDestra = document.getElementById('nm-cavo-destra');
+
+  if (cavoSinistra) {
+    cavoSinistra.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('nm-cavo-destra').focus();
       }
-      input.value = formattaSmartTime(ore + (ore ? ':' : ''));
-    }
-  } else if (fase === 'ore') {
-    if (ore.length > 0) {
-      ore = ore.slice(0, -1);
-      input.dataset.smartOre = ore;
-      input.value = formattaSmartTime(ore + (ore ? ':' : ''));
-    }
+    });
   }
-}
 
-function formattaSmartTime(valore) {
-  if (!valore) return '';
-  if (valore.endsWith(':')) return valore;
-  return valore;
-}
-
-function saltaAlProssimo(input) {
-  const id = input.id;
-  const def = SMART_TIME_DEFS[id];
-  if (def && def.next) {
-    const next = document.getElementById(def.next);
-    if (next) {
-      setTimeout(() => {
-        next.focus();
-        if (typeof next.select === 'function') next.select();
-      }, 50);
-    }
+  if (cavoDestra) {
+    cavoDestra.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); nmAggiungiNumero(); }
+    });
   }
-}
 
-document.addEventListener('DOMContentLoaded', () => {
-  ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) initSmartTime(el);
+  const inputAdmin = document.getElementById('nm-admin-password');
+  if (inputAdmin) {
+    inputAdmin.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); nmConfermaCancellazione(); }
+    });
+  }
+});
+
+// Click fuori modali per chiudere
+document.addEventListener('click', function(e) {
+  const modali = [
+    { id: 'modal-notifiche', chiudi: chiudiNotifiche },
+    { id: 'modal-password', chiudi: chiudiModificaPassword },
+    { id: 'modal-aziende', chiudi: chiudiModalAziende },
+    { id: 'modal-backup', chiudi: chiudiModalBackup },
+    { id: 'modal-dettaglio-commessa', chiudi: chiudiDettaglioCommessa },
+    { id: 'modal-dettaglio-dipendente', chiudi: chiudiDettaglioDipendente },
+    { id: 'nm-modal-crea-commessa', chiudi: nmChiudiCreaCommessa },
+    { id: 'nm-modal-popup', chiudi: nmChiudiPopup },
+    { id: 'nm-modal-admin', chiudi: nmChiudiAdmin }
+  ];
+
+  modali.forEach(m => {
+    const modal = document.getElementById(m.id);
+    if (modal && e.target === modal) {
+      m.chiudi();
+    }
   });
 });
 
-setTimeout(() => {
-  ['ora-inizio', 'ora-fine', 'recupero-ora-inizio', 'recupero-ora-fine'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) initSmartTime(el);
-  });
-}, 1000);
-
-// ============================================
-// NOTIFICHE PUSH (Firebase Cloud Messaging)
-// ============================================
-const VAPID_KEY = 'BGDim7zjRi-WXyIDYoKnZjAX92fChXCHo1uUZKOef9l2cHSu6FJrInHrB4IEFAJewF8TrJCDzTsNR1BANwLUml0';
-
-async function chiediPermessoNotifiche() {
-  if (!utenteCorrente) return;
-
-  if (!('Notification' in window)) {
-    console.warn('⚠️ Notifiche non supportate');
-    return;
-  }
-
-  if (Notification.permission === 'denied') {
-    console.warn('⚠️ Notifiche bloccate');
-    return;
-  }
-
-  if (Notification.permission === 'default') {
-    const permesso = await Notification.requestPermission();
-    if (permesso !== 'granted') {
-      console.log('❌ Utente ha rifiutato le notifiche');
-      return;
-    }
-  }
-
-  try {
-    console.log('📝 Registrazione firebase-messaging-sw.js...');
-
-    const swReg = await navigator.serviceWorker.register(
-      './firebase-messaging-sw.js',
-      { scope: './firebase-cloud-messaging-push-scope' }
-    );
-
-    console.log('✅ SW Firebase registrato:', swReg);
-
-    await navigator.serviceWorker.ready;
-    console.log('✅ Service worker pronto');
-
-    const messaging = firebase.messaging();
-    const token = await messaging.getToken({
-      vapidKey: VAPID_KEY,
-      serviceWorkerRegistration: swReg
-    });
-
-    if (!token) {
-      console.warn('⚠️ Nessun token ottenuto');
-      return;
-    }
-
-    console.log('✅ Token FCM ottenuto:', token);
-    window._tokenFCMDebug = token;
-
-    const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
-    if (!utente) return;
-
-    if (utente.token_fcm === token) {
-      console.log('ℹ️ Token già aggiornato');
-      return;
-    }
-
-    utente.token_fcm = token;
-    await salvaDati();
-    console.log('%c✅ Token FCM salvato su Firestore', 'background: #00695C; color: white; padding: 4px 8px; border-radius: 4px;');
-
-  } catch (err) {
-    console.error('❌ Errore durante getToken:', err);
-    console.error('Dettagli errore:', err.message, err.stack);
-  }
-}
-
-async function ascoltaRinnovoToken() {
-  if (!utenteCorrente) return;
-
-  try {
-    const messaging = firebase.messaging();
-    messaging.onTokenRefresh(async () => {
-      console.log('🔄 Token FCM rinnovato, aggiorno Firestore...');
-      await chiediPermessoNotifiche();
-    });
-  } catch (err) {
-    // Ignora silenziosamente se non supportato
-  }
-}
+console.log('✅ script.js — COMPLETO caricato (parte 6/6)');
