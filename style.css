@@ -3023,3 +3023,28 @@ body.dark-mode::before {
     font-size: 0.9em;
   }
 }
+
+/* ============================================ */
+/* AZIONI DIPENDENTI (in fondo alla tab)        */
+/* ============================================ */
+.dipendenti-azioni-wrapper {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e3ebe9;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dark-mode .dipendenti-azioni-wrapper {
+  border-top-color: #2a2a5a;
+}
+
+@media (max-width: 768px) {
+  .dipendenti-azioni-wrapper {
+    flex-direction: column;
+  }
+  .dipendenti-azioni-wrapper button {
+    width: 100%;
+  }
+}
