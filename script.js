@@ -365,7 +365,6 @@ function login() {
       document.getElementById('errore').style.display = 'none';
     }
 
-    document.getElementById('user-nome').textContent = utente.nome + ' ' + utente.cognome;
     const ruoloBadge = document.getElementById('user-ruolo');
     ruoloBadge.textContent = utente.ruolo;
     ruoloBadge.className = 'badge ' + utente.ruolo;
@@ -533,6 +532,20 @@ function showTab(tab) {
     nmCommessaCorrente = null;
     nmCartellaCorrente = null;
     nmCaricaListaCommesse();
+  }
+
+  // ⭐ NUOVO: se è il calendario, carica subito il mese corrente
+  if (tab === 'calendario') {
+    // Imposta mese/anno correnti (solo se non sono già impostati)
+    const adesso = new Date();
+    const meseSelect = document.getElementById('cal-mese');
+    const annoInput = document.getElementById('cal-anno');
+
+    if (meseSelect) meseSelect.value = adesso.getMonth() + 1;
+    if (annoInput) annoInput.value = adesso.getFullYear();
+
+    // Carica subito il calendario
+    caricaCalendario();
   }
 }
 
@@ -3711,37 +3724,72 @@ async function nmCondividiCartella() {
       margin,
       y
     );
-
-    // Numeri in colonne
+    // ============================================
+    // NUMERI IN COLONNE AFFIANCATE
+    // ============================================
     y += 8;
 
-    const righePerColonna = 40;
-    const fontSizeRighe = 10;
-    const lineHeight = 5.5;
+    // Font dinamico in base alle colonne
+    let fontSizeRighe = 10;
+    if (numColonne >= 6) fontSizeRighe = 8;
+    else if (numColonne >= 4) fontSizeRighe = 9;
+    else if (numColonne === 2) fontSizeRighe = 9;
+    else fontSizeRighe = 10;
+
+    // Altezza di una riga in mm
+    const lineHeight = fontSizeRighe * 0.55;
+
+    // Altezza disponibile nella pagina (dopo header/titolo)
+    const altezzaDisponibile = pageH - y - margin - 5;
+
+    // Numero MASSIMO di righe che ci stanno in una colonna
+    const righeMaxPerColonna = Math.floor(altezzaDisponibile / lineHeight);
+
+    // Larghezza di una colonna
+    const colonnaW = contentW / numColonne;
+    const paddingColonna = 2;
+    const larghezzaUtile = colonnaW - paddingColonna * 2;
+    const maxChars = Math.floor(larghezzaUtile / (fontSizeRighe * 0.18));
 
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(fontSizeRighe);
     pdf.setTextColor(...colorText);
 
-    const colonnaW = contentW / numColonne;
-    const paddingColonna = 3;
+    // ============================================
+    // CALCOLO BILANCIATO: distribuisci i numeri equamente
+    // ============================================
+    // Quanti numeri per pagina (se ci stanno tutti in una pagina)
+    const numeriPerPaginaMax = righeMaxPerColonna * numColonne;
 
-    for (let c = 0; c < numColonne; c++) {
-      const startIdx = c * righePerColonna;
-      const endIdx = startIdx + righePerColonna;
-      const numeriColonna = numeri.slice(startIdx, endIdx);
+    // Calcola quante pagine servono
+    const numPagine = Math.ceil(numeri.length / numeriPerPaginaMax);
 
-      const colX = margin + (c * colonnaW) + paddingColonna;
+    for (let p = 0; p < numPagine; p++) {
+      if (p > 0) {
+        pdf.addPage();
+        y = margin + 5;
+      }
 
-      numeriColonna.forEach((num, i) => {
-        const rigaY = y + (i * lineHeight);
-        let testo = num.testo || '';
-        const maxChars = Math.floor(colonnaW / 2.2);
-        if (testo.length > maxChars) {
-          testo = testo.substring(0, maxChars - 2) + '..';
-        }
-        pdf.text(testo, colX, rigaY);
-      });
+      const numeriPagina = numeri.slice(p * numeriPerPaginaMax, (p + 1) * numeriPerPaginaMax);
+
+      // ⭐ Calcola righe per colonna in modo BILANCIATO per questa pagina
+      const righeBilanciate = Math.ceil(numeriPagina.length / numColonne);
+
+      for (let c = 0; c < numColonne; c++) {
+        const startIdx = c * righeBilanciate;
+        const numeriColonna = numeriPagina.slice(startIdx, startIdx + righeBilanciate);
+
+        const colX = margin + (c * colonnaW) + paddingColonna;
+
+        numeriColonna.forEach((num, i) => {
+          const rigaY = y + ((i + 1) * lineHeight);
+          let testo = num.testo || '';
+          if (testo.length > maxChars) {
+            testo = testo.substring(0, maxChars - 2) + '..';
+          }
+          pdf.text(testo, colX, rigaY);
+        });
+      }
     }
 
     const nomeFile = `${commessa.codice}_${NM_CARTELLE_LABEL[nmCartellaCorrente]}`.replace(/\s+/g, '_') + '.pdf';
@@ -3850,8 +3898,6 @@ async function nmCondividiTuttaCommessa() {
     // ============================================
     // SEZIONI PER OGNI CARTELLA
     // ============================================
-    const righePerColonna = 40;
-    const lineHeight = 5.5;
 
     for (const cartella of cartelleDaStampare) {
       const tipo = cartella.tipo;
@@ -3859,11 +3905,23 @@ async function nmCondividiTuttaCommessa() {
       const label = NM_CARTELLE_LABEL[tipo];
       const numColonne = NM_CARTELLE_COLONNE[tipo] || 3;
 
-      const righeTotali = Math.ceil(numeri.length / numColonne);
-      const altezzaSezione = righeTotali * lineHeight + 12;
+      // Font dinamico in base alle colonne
+      let fontSizeRighe = 10;
+      if (numColonne >= 6) fontSizeRighe = 8;
+      else if (numColonne >= 4) fontSizeRighe = 9;
+      else if (numColonne === 2) fontSizeRighe = 9;
+      else fontSizeRighe = 10;
 
-      // Nuova pagina se non ci sta
-      if (y + altezzaSezione > pageH - margin) {
+      const lineHeight = fontSizeRighe * 0.55;
+
+      // ⭐ RIGHE PER COLONNA BILANCIATE
+      const righeBilanciate = Math.ceil(numeri.length / numColonne);
+
+      // Altezza necessaria per questa cartella
+      const altezzaSezione = righeBilanciate * lineHeight + 12;
+
+      // Se non ci sta nella pagina corrente, nuova pagina
+      if (y + altezzaSezione > pageH - margin && y > margin + 10) {
         pdf.addPage();
         y = margin + 5;
       }
@@ -3880,30 +3938,27 @@ async function nmCondividiTuttaCommessa() {
       pdf.setFontSize(9);
       pdf.text(numeri.length + ' numeri', pageW - margin - 3, y + 5, { align: 'right' });
 
-      y += 10;
+      const yInizioNumeri = y + 10;
 
       // Numeri in colonne
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
+      pdf.setFontSize(fontSizeRighe);
       pdf.setTextColor(...colorText);
 
       const colonnaW = contentW / numColonne;
-      const paddingColonna = 3;
+      const paddingColonna = 2;
+      const larghezzaUtile = colonnaW - paddingColonna * 2;
+      const maxChars = Math.floor(larghezzaUtile / (fontSizeRighe * 0.18));
 
       for (let c = 0; c < numColonne; c++) {
-        const startIdx = c * righePerColonna;
-        const endIdx = startIdx + righePerColonna;
-        const numeriColonna = numeri.slice(startIdx, endIdx);
+        const startIdx = c * righeBilanciate;
+        const numeriColonna = numeri.slice(startIdx, startIdx + righeBilanciate);
 
         const colX = margin + (c * colonnaW) + paddingColonna;
 
         numeriColonna.forEach((num, i) => {
-          const rigaY = y + (i * lineHeight);
-          if (rigaY > pageH - margin - 5) {
-            return;
-          }
+          const rigaY = yInizioNumeri + ((i + 1) * lineHeight);
           let testo = num.testo || '';
-          const maxChars = Math.floor(colonnaW / 2.2);
           if (testo.length > maxChars) {
             testo = testo.substring(0, maxChars - 2) + '..';
           }
@@ -3911,7 +3966,8 @@ async function nmCondividiTuttaCommessa() {
         });
       }
 
-      y += righeTotali * lineHeight + 8;
+      // Prepara y per la prossima cartella
+      y = yInizioNumeri + righeBilanciate * lineHeight + 8;
     }
 
     const nomeFile = `${commessa.codice}_Numeri_Mancanti.pdf`;
@@ -4508,7 +4564,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('main-page').style.display = 'block';
         document.getElementById('errore').style.display = 'none';
 
-        document.getElementById('user-nome').textContent = utente.nome + ' ' + utente.cognome;
         const ruoloBadge = document.getElementById('user-ruolo');
         ruoloBadge.textContent = utente.ruolo;
         ruoloBadge.className = 'badge ' + utente.ruolo;
