@@ -88,7 +88,7 @@
         <div id="notifiche-container" style="display:none;position:relative;">
           <button onclick="mostraNotifiche()" class="btn-notifica" id="btn-notifica" title="Notifiche">
             <i class="fas fa-bell"></i>
-            <span id="badge-notifiche" style="display:none;background:red;color:white;border-radius:50%;padding:2px 8px;font-size:12px;position:absolute;top:-8px;right:-8px;">0</span>
+            <span id="badge-notifiche" class="badge-notifica-rossa" style="display:none;">0</span>
           </button>
         </div>
         <div id="azienda-container" style="display:none;margin-left:10px;">
@@ -102,32 +102,56 @@
       </button>
     </header>
 
+       <!-- TABS CON MENU A TENDINA -->
     <nav class="tabs">
+      
+      <!-- Menu per DIPENDENTI (vista dipendente) -->
       <button class="tab" id="tab-registra" onclick="showTab('registra')">
         <i class="fas fa-pen"></i> Registra Ore
       </button>
       <button class="tab" id="tab-richiedi" onclick="showTab('richiedi')">
         <i class="fas fa-paper-plane"></i> Richiedi
       </button>
-      <button class="tab" id="tab-modifica" onclick="showTab('modifica')" style="display:none;">
-        <i class="fas fa-edit"></i> Modifica Ore
-      </button>
-      <button class="tab" id="tab-richieste" onclick="showTab('richieste')" style="display:none;">
-        <i class="fas fa-inbox"></i> Richieste
-        <span id="badge-richieste" style="background:red;color:white;border-radius:50%;padding:2px 8px;font-size:12px;margin-left:5px;display:none;">0</span>
-      </button>
+
+      <!-- CARTELLA: GESTIONE (solo admin) -->
+      <div class="dropdown" id="dropdown-gestione" style="display:none;">
+        <button class="tab dropdown-btn" onclick="toggleDropdown('gestione', event)">
+          <i class="fas fa-folder"></i> GESTIONE <i class="fas fa-chevron-down dropdown-arrow"></i>
+        </button>
+        <div class="dropdown-menu" id="dropdown-menu-gestione">
+          <button class="dropdown-item" onclick="showTab('dipendenti'); chiudiTuttiDropdown();">
+            <i class="fas fa-users"></i> Dipendenti
+          </button>
+          <button class="dropdown-item" onclick="showTab('commesse'); chiudiTuttiDropdown();">
+            <i class="fas fa-folder-plus"></i> Commesse
+          </button>
+        </div>
+      </div>
+
+      <!-- CARTELLA: OPERATIVITÀ (solo admin) -->
+      <div class="dropdown" id="dropdown-operativita" style="display:none;">
+        <button class="tab dropdown-btn" onclick="toggleDropdown('operativita', event)">
+          <i class="fas fa-folder"></i> OPERATIVITÀ <i class="fas fa-chevron-down dropdown-arrow"></i>
+        </button>
+        <div class="dropdown-menu" id="dropdown-menu-operativita">
+          <button class="dropdown-item" onclick="showTab('modifica'); chiudiTuttiDropdown();">
+            <i class="fas fa-edit"></i> Modifica Ore
+          </button>
+          <button class="dropdown-item" onclick="showTab('richieste'); chiudiTuttiDropdown();">
+            <i class="fas fa-inbox"></i> Richieste
+            <span id="badge-richieste" class="badge-inline" style="display:none;">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab singole -->
       <button class="tab" id="tab-calendario" onclick="showTab('calendario')">
         <i class="fas fa-calendar-alt"></i> Calendario
-      </button>
-      <button class="tab" id="tab-dipendenti" onclick="showTab('dipendenti')" style="display:none;">
-        <i class="fas fa-users"></i> Dipendenti
-      </button>
-      <button class="tab" id="tab-commesse" onclick="showTab('commesse')" style="display:none;">
-        <i class="fas fa-folder-plus"></i> Commesse
       </button>
       <button class="tab" id="tab-numeri-mancanti" onclick="showTab('numeri-mancanti')">
         <i class="fas fa-list-ol"></i> Numeri Mancanti
       </button>
+
     </nav>
         <!-- ============================================================ -->
     <!-- TAB 1: REGISTRA ORE -->
