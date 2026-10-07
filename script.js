@@ -3626,7 +3626,9 @@ async function nmCancellaNumero(idNumero) {
     alert('❌ Errore: ' + err.message);
   }
 }
-
+// ============================================
+// CONDIVIDI / STAMPA SINGOLA CARTELLA (PDF)
+// ============================================
 async function nmCondividiCartella() {
   if (!nmCommessaCorrente || !nmCartellaCorrente) return;
 
@@ -3643,110 +3645,108 @@ async function nmCondividiCartella() {
     }
 
     const numColonne = NM_CARTELLE_COLONNE[nmCartellaCorrente] || 3;
-    const righePerColonna = 38;
 
-    let colonneHTML = '';
-    for (let c = 0; c < numColonne; c++) {
-      const start = c * righePerColonna;
-      const end = start + righePerColonna;
-      const numeriColonna = numeri.slice(start, end);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
 
-      colonneHTML += '<div class="a4-colonna">';
-      if (numeriColonna.length === 0) {
-        colonneHTML += '&nbsp;';
-      } else {
-        numeriColonna.forEach(num => {
-          colonneHTML += `<div class="a4-riga">- ${nmEscapaHtml(num.testo)}</div>`;
-        });
-      }
-      colonneHTML += '</div>';
-    }
+    const pageW = 210;
+    const pageH = 297;
+    const margin = 12;
+    const contentW = pageW - margin * 2;
 
+    const colorPrimary = [0, 105, 92];
+    const colorText = [34, 34, 34];
+
+    // Carica logo
+    const logo = await caricaLogoPerPDF();
+
+    // Data
     const dataGenerazione = new Date().toLocaleDateString('it-IT');
 
-    const html = `
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-        <meta charset="UTF-8">
-        <title>${commessa.codice} - ${NM_CARTELLE_LABEL[nmCartellaCorrente]}</title>
-        <style>
-          @page { size: A4 portrait; margin: 0; }
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: Arial, Helvetica, sans-serif; background: white; padding: 0; }
-          .a4-foglio { width: 21cm; height: 29.7cm; padding: 1.2cm 1.2cm; margin: 0 auto; background: white; display: flex; flex-direction: column; }
+    let y = margin + 2;
 
-          /* Intestazione: logo + nome + data */
-          .a4-intestazione {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.5cm;
-            padding-bottom: 0.5cm;
-            border-bottom: 2px solid #00695C;
-            margin-bottom: 0.6cm;
-          }
-          .a4-intestazione-sinistra {
-            display: flex;
-            align-items: center;
-            gap: 0.4cm;
-          }
-          .a4-logo {
-            height: 1.6cm;
-            width: auto;
-            object-fit: contain;
-          }
-          .a4-nome-azienda {
-            font-size: 16pt;
-            font-weight: 700;
-            color: #00695C;
-            letter-spacing: 0.5px;
-          }
-          .a4-data {
-            font-size: 11pt;
-            font-weight: 600;
-            color: #333;
-            white-space: nowrap;
-          }
+    // Logo a sinistra
+    const logoMaxH = 12;
+    let logoH = 0;
+    let logoW = 0;
+    if (logo) {
+      logoH = logoMaxH;
+      logoW = (logo.naturalWidth / logo.naturalHeight) * logoH;
+      try {
+        pdf.addImage(logo, 'PNG', margin, y, logoW, logoH);
+      } catch (err) {
+        console.warn('⚠️ Errore logo:', err);
+      }
+    }
 
-          /* Titolo */
-          .a4-titolo {
-            font-size: 15pt;
-            font-weight: 700;
-            color: #00695C;
-            margin-bottom: 0.8cm;
-            letter-spacing: 0.5px;
-          }
+    // Nome azienda accanto al logo
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(...colorPrimary);
+    pdf.text('MEC-ROY SRLS', margin + (logo ? logoW + 4 : 0), y + logoH / 2 + 2);
 
-          /* Colonne scritte */
-          .a4-colonne { display: flex; gap: 0.5cm; flex: 1; overflow: hidden; }
-          .a4-colonna { flex: 1; border-right: 1px dashed #ddd; padding-right: 0.4cm; min-height: 0; overflow: hidden; }
-          .a4-colonna:last-child { border-right: none; }
-          .a4-riga { font-size: 13pt; line-height: 1.6; color: #222; padding: 1px 0; word-wrap: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    // Data a destra
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(...colorText);
+    pdf.text(dataGenerazione, pageW - margin, y + logoH / 2 + 2, { align: 'right' });
 
-          @media print { .a4-foglio { margin: 0; padding: 1.2cm; } body { padding: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="a4-foglio">
-          <div class="a4-intestazione">
-            <div class="a4-intestazione-sinistra">
-              <img src="images/logo.png" alt="MEC-ROY" class="a4-logo" />
-              <span class="a4-nome-azienda">MEC-ROY SRLS</span>
-            </div>
-            <div class="a4-data">${dataGenerazione}</div>
-          </div>
+    // Linea
+    y += logoH + 4;
+    pdf.setDrawColor(...colorPrimary);
+    pdf.setLineWidth(0.5);
+    pdf.line(margin, y, pageW - margin, y);
 
-          <div class="a4-titolo">${commessa.codice} - ${NM_CARTELLE_LABEL[nmCartellaCorrente]}</div>
+    // Titolo
+    y += 8;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(...colorPrimary);
+    pdf.text(
+      commessa.codice + ' - ' + NM_CARTELLE_LABEL[nmCartellaCorrente],
+      margin,
+      y
+    );
 
-          <div class="a4-colonne">${colonneHTML}</div>
-        </div>
-      </body>
-      </html>
-    `;
+    // Numeri in colonne
+    y += 8;
 
-    const nomeFile = `${commessa.codice}_${NM_CARTELLE_LABEL[nmCartellaCorrente]}`.replace(/\s+/g, '_');
-    await scaricaOCondividiFile(html, nomeFile);
+    const righePerColonna = 40;
+    const fontSizeRighe = 10;
+    const lineHeight = 5.5;
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(fontSizeRighe);
+    pdf.setTextColor(...colorText);
+
+    const colonnaW = contentW / numColonne;
+    const paddingColonna = 3;
+
+    for (let c = 0; c < numColonne; c++) {
+      const startIdx = c * righePerColonna;
+      const endIdx = startIdx + righePerColonna;
+      const numeriColonna = numeri.slice(startIdx, endIdx);
+
+      const colX = margin + (c * colonnaW) + paddingColonna;
+
+      numeriColonna.forEach((num, i) => {
+        const rigaY = y + (i * lineHeight);
+        let testo = num.testo || '';
+        const maxChars = Math.floor(colonnaW / 2.2);
+        if (testo.length > maxChars) {
+          testo = testo.substring(0, maxChars - 2) + '..';
+        }
+        pdf.text(testo, colX, rigaY);
+      });
+    }
+
+    const nomeFile = `${commessa.codice}_${NM_CARTELLE_LABEL[nmCartellaCorrente]}`.replace(/\s+/g, '_') + '.pdf';
+
+    await scaricaOCondividiPDF(pdf, nomeFile);
 
   } catch (err) {
     console.error('❌ Errore condivisione:', err);
@@ -3754,12 +3754,21 @@ async function nmCondividiCartella() {
   }
 }
 
+// ============================================
+// CONDIVIDI / STAMPA TUTTA LA COMMESSA (PDF)
+// ============================================
 async function nmCondividiTuttaCommessa() {
-  if (!nmCommessaCorrente) { alert('⚠️ Nessuna commessa selezionata'); return; }
+  if (!nmCommessaCorrente) {
+    alert('⚠️ Nessuna commessa selezionata');
+    return;
+  }
 
   try {
     const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
-    if (!doc.exists) { alert('❌ Commessa non trovata'); return; }
+    if (!doc.exists) {
+      alert('❌ Commessa non trovata');
+      return;
+    }
 
     const commessa = doc.data();
     const cartelle = commessa.cartelle || {};
@@ -3779,132 +3788,135 @@ async function nmCondividiTuttaCommessa() {
       return;
     }
 
-    let sezioniHTML = '';
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
 
-    cartelleDaStampare.forEach((cartella) => {
+    const pageW = 210;
+    const pageH = 297;
+    const margin = 12;
+    const contentW = pageW - margin * 2;
+
+    const colorPrimary = [0, 105, 92];
+    const colorText = [34, 34, 34];
+
+    const logo = await caricaLogoPerPDF();
+    const dataGenerazione = new Date().toLocaleDateString('it-IT');
+
+    // ============================================
+    // INTESTAZIONE (prima pagina)
+    // ============================================
+    let y = margin + 2;
+
+    const logoMaxH = 12;
+    let logoH = 0;
+    let logoW = 0;
+    if (logo) {
+      logoH = logoMaxH;
+      logoW = (logo.naturalWidth / logo.naturalHeight) * logoH;
+      try {
+        pdf.addImage(logo, 'PNG', margin, y, logoW, logoH);
+      } catch (err) {
+        console.warn('⚠️ Errore logo:', err);
+      }
+    }
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(...colorPrimary);
+    pdf.text('MEC-ROY SRLS', margin + (logo ? logoW + 4 : 0), y + logoH / 2 + 2);
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(...colorText);
+    pdf.text(dataGenerazione, pageW - margin, y + logoH / 2 + 2, { align: 'right' });
+
+    y += logoH + 4;
+    pdf.setDrawColor(...colorPrimary);
+    pdf.setLineWidth(0.5);
+    pdf.line(margin, y, pageW - margin, y);
+
+    y += 8;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(...colorPrimary);
+    pdf.text(commessa.codice + ' - NUMERI MANCANTI', margin, y);
+
+    y += 10;
+
+    // ============================================
+    // SEZIONI PER OGNI CARTELLA
+    // ============================================
+    const righePerColonna = 40;
+    const lineHeight = 5.5;
+
+    for (const cartella of cartelleDaStampare) {
       const tipo = cartella.tipo;
       const numeri = cartella.numeri;
       const label = NM_CARTELLE_LABEL[tipo];
       const numColonne = NM_CARTELLE_COLONNE[tipo] || 3;
-      const righePerColonna = 38;
 
-      let colonneHTML = '';
-      for (let c = 0; c < numColonne; c++) {
-        const start = c * righePerColonna;
-        const end = start + righePerColonna;
-        const numeriColonna = numeri.slice(start, end);
+      const righeTotali = Math.ceil(numeri.length / numColonne);
+      const altezzaSezione = righeTotali * lineHeight + 12;
 
-        colonneHTML += '<div class="a4-colonna">';
-        if (numeriColonna.length === 0) {
-          colonneHTML += '&nbsp;';
-        } else {
-          numeriColonna.forEach(num => {
-            colonneHTML += `<div class="a4-riga">- ${nmEscapaHtml(num.testo)}</div>`;
-          });
-        }
-        colonneHTML += '</div>';
+      // Nuova pagina se non ci sta
+      if (y + altezzaSezione > pageH - margin) {
+        pdf.addPage();
+        y = margin + 5;
       }
 
-      sezioniHTML += `
-        <div class="a4-sezione">
-          <div class="a4-sezione-header">
-            <h2>${nmEscapaHtml(label)}</h2>
-            <span class="a4-sezione-count">${numeri.length} numeri</span>
-          </div>
-          <div class="a4-colonne">${colonneHTML}</div>
-        </div>
-      `;
-    });
+      // Header sezione
+      pdf.setFillColor(...colorPrimary);
+      pdf.rect(margin, y, contentW, 7, 'F');
 
-    const dataGenerazione = new Date().toLocaleDateString('it-IT');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(label, margin + 3, y + 5);
 
-    const html = `
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-        <meta charset="UTF-8">
-        <title>${commessa.codice} - Numeri Mancanti</title>
-        <style>
-          @page { size: A4 portrait; margin: 1.2cm; }
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: Arial, Helvetica, sans-serif; background: white; padding: 0; }
-          .a4-foglio { width: 21cm; min-height: 29.7cm; padding: 1.2cm; margin: 0 auto; background: white; }
+      pdf.setFontSize(9);
+      pdf.text(numeri.length + ' numeri', pageW - margin - 3, y + 5, { align: 'right' });
 
-          /* Intestazione: logo + nome + data */
-          .a4-intestazione {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.5cm;
-            padding-bottom: 0.5cm;
-            border-bottom: 2px solid #00695C;
-            margin-bottom: 0.6cm;
+      y += 10;
+
+      // Numeri in colonne
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(...colorText);
+
+      const colonnaW = contentW / numColonne;
+      const paddingColonna = 3;
+
+      for (let c = 0; c < numColonne; c++) {
+        const startIdx = c * righePerColonna;
+        const endIdx = startIdx + righePerColonna;
+        const numeriColonna = numeri.slice(startIdx, endIdx);
+
+        const colX = margin + (c * colonnaW) + paddingColonna;
+
+        numeriColonna.forEach((num, i) => {
+          const rigaY = y + (i * lineHeight);
+          if (rigaY > pageH - margin - 5) {
+            return;
           }
-          .a4-intestazione-sinistra {
-            display: flex;
-            align-items: center;
-            gap: 0.4cm;
+          let testo = num.testo || '';
+          const maxChars = Math.floor(colonnaW / 2.2);
+          if (testo.length > maxChars) {
+            testo = testo.substring(0, maxChars - 2) + '..';
           }
-          .a4-logo {
-            height: 1.6cm;
-            width: auto;
-            object-fit: contain;
-          }
-          .a4-nome-azienda {
-            font-size: 16pt;
-            font-weight: 700;
-            color: #00695C;
-            letter-spacing: 0.5px;
-          }
-          .a4-data {
-            font-size: 11pt;
-            font-weight: 600;
-            color: #333;
-            white-space: nowrap;
-          }
+          pdf.text(testo, colX, rigaY);
+        });
+      }
 
-          /* Titolo */
-          .a4-titolo {
-            font-size: 15pt;
-            font-weight: 700;
-            color: #00695C;
-            margin-bottom: 0.8cm;
-            letter-spacing: 0.5px;
-          }
+      y += righeTotali * lineHeight + 8;
+    }
 
-          /* Sezioni cartelle */
-          .a4-sezione { margin-bottom: 1cm; page-break-inside: avoid; }
-          .a4-sezione-header { display: flex; justify-content: space-between; align-items: center; background: #00695C; color: white; padding: 8px 14px; border-radius: 6px 6px 0 0; margin-bottom: 0.4cm; }
-          .a4-sezione-header h2 { font-size: 13pt; color: white; margin: 0; letter-spacing: 0.5px; }
-          .a4-sezione-count { font-size: 10pt; background: rgba(255,255,255,0.25); padding: 2px 10px; border-radius: 10px; }
-          .a4-colonne { display: flex; gap: 0.5cm; }
-          .a4-colonna { flex: 1; border-right: 1px dashed #ddd; padding-right: 0.4cm; min-height: 0; }
-          .a4-colonna:last-child { border-right: none; }
-          .a4-riga { font-size: 12pt; line-height: 1.5; color: #222; padding: 1px 0; word-wrap: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    const nomeFile = `${commessa.codice}_Numeri_Mancanti.pdf`;
 
-          @media print { .a4-foglio { margin: 0; padding: 1.2cm; } body { padding: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="a4-foglio">
-          <div class="a4-intestazione">
-            <div class="a4-intestazione-sinistra">
-              <img src="images/logo.png" alt="MEC-ROY" class="a4-logo" />
-              <span class="a4-nome-azienda">MEC-ROY SRLS</span>
-            </div>
-            <div class="a4-data">${dataGenerazione}</div>
-          </div>
-
-          <div class="a4-titolo">${commessa.codice} - NUMERI MANCANTI</div>
-
-          ${sezioniHTML}
-        </div>
-      </body>
-      </html>
-    `;
-
-    const nomeFile = `${commessa.codice}_Numeri_Mancanti`;
-    await scaricaOCondividiFile(html, nomeFile);
+    await scaricaOCondividiPDF(pdf, nomeFile);
 
   } catch (err) {
     console.error('❌ Errore condivisione commessa:', err);
@@ -4734,3 +4746,71 @@ document.addEventListener('click', function(e) {
     chiudiTuttiDropdown();
   }
 });
+
+// ============================================
+// HELPER: Carica logo da logo.js (base64)
+// ============================================
+function caricaLogoPerPDF() {
+  return new Promise((resolve) => {
+    if (typeof LOGO_BASE64 === 'undefined' || !LOGO_BASE64) {
+      console.warn('⚠️ LOGO_BASE64 non definito - verifica che logo.js sia caricato');
+      resolve(null);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      console.log('✅ Logo caricato:', img.naturalWidth, 'x', img.naturalHeight);
+      resolve(img);
+    };
+    img.onerror = () => {
+      console.warn('⚠️ Logo base64 non valido');
+      resolve(null);
+    };
+    img.src = LOGO_BASE64;
+    setTimeout(() => resolve(null), 3000);
+  });
+}
+
+// ============================================
+// HELPER: Salva o condividi PDF
+// ============================================
+async function scaricaOCondividiPDF(pdf, nomeFile) {
+  // Genera blob del PDF
+  const pdfBlob = pdf.output('blob');
+  const file = new File([pdfBlob], nomeFile, { type: 'application/pdf' });
+
+  // Prova a condividere (mobile)
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: nomeFile.replace('.pdf', ''),
+        text: 'Numeri Mancanti - MEC-ROY'
+      });
+      console.log('✅ PDF condiviso');
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Condivisione annullata');
+        return;
+      }
+      console.warn('Condivisione non disponibile, uso download...', error);
+    }
+  }
+
+  // Fallback: download diretto
+  const url = URL.createObjectURL(pdfBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeFile;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  console.log('✅ PDF scaricato:', nomeFile);
+
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    alert('📄 PDF scaricato!\n\nApri il file nella cartella Download per condividerlo o stamparlo.');
+  }
+}
