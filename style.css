@@ -2783,3 +2783,243 @@ body.dark-mode::before {
     width: 100%;
   }
 }
+/* ============================================ */
+/* PASSWORD VISIBILE IN TABELLA DIPENDENTI      */
+/* ============================================ */
+.password-cell {
+  font-family: 'Courier New', monospace;
+  background: linear-gradient(180deg, #fff3cd 0%, #ffe9a8 100%);
+  color: #856404;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  font-weight: 600;
+  border: 1px solid #ffc107;
+  display: inline-block;
+  user-select: text;
+  cursor: text;
+}
+
+/* Dark mode */
+.dark-mode .password-cell {
+  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
+  color: #ffd54f;
+  border-color: #ffc107;
+}
+/* ============================================ */
+/* DROPDOWN MENU                                */
+/* ============================================ */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dropdown-arrow {
+  font-size: 0.7em;
+  transition: transform 0.2s;
+  margin-left: 4px;
+}
+
+.dropdown-btn.aperto .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  min-width: 200px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faf9 100%);
+  border: 1px solid #dfe6e4;
+  border-radius: 10px;
+  box-shadow:
+    0 8px 20px rgba(0,0,0,0.15),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+  margin-top: 6px;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.dropdown-menu.aperto {
+  display: block;
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #444;
+  text-align: left;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.dropdown-item:hover {
+  background: linear-gradient(180deg, #f5fffd 0%, #dff3ee 100%);
+  color: #00695C;
+}
+
+.dropdown-item i {
+  color: #00695C;
+  width: 20px;
+  text-align: center;
+  font-size: 1em;
+}
+
+.dropdown-item .badge-inline {
+  margin-left: auto;
+  background: #dc3545;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75em;
+  font-weight: 700;
+}
+
+/* ============================================ */
+/* BADGE NOTIFICHE PIÙ VISIBILE                 */
+/* ============================================ */
+.badge-notifica-rossa {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: linear-gradient(180deg, #ef4a5c 0%, #c82333 100%);
+  color: white;
+  border-radius: 50%;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+  box-shadow:
+    0 3px 8px rgba(200,35,51,0.5),
+    0 1px 0 rgba(255,255,255,0.3) inset;
+  animation: pulseNotifica 1.8s ease-in-out infinite;
+}
+
+@keyframes pulseNotifica {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 3px 8px rgba(200,35,51,0.5), 0 0 0 0 rgba(220,53,69,0.7);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(200,35,51,0.6), 0 0 0 8px rgba(220,53,69,0);
+  }
+}
+
+/* ============================================ */
+/* DARK MODE — DROPDOWN                         */
+/* ============================================ */
+.dark-mode .dropdown-menu {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+  box-shadow:
+    0 8px 20px rgba(0,0,0,0.5),
+    0 1px 0 rgba(255,255,255,0.05) inset;
+}
+
+.dark-mode .dropdown-item {
+  color: #e0e0e0;
+}
+
+.dark-mode .dropdown-item:hover {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
+  color: white;
+}
+
+.dark-mode .dropdown-item i {
+  color: #4db6ac;
+}
+
+.dark-mode .dropdown-item:hover i {
+  color: white;
+}
+
+/* ============================================ */
+/* RESPONSIVE — DROPDOWN E TAB                  */
+/* ============================================ */
+@media (max-width: 768px) {
+  .tabs {
+    gap: 6px;
+  }
+
+  .tab,
+  .dropdown-btn {
+    padding: 8px 12px;
+    font-size: 0.8em;
+  }
+
+  .dropdown {
+    flex: 1 1 auto;
+  }
+
+  .dropdown-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dropdown-menu {
+    min-width: 180px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .dropdown-menu.aperto {
+    animation: dropdownFadeInMobile 0.2s ease-out;
+  }
+
+  @keyframes dropdownFadeInMobile {
+    from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  .badge-notifica-rossa {
+    min-width: 20px;
+    height: 20px;
+    font-size: 11px;
+    line-height: 20px;
+    padding: 0 5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tab,
+  .dropdown-btn {
+    padding: 6px 10px;
+    font-size: 0.75em;
+  }
+
+  .dropdown-menu {
+    min-width: 160px;
+  }
+
+  .dropdown-item {
+    padding: 10px 12px;
+    font-size: 0.9em;
+  }
+}
