@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MEC-ROY srls - Gestione lavoro </title>
-  
+
   <!-- ===== PWA ===== -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#00695C" />
@@ -12,22 +12,22 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MEC-ROY" />
   <link rel="apple-touch-icon" href="images/logo-192.png" />
-  
+
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
-  
+
   <!-- ===== FIREBASE SDK ===== -->
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js"></script>
-  
+
   <!-- ===== JSZIP (per backup ZIP) ===== -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
 <div class="container" id="app-container">
-  
+
   <!-- ===== LOGIN ===== -->
   <div id="login-page">
     <div class="login-box">
@@ -44,22 +44,28 @@
       </div>
       <input type="text" id="username" class="login-anim-1" placeholder="Username" />
       <input type="password" id="password" class="login-anim-2" placeholder="Password" />
-      
-      <!-- CHECKBOX RICORDAMI -->
+
       <label class="ricordami-label login-anim-3">
         <input type="checkbox" id="ricordami" />
         <span>Ricordami su questo dispositivo</span>
       </label>
-      
+
       <button onclick="login()" class="login-anim-4"><i class="fas fa-sign-in-alt"></i> Entra</button>
+
+      <div class="numeri-mancanti-login-separator">
+        <span>oppure</span>
+      </div>
+      <button onclick="apriNumeriMancanti()" class="btn-numeri-mancanti login-anim-4">
+        <i class="fas fa-list-ol"></i> NUMERI MANCANTI
+      </button>
+
       <div id="errore" style="color:red;display:none;margin-top:10px;text-align:center;">Credenziali errate</div>
     </div>
   </div>
 
   <!-- ===== MAIN ===== -->
   <div id="main-page" style="display:none;">
-    
-    <!-- HEADER -->
+
     <header>
       <div class="header-left">
         <div class="logo-small">
@@ -96,7 +102,6 @@
       </button>
     </header>
 
-    <!-- TABS -->
     <nav class="tabs">
       <button class="tab" id="tab-registra" onclick="showTab('registra')">
         <i class="fas fa-pen"></i> Registra Ore
@@ -120,9 +125,11 @@
       <button class="tab" id="tab-commesse" onclick="showTab('commesse')" style="display:none;">
         <i class="fas fa-folder-plus"></i> Commesse
       </button>
+      <button class="tab" id="tab-numeri-mancanti" onclick="showTab('numeri-mancanti')">
+        <i class="fas fa-list-ol"></i> Numeri Mancanti
+      </button>
     </nav>
-
-    <!-- ============================================================ -->
+        <!-- ============================================================ -->
     <!-- TAB 1: REGISTRA ORE -->
     <!-- ============================================================ -->
     <div id="panel-registra" class="panel">
@@ -203,7 +210,6 @@
             </div>
           </div>
           
-          <!-- ORARI OPZIONALI (solo per ferie/permesso) -->
           <div class="form-row" id="riga-orari-opzionali" style="display:none;">
             <div class="form-group">
               <label><i class="fas fa-clock"></i> Ora Inizio (opzionale)</label>
@@ -321,7 +327,6 @@
       <h2><i class="fas fa-calendar-alt"></i> Calendario</h2>
       <p class="subtitle">Visualizza il riepilogo mensile con ore e assenze</p>
       
-      <!-- SELEZIONE VISTA (solo per dipendenti) -->
       <div id="cal-vista-selector" class="cal-vista-selector" style="display:none;">
         <label class="vista-radio">
           <input type="radio" name="cal-vista" value="mensile" checked onchange="cambiaVistaCalendario()">
@@ -508,6 +513,66 @@
       </div>
 
     </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 8: NUMERI MANCANTI -->
+    <!-- ============================================================ -->
+    <div id="panel-numeri-mancanti" class="panel">
+
+      <!-- SCHERMATA 1: LISTA COMMESSE -->
+      <div id="nm-schermata-commesse">
+        <h2><i class="fas fa-list-ol"></i> Numeri Mancanti</h2>
+        <p class="subtitle">Seleziona una commessa o creane una nuova</p>
+
+        <button onclick="nmApriCreaCommessa()" class="btn-primary btn-lg" style="margin-bottom:20px;">
+          <i class="fas fa-plus-circle"></i> Crea Nuova Commessa
+        </button>
+
+        <div id="nm-lista-commesse"></div>
+      </div>
+
+      <!-- SCHERMATA 2: LE 5 CARTELLE -->
+      <div id="nm-schermata-cartelle" style="display:none;">
+        <button onclick="nmTornaAlleCommesse()" class="btn-info" style="margin-bottom:15px;">
+          <i class="fas fa-arrow-left"></i> Indietro
+        </button>
+
+        <h2><i class="fas fa-folder-open"></i> <span id="nm-commessa-corrente-titolo"></span></h2>
+        <p class="subtitle">Scegli la cartella su cui lavorare</p>
+
+        <!-- ⭐ Pulsante Condividi/Stampa TUTTA la commessa -->
+        <div class="nm-condividi-commessa-wrapper">
+          <button onclick="nmCondividiTuttaCommessa()" class="btn-info btn-condividi-commessa">
+            <i class="fas fa-share-alt"></i> Condividi / Stampa Commessa
+          </button>
+        </div>
+
+        <div class="nm-cartelle-grid">
+          <div class="nm-cartella" onclick="nmApriCartella('filo')">
+            <div class="nm-cartella-nome">FILO</div>
+            <div class="nm-cartella-count" id="nm-count-filo">0</div>
+          </div>
+          <div class="nm-cartella" onclick="nmApriCartella('cavo')">
+            <div class="nm-cartella-nome">CAVO</div>
+            <div class="nm-cartella-count" id="nm-count-cavo">0</div>
+          </div>
+          <div class="nm-cartella" onclick="nmApriCartella('adesive')">
+            <div class="nm-cartella-nome">ADESIVE</div>
+            <div class="nm-cartella-count" id="nm-count-adesive">0</div>
+          </div>
+          <div class="nm-cartella" onclick="nmApriCartella('targhette')">
+            <div class="nm-cartella-nome">TARGHETTE GIALLE</div>
+            <div class="nm-cartella-count" id="nm-count-targhette">0</div>
+          </div>
+          <div class="nm-cartella" onclick="nmApriCartella('morsetti')">
+            <div class="nm-cartella-nome">MORSETTI</div>
+            <div class="nm-cartella-count" id="nm-count-morsetti">0</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 </div>
 
@@ -692,7 +757,6 @@
     </div>
     <div class="modal-body">
       
-      <!-- FILTRI -->
       <div class="filtri-commessa">
         <div class="filtri-row">
           <div class="filtro-group">
@@ -743,11 +807,116 @@
         </div>
       </div>
       
-      <!-- TABELLA DETTAGLIO -->
       <div id="dettaglio-dipendente-output" class="dettaglio-output">
         <p class="text-muted">Caricamento...</p>
       </div>
       
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODALE CREA NUOVA COMMESSA (Numeri Mancanti) -->
+<!-- ============================================================ -->
+<div id="nm-modal-crea-commessa" class="modal">
+  <div class="modal-content" style="max-width:500px;">
+    <div class="modal-header">
+      <h2><i class="fas fa-plus-circle"></i> Nuova Commessa</h2>
+      <span class="modal-close" onclick="nmChiudiCreaCommessa()">&times;</span>
+    </div>
+    <div class="modal-body">
+      <p style="color:#666;margin-bottom:15px;font-size:0.9em;">
+        Inserisci il codice della commessa nel formato <strong>CC____-A-______</strong>
+      </p>
+
+      <div class="nm-formato-commessa">
+        <span class="nm-prefisso">CC</span>
+        <input type="text" id="nm-input-4cifre" class="nm-input-cifre" maxlength="4" inputmode="numeric" placeholder="0000" autocomplete="off" />
+        <span class="nm-separatore">-A-</span>
+        <input type="text" id="nm-input-6char" class="nm-input-chars" maxlength="6" placeholder="XXXXXX" autocomplete="off" style="text-transform:uppercase;" />
+      </div>
+
+      <div id="nm-preview-commessa" class="nm-preview">Anteprima: CC0000-A-XXXXXX</div>
+
+      <button onclick="nmSalvaNuovaCommessa()" class="btn-primary" style="width:100%;margin-top:15px;">
+        <i class="fas fa-save"></i> Crea Commessa
+      </button>
+
+      <div id="nm-msg-crea-commessa" style="margin-top:10px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODALE POPUP NUMERI -->
+<!-- ============================================================ -->
+<div id="nm-modal-popup" class="modal">
+  <div class="modal-content nm-popup-content">
+    <div class="modal-header">
+      <h2><i class="fas fa-list"></i> <span id="nm-popup-titolo">FILO</span></h2>
+      <span class="modal-close" onclick="nmChiudiPopup()">&times;</span>
+    </div>
+    <div class="modal-body nm-popup-body">
+      
+      <!-- ⭐ INPUT SINGOLO (per tutte le cartelle tranne CAVO) -->
+      <div class="nm-input-wrapper" id="nm-input-singolo">
+        <input type="text" id="nm-input-numero" class="nm-input-numero" placeholder="Inserisci il numero..." autocomplete="off" />
+        <button onclick="nmAggiungiNumero()" class="btn-primary">
+          <i class="fas fa-plus"></i> Aggiungi
+        </button>
+      </div>
+
+      <!-- ⭐ INPUT DOPPIO (solo per CAVO) -->
+      <div class="nm-input-wrapper-cavo" id="nm-input-doppio" style="display:none;">
+        <div class="nm-cavo-box">
+          <span class="nm-cavo-trattino">-</span>
+          <input type="text" id="nm-cavo-sinistra" class="nm-cavo-input" placeholder="Scritta sinistra..." autocomplete="off" />
+        </div>
+        <span class="nm-cavo-separatore">/</span>
+        <div class="nm-cavo-box">
+          <span class="nm-cavo-trattino">-</span>
+          <input type="text" id="nm-cavo-destra" class="nm-cavo-input" placeholder="Scritta destra..." autocomplete="off" />
+        </div>
+        <button onclick="nmAggiungiNumero()" class="btn-primary">
+          <i class="fas fa-plus"></i> Aggiungi
+        </button>
+      </div>
+
+      <div id="nm-lista-numeri" class="nm-lista-numeri">
+        <p class="text-muted">Nessun numero inserito</p>
+      </div>
+
+      <div class="nm-popup-azioni">
+        <button onclick="nmCondividiCartella()" class="btn-info">
+          <i class="fas fa-share-alt"></i> Condividi / Stampa
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODALE PASSWORD ADMIN per cancellare commessa -->
+<!-- ============================================================ -->
+<div id="nm-modal-admin" class="modal">
+  <div class="modal-content" style="max-width:400px;">
+    <div class="modal-header">
+      <h2><i class="fas fa-shield-alt"></i> Autorizzazione Admin</h2>
+      <span class="modal-close" onclick="nmChiudiAdmin()">&times;</span>
+    </div>
+    <div class="modal-body">
+      <p style="color:#666;margin-bottom:15px;font-size:0.9em;">
+        Per cancellare questa commessa serve la password di un admin.
+      </p>
+      <div class="form-group">
+        <label>Password Admin *</label>
+        <input type="password" id="nm-admin-password" placeholder="Inserisci password admin" />
+      </div>
+      <button onclick="nmConfermaCancellazione()" class="btn-danger" style="width:100%;">
+        <i class="fas fa-trash"></i> Cancella Commessa
+      </button>
+      <div id="nm-msg-admin" style="margin-top:10px;"></div>
     </div>
   </div>
 </div>
@@ -768,7 +937,6 @@
     });
   }
 
-  // Inizializza Firebase Messaging per il SW
   if (firebase.messaging && firebase.messaging.isSupported()) {
     try {
       const messaging = firebase.messaging();
