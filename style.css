@@ -1,6 +1,10 @@
-/* ============================================
-   SFONDO VERDE SCURO LUCIDO EFFETTO PLASTIFICATO
-   ============================================ */
+/* ============================================ */
+/* MEC-ROY — style.css                          */
+/* ============================================ */
+
+/* ============================================ */
+/* SFONDO VERDE SCURO LUCIDO                    */
+/* ============================================ */
 body {
   background: linear-gradient(135deg, #01815f 0%, #036b34 50%, #003B33 100%);
   min-height: 100vh;
@@ -45,11 +49,14 @@ body::before {
   transition: all 0.3s ease;
 }
 
-/* ============================================
-   RESTO DEL CSS
-   ============================================ */
+/* ============================================ */
+/* RESET                                        */
+/* ============================================ */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ============================================ */
+/* HEADER                                       */
+/* ============================================ */
 header {
   display: flex;
   justify-content: space-between;
@@ -96,6 +103,24 @@ header {
   box-shadow: 0 1px 2px rgba(33,136,56,0.4);
 }
 
+header h1 {
+  font-size: 1.15em;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+header h1 i {
+  font-size: 0.9em;
+  color: #00695C;
+}
+
+/* ============================================ */
+/* PULSANTI HEADER                              */
+/* ============================================ */
 .btn-logout {
   background: linear-gradient(180deg, #ef4a5c 0%, #c82333 100%);
   color: white;
@@ -126,32 +151,7 @@ header {
     0 2px 4px rgba(0,0,0,0.12) inset;
 }
 
-.btn-password {
-  background: linear-gradient(180deg, #ffffff 0%, #f0f4f3 100%);
-  border: 1px solid #ddd;
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  cursor: pointer;
-  font-size: 1em;
-  color: #555;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow:
-    0 2px 3px rgba(0,0,0,0.08),
-    0 1px 0 rgba(255,255,255,0.9) inset;
-}
-.btn-password:hover {
-  background: linear-gradient(180deg, #00917d 0%, #00695C 100%);
-  color: white;
-  transform: scale(1.05);
-  box-shadow:
-    0 3px 6px rgba(0,105,92,0.35),
-    0 1px 0 rgba(255,255,255,0.3) inset;
-}
-
+.btn-password,
 .btn-darkmode {
   background: linear-gradient(180deg, #ffffff 0%, #f0f4f3 100%);
   border: 1px solid #ddd;
@@ -169,6 +169,7 @@ header {
     0 2px 3px rgba(0,0,0,0.08),
     0 1px 0 rgba(255,255,255,0.9) inset;
 }
+.btn-password:hover,
 .btn-darkmode:hover {
   background: linear-gradient(180deg, #00917d 0%, #00695C 100%);
   color: white;
@@ -188,6 +189,9 @@ header {
   box-shadow: 0 1px 2px rgba(0,0,0,0.05) inset;
 }
 
+/* ============================================ */
+/* TABS                                         */
+/* ============================================ */
 .tabs {
   display: flex;
   gap: 10px;
@@ -228,10 +232,11 @@ header {
   text-shadow: 0 1px 1px rgba(0,0,0,0.2);
 }
 
-.tab i {
-  margin-right: 8px;
-}
+.tab i { margin-right: 8px; }
 
+/* ============================================ */
+/* PULSANTI                                    */
+/* ============================================ */
 .btn-primary,
 .login-box button {
   background: linear-gradient(180deg, #00917d 0%, #00695C 50%, #005e51 100%);
@@ -297,113 +302,6 @@ header {
     0 5px 12px rgba(108,117,125,0.5),
     0 1px 0 rgba(255,255,255,0.4) inset,
     0 -2px 0 rgba(0,0,0,0.18) inset;
-}
-
-thead {
-  background: linear-gradient(180deg, #00917d 0%, #00695C 50%, #005e51 100%);
-  color: white;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.15);
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 10px 14px;
-  text-align: left;
-}
-
-tbody tr {
-  border-bottom: 1px solid #eef2f1;
-  transition: background 0.15s;
-}
-
-tbody tr:hover {
-  background: linear-gradient(180deg, #f0faf8 0%, #e3f5f1 100%);
-}
-
-.panel { display: none; }
-.panel.active { display: block; }
-
-.panel h2 {
-  color: #333;
-  font-size: 1.4em;
-  margin-bottom: 5px;
-}
-.panel h2 i {
-  color: #00695C;
-  margin-right: 10px;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.8);
-}
-.subtitle {
-  color: #888;
-  margin-bottom: 20px;
-  font-size: 0.95em;
-}
-
-.form-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
-  padding: 22px;
-  border-radius: 14px;
-  border: 1px solid #e3ebe9;
-  box-shadow:
-    0 4px 12px rgba(0,80,70,0.06),
-    0 1px 0 rgba(255,255,255,0.9) inset;
-}
-
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #555; }
-.form-group label i { color: #00695C; width: 20px; }
-.form-group input,
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 10px 14px;
-  border: 2px solid #dfe6e4;
-  border-radius: 8px;
-  font-size: 0.95em;
-  font-family: inherit;
-  transition: all 0.2s;
-  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
-  box-shadow:
-    0 2px 3px rgba(0,0,0,0.04) inset,
-    0 1px 0 rgba(255,255,255,0.9);
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #00917d;
-  background: #ffffff;
-  box-shadow:
-    0 0 0 3px rgba(0,145,125,0.15),
-    0 2px 3px rgba(0,0,0,0.04) inset;
-}
-
-input[disabled] {
-  opacity: 0.7;
-  cursor: not-allowed !important;
-  background: #f0f2f1 !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08) inset !important;
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 60px;
-}
-
-.form-row { display: flex; gap: 15px; flex-wrap: wrap; }
-.form-row .form-group { flex: 1; min-width: 150px; }
-
-.hint {
-  display: block;
-  margin-top: 4px;
-  color: #999;
-  font-size: 0.8em;
-  font-style: italic;
 }
 
 .btn-info {
@@ -554,6 +452,34 @@ input[disabled] {
   transform: scale(1.1);
 }
 
+/* ============================================ */
+/* TABELLE                                     */
+/* ============================================ */
+thead {
+  background: linear-gradient(180deg, #00917d 0%, #00695C 50%, #005e51 100%);
+  color: white;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.15);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 10px 14px;
+  text-align: left;
+}
+
+tbody tr {
+  border-bottom: 1px solid #eef2f1;
+  transition: background 0.15s;
+}
+
+tbody tr:hover {
+  background: linear-gradient(180deg, #f0faf8 0%, #e3f5f1 100%);
+}
+
 .table-wrapper {
   overflow-x: auto;
   border: 1px solid #e3ebe9;
@@ -565,6 +491,91 @@ input[disabled] {
   background: #ffffff;
 }
 .table-wrapper table { font-size: 0.9em; }
+
+/* ============================================ */
+/* PANEL / FORM                                 */
+/* ============================================ */
+.panel { display: none; }
+.panel.active { display: block; }
+
+.panel h2 {
+  color: #333;
+  font-size: 1.4em;
+  margin-bottom: 5px;
+}
+.panel h2 i {
+  color: #00695C;
+  margin-right: 10px;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+}
+.subtitle {
+  color: #888;
+  margin-bottom: 20px;
+  font-size: 0.95em;
+}
+
+.form-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid #e3ebe9;
+  box-shadow:
+    0 4px 12px rgba(0,80,70,0.06),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+}
+
+.form-group { margin-bottom: 15px; }
+.form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #555; }
+.form-group label i { color: #00695C; width: 20px; }
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #dfe6e4;
+  border-radius: 8px;
+  font-size: 0.95em;
+  font-family: inherit;
+  transition: all 0.2s;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  box-shadow:
+    0 2px 3px rgba(0,0,0,0.04) inset,
+    0 1px 0 rgba(255,255,255,0.9);
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #00917d;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 3px rgba(0,145,125,0.15),
+    0 2px 3px rgba(0,0,0,0.04) inset;
+}
+
+input[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed !important;
+  background: #f0f2f1 !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08) inset !important;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.form-row { display: flex; gap: 15px; flex-wrap: wrap; }
+.form-row .form-group { flex: 1; min-width: 150px; }
+
+.hint {
+  display: block;
+  margin-top: 4px;
+  color: #999;
+  font-size: 0.8em;
+  font-style: italic;
+}
 
 .edit-input {
   width: 100%;
@@ -616,71 +627,33 @@ input[disabled] {
 }
 .text-muted { color: #999; font-style: italic; padding: 20px; text-align: center; }
 
-/* ============================================
-   STRAORDINARIO - ROSSO PER ORE > 8
-   ============================================ */
+/* ============================================ */
+/* STRAORDINARIO                                */
+/* ============================================ */
 .ore-straordinario {
   color: #d32f2f !important;
   font-weight: bold !important;
 }
-
 .ore-straordinario td {
   background-color: #ffebee !important;
 }
-
 .ore-straordinario:hover td {
   background-color: #ffcdd2 !important;
 }
-
 .totale-oltre8 {
   color: #d32f2f !important;
   font-weight: bold !important;
   background-color: #ffebee !important;
 }
-
 .totale-normale {
   color: #2e7d32 !important;
   font-weight: bold !important;
   background-color: #e8f5e9 !important;
 }
 
-.calendario-totale-oltre8 {
-  background-color: #ffebee !important;
-  color: #d32f2f !important;
-  font-weight: bold !important;
-}
-
-.calendario-totale-normale {
-  background-color: #e8f5e9 !important;
-  color: #2e7d32 !important;
-  font-weight: bold !important;
-}
-
-.badge-straordinario {
-  background: linear-gradient(180deg, #e8455a 0%, #d32f2f 100%);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.65em;
-  font-weight: 700;
-  margin-left: 5px;
-  box-shadow: 0 1px 2px rgba(211,47,47,0.35);
-}
-
-.giorno-straordinario {
-  background-color: #ffebee !important;
-  border-color: #d32f2f !important;
-  border-width: 2px !important;
-}
-
-.giorno-straordinario .info {
-  color: #d32f2f !important;
-  font-weight: bold !important;
-}
-
-/* ============================================
-   CALENDARIO
-   ============================================ */
+/* ============================================ */
+/* CALENDARIO                                   */
+/* ============================================ */
 .calendario-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -695,23 +668,6 @@ input[disabled] {
   box-shadow:
     0 1px 3px rgba(0,0,0,0.05),
     0 1px 0 rgba(255,255,255,0.9) inset;
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.calendario-giorno:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 3px 8px rgba(0,0,0,0.1),
-    0 1px 0 rgba(255,255,255,0.9) inset;
-}
-.calendario-giorno .numero {
-  font-weight: 700;
-  font-size: 1.1em;
-  display: block;
-}
-.calendario-giorno .info {
-  font-size: 0.7em;
-  display: block;
-  margin-top: 4px;
 }
 .calendario-giorno.lavorato {
   background: linear-gradient(180deg, #f1faf4 0%, #E8F5E9 100%);
@@ -729,23 +685,6 @@ input[disabled] {
   background: linear-gradient(180deg, #fdeef0 0%, #FFEBEE 100%);
   border-color: #f44336;
 }
-.calendario-giorno.assente {
-  background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
-  border-color: #999;
-  border-style: dashed;
-}
-.calendario-giorno.assente .info { color: #999; }
-.calendario-giorno.altro-mese { background: #f5f5f5; color: #ccc; }
-.calendario-giorno.altro-mese .numero { color: #bbb; }
-.calendario-giorno.recupero {
-  background: linear-gradient(180deg, #fff9e5 0%, #fff3cd 100%);
-  border-color: #ffc107;
-}
-.calendario-giorno.straordinario {
-  background: linear-gradient(180deg, #fdeef0 0%, #ffebee 100%);
-  border-color: #d32f2f;
-  border-width: 2px;
-}
 
 .legenda {
   display: flex;
@@ -759,12 +698,11 @@ input[disabled] {
   height: 20px;
   border-radius: 4px;
   border: 1px solid rgba(0,0,0,0.1);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08) inset;
 }
 
-/* ============================================
-   RICHIESTE
-   ============================================ */
+/* ============================================ */
+/* RICHIESTE                                    */
+/* ============================================ */
 .richiesta-card {
   background: linear-gradient(180deg, #ffffff 0%, #f8faf9 100%);
   padding: 15px 20px;
@@ -790,9 +728,9 @@ input[disabled] {
 .richiesta-card .info small { color: #888; }
 .richiesta-card .azioni { display: flex; gap: 8px; }
 
-/* ============================================
-   NOTIFICHE MODALE
-   ============================================ */
+/* ============================================ */
+/* NOTIFICHE MODALE                             */
+/* ============================================ */
 .notifica-item {
   padding: 12px 16px;
   border-bottom: 1px solid #eef2f1;
@@ -805,9 +743,7 @@ input[disabled] {
 .notifica-item:hover {
   background: linear-gradient(180deg, #f7fbfa 0%, #eef8f6 100%);
 }
-.notifica-item:last-child {
-  border-bottom: none;
-}
+.notifica-item:last-child { border-bottom: none; }
 .notifica-item .notifica-testo { flex: 1; }
 .notifica-item .notifica-data {
   color: #999;
@@ -820,9 +756,9 @@ input[disabled] {
   border-left: 3px solid #00695C;
 }
 
-/* ============================================
-   MODALE
-   ============================================ */
+/* ============================================ */
+/* MODALE                                       */
+/* ============================================ */
 .modal {
   display: none;
   position: fixed;
@@ -837,9 +773,7 @@ input[disabled] {
   justify-content: center;
   align-items: center;
 }
-.modal.active {
-  display: flex;
-}
+.modal.active { display: flex; }
 .modal-content {
   background: linear-gradient(180deg, #ffffff 0%, #fbfdfc 100%);
   border-radius: 20px;
@@ -873,16 +807,195 @@ input[disabled] {
   color: #999;
   transition: color 0.2s;
 }
-.modal-close:hover {
-  color: #333;
+.modal-close:hover { color: #333; }
+.modal-body { padding: 20px 25px; }
+
+/* ============================================ */
+/* LOGIN                                        */
+/* ============================================ */
+.login-box {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 30px 20px;
 }
-.modal-body {
-  padding: 20px 25px;
+.login-header { text-align: center; margin-bottom: 25px; }
+.login-header p { color: #888; }
+
+.login-box input {
+  width: 100%;
+  padding: 12px 16px;
+  margin: 8px 0;
+  border: 2px solid #dfe6e4;
+  border-radius: 10px;
+  font-size: 1em;
+  transition: all 0.2s;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.05) inset,
+    0 1px 0 rgba(255,255,255,0.9);
+}
+.login-box input:focus {
+  outline: none;
+  border-color: #00917d;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 4px rgba(0,145,125,0.15),
+    0 2px 4px rgba(0,0,0,0.05) inset;
+}
+.login-box button {
+  width: 100%;
+  padding: 14px;
+  font-size: 1.1em;
+  margin-top: 10px;
 }
 
-/* ============================================
-   MODALE BACKUP
-   ============================================ */
+/* ============================================ */
+/* LOGO                                         */
+/* ============================================ */
+.logo-container { text-align: center; margin-bottom: 25px; }
+.logo-img {
+  max-width: 160px;
+  max-height: 160px;
+  object-fit: contain;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 4px 8px rgba(0,105,92,0.15));
+}
+.logo-small { display: flex; align-items: center; gap: 10px; }
+.logo-small-img { max-height: 58px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,105,92,0.15)); }
+.azienda-nome { font-size: 1.6em; color: #333; margin: 5px 0; }
+.azienda-small { font-weight: 700; color: #00695C; font-size: 1.65em; letter-spacing: 0.5px; }
+#logo-fallback i { font-size: 70px; color: #00695C; }
+
+/* ============================================ */
+/* RICORDAMI                                    */
+/* ============================================ */
+.ricordami-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  cursor: pointer;
+  font-size: 0.9em;
+  color: #555;
+  user-select: none;
+}
+.ricordami-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #00695C;
+}
+.ricordami-label span { color: #666; }
+.ricordami-label:hover span { color: #00695C; }
+
+/* ============================================ */
+/* SMART TIME INPUT                             */
+/* ============================================ */
+input.smart-time {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #dfe6e4;
+  border-radius: 10px;
+  font-size: 1.4em;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 3px;
+  color: #00695C;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  transition: all 0.2s;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.05) inset,
+    0 1px 0 rgba(255,255,255,0.9);
+}
+input.smart-time:focus {
+  outline: none;
+  border-color: #00917d;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 4px rgba(0,145,125,0.15),
+    0 2px 4px rgba(0,0,0,0.05) inset;
+}
+input.smart-time::placeholder {
+  color: #bbb;
+  letter-spacing: 3px;
+}
+
+/* ============================================ */
+/* ANIMAZIONI LOGIN                             */
+/* ============================================ */
+@keyframes loginFadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes loginZoomIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes loginFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.95); }
+}
+@keyframes loginShake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-8px); }
+  20% { transform: translateX(8px); }
+  30% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  50% { transform: translateX(-4px); }
+  60% { transform: translateX(4px); }
+  70% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+  90% { transform: translateX(-1px); }
+}
+
+#login-page .login-header {
+  animation: loginFadeSlideUp 0.35s ease-out both;
+}
+#login-page .logo-container {
+  animation: loginZoomIn 0.45s ease-out both;
+  animation-delay: 0.05s;
+}
+
+.login-anim-1,
+.login-anim-2,
+.login-anim-3,
+.login-anim-4 {
+  opacity: 0;
+  animation: loginFadeSlideUp 0.28s ease-out forwards;
+}
+.login-anim-1 { animation-delay: 0.15s; }
+.login-anim-2 { animation-delay: 0.23s; }
+.login-anim-3 { animation-delay: 0.31s; }
+.login-anim-4 { animation-delay: 0.39s; }
+
+#login-page .login-box button:active {
+  transform: scale(0.97);
+  transition: transform 0.08s ease;
+}
+
+.login-box.shake {
+  animation: loginShake 0.5s ease-in-out !important;
+}
+.login-box.fade-out {
+  animation: loginFadeOut 0.22s ease-in forwards !important;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #login-page .login-header,
+  #login-page .logo-container,
+  .login-anim-1, .login-anim-2, .login-anim-3, .login-anim-4,
+  .login-box.shake, .login-box.fade-out {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+/* ============================================ */
+/* MODALE BACKUP                                */
+/* ============================================ */
 .backup-opzione {
   display: flex;
   align-items: center;
@@ -930,9 +1043,9 @@ input[disabled] {
   font-size: 0.85em;
 }
 
-/* ============================================
-   MODALE DETTAGLIO COMMESSA
-   ============================================ */
+/* ============================================ */
+/* MODALE DETTAGLIO COMMESSA                    */
+/* ============================================ */
 .modal-dettaglio-commessa-content {
   max-width: 1200px !important;
   width: 95% !important;
@@ -963,7 +1076,9 @@ input[disabled] {
   font-size: 0.85em;
 }
 
-/* FILTRI */
+/* ============================================ */
+/* FILTRI COMMESSA / DIPENDENTE                 */
+/* ============================================ */
 .filtri-commessa {
   background: linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
   border: 1px solid #e3ebe9;
@@ -1001,7 +1116,9 @@ input[disabled] {
 }
 
 .filtro-group input[type="date"],
-.filtro-group input[type="text"] {
+.filtro-group input[type="text"],
+.filtro-group input[type="number"],
+.filtro-group select {
   width: 100%;
   padding: 8px 12px;
   border: 2px solid #dfe6e4;
@@ -1012,7 +1129,8 @@ input[disabled] {
   box-shadow: 0 2px 3px rgba(0,0,0,0.04) inset;
 }
 
-.filtro-group input:focus {
+.filtro-group input:focus,
+.filtro-group select:focus {
   outline: none;
   border-color: #00917d;
   box-shadow:
@@ -1069,10 +1187,6 @@ input[disabled] {
     0 1px 0 rgba(255,255,255,0.3) inset;
 }
 
-.filtro-dipendente-item input[type="checkbox"] {
-  display: none;
-}
-
 .filtri-azioni {
   display: flex;
   gap: 10px;
@@ -1088,11 +1202,13 @@ input[disabled] {
   font-size: 0.9em;
 }
 
-/* OUTPUT DETTAGLIO */
 .dettaglio-output {
   margin-top: 20px;
 }
 
+/* ============================================ */
+/* GRUPPO DIPENDENTE (modale commessa)          */
+/* ============================================ */
 .gruppo-dipendente {
   margin-bottom: 25px;
   background: linear-gradient(180deg, #ffffff 0%, #fafdfc 100%);
@@ -1146,467 +1262,9 @@ input[disabled] {
     0 1px 0 rgba(255,255,255,0.7) inset;
 }
 
-/* ============================================
-   LOGIN
-   ============================================ */
-.login-box {
-  max-width: 400px;
-  margin: 0 auto;
-  padding: 30px 20px;
-}
-.login-header { text-align: center; margin-bottom: 25px; }
-.login-header p { color: #888; }
-
-.login-box input {
-  width: 100%;
-  padding: 12px 16px;
-  margin: 8px 0;
-  border: 2px solid #dfe6e4;
-  border-radius: 10px;
-  font-size: 1em;
-  transition: all 0.2s;
-  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
-  box-shadow:
-    0 2px 4px rgba(0,0,0,0.05) inset,
-    0 1px 0 rgba(255,255,255,0.9);
-}
-.login-box input:focus {
-  outline: none;
-  border-color: #00917d;
-  background: #ffffff;
-  box-shadow:
-    0 0 0 4px rgba(0,145,125,0.15),
-    0 2px 4px rgba(0,0,0,0.05) inset;
-}
-.login-box button {
-  width: 100%;
-  padding: 14px;
-  font-size: 1.1em;
-  margin-top: 10px;
-}
-
-/* ============================================
-   LOGO
-   ============================================ */
-.logo-container { text-align: center; margin-bottom: 25px; }
-.logo-img {
-  max-width: 160px;
-  max-height: 160px;
-  object-fit: contain;
-  border-radius: 12px;
-  margin-bottom: 10px;
-  filter: drop-shadow(0 4px 8px rgba(0,105,92,0.15));
-}
-.logo-small { display: flex; align-items: center; gap: 10px; }
-.logo-small-img { max-height: 58px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,105,92,0.15)); }
-.azienda-nome { font-size: 1.6em; color: #333; margin: 5px 0; }
-.azienda-small { font-weight: 700; color: #00695C; font-size: 1.65em; letter-spacing: 0.5px; }
-#logo-fallback i { font-size: 70px; color: #00695C; }
-
-/* ============================================
-   DARK MODE
-   ============================================ */
-body.dark-mode {
-  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #0f1626 100%) !important;
-}
-
-body.dark-mode::before {
-  background:
-    radial-gradient(ellipse at 15% 20%, rgba(100,181,246,0.12) 0%, transparent 45%),
-    radial-gradient(ellipse at 85% 80%, rgba(77,182,172,0.08) 0%, transparent 40%),
-    radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.05) 0%, transparent 60%);
-}
-
-.dark-mode .container {
-  background: linear-gradient(180deg, #1a2340 0%, #16213e 100%);
-  box-shadow:
-    0 25px 70px rgba(0,0,0,0.85),
-    0 1px 0 rgba(255,255,255,0.08) inset;
-  border: 1px solid rgba(255,255,255,0.08);
-}
-
-.dark-mode .form-card {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-  box-shadow:
-    0 4px 12px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.05) inset;
-}
-
-.dark-mode .form-group input,
-.dark-mode .form-group select,
-.dark-mode .form-group textarea {
-  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
-  color: #e0e0e0;
-  border-color: #2a2a5a;
-  box-shadow:
-    0 2px 4px rgba(0,0,0,0.3) inset,
-    0 1px 0 rgba(255,255,255,0.05);
-}
-
-.dark-mode .form-group input:focus,
-.dark-mode .form-group select:focus,
-.dark-mode .form-group textarea:focus {
-  border-color: #4db6ac;
-  box-shadow:
-    0 0 0 3px rgba(77,182,172,0.2),
-    0 2px 4px rgba(0,0,0,0.3) inset;
-}
-
-.dark-mode .tab {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  color: #aaa;
-  border-color: #2a2a5a;
-  box-shadow:
-    0 1px 2px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.05) inset;
-}
-
-.dark-mode .tab.active {
-  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #00594d 100%);
-  color: white;
-  box-shadow:
-    0 4px 10px rgba(0,105,92,0.5),
-    0 1px 0 rgba(255,255,255,0.15) inset,
-    0 -2px 0 rgba(0,0,0,0.3) inset;
-}
-
-.dark-mode .user-badge {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  color: #e0e0e0;
-  border-color: #2a2a5a;
-  box-shadow:
-    0 1px 2px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.05) inset;
-}
-
-.dark-mode .panel h2 { color: #e0e0e0; }
-.dark-mode header h1 { color: #e0e0e0; }
-.dark-mode .subtitle { color: #aaa; }
-.dark-mode .text-muted { color: #888; }
-
-.dark-mode .table-wrapper {
-  border-color: #2a2a5a;
-  background: #0f1a30;
-  box-shadow:
-    0 2px 6px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.03) inset;
-}
-
-.dark-mode thead {
-  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #00594d 100%);
-}
-
-.dark-mode tbody td { color: #e0e0e0; }
-.dark-mode tbody tr { border-color: #2a2a5a; }
-.dark-mode tbody tr:hover {
-  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
-}
-
-.dark-mode .btn-password,
-.dark-mode .btn-darkmode {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-  color: #e0e0e0;
-  box-shadow:
-    0 1px 2px rgba(0,0,0,0.4),
-    0 1px 0 rgba(255,255,255,0.05) inset;
-}
-
-.dark-mode .btn-password:hover,
-.dark-mode .btn-darkmode:hover {
-  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
-  color: white;
-}
-
-.dark-mode .btn-notifica { color: #e0e0e0; }
-.dark-mode .btn-notifica:hover {
-  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
-}
-
-.dark-mode .legenda {
-  background: #1a2340;
-  border-color: #2a2a5a;
-}
-.dark-mode .legenda span { color: #e0e0e0; }
-
-.dark-mode .calendario-giorno {
-  background: linear-gradient(180deg, #16213e 0%, #0f3460 100%);
-  border-color: #2a2a5a;
-  color: #e0e0e0;
-}
-.dark-mode .calendario-giorno .numero { color: #e0e0e0; }
-.dark-mode .calendario-giorno.altro-mese { background: #1a2340; }
-.dark-mode .calendario-giorno.altro-mese .numero { color: #666; }
-.dark-mode .calendario-giorno.lavorato {
-  background: linear-gradient(180deg, #1a3a2a 0%, #142e20 100%);
-  border-color: #4CAF50;
-}
-.dark-mode .calendario-giorno.ferie {
-  background: linear-gradient(180deg, #1a2a4a 0%, #14203a 100%);
-  border-color: #2196F3;
-}
-.dark-mode .calendario-giorno.permesso {
-  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
-  border-color: #FF9800;
-}
-.dark-mode .calendario-giorno.malattia {
-  background: linear-gradient(180deg, #3a1a1a 0%, #2e1414 100%);
-  border-color: #f44336;
-}
-.dark-mode .calendario-giorno.assente {
-  background: #1a1a1a;
-  border-color: #666;
-}
-
-.dark-mode .modal-content {
-  background: linear-gradient(180deg, #1a2340 0%, #16213e 100%);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow:
-    0 25px 70px rgba(0,0,0,0.6),
-    0 1px 0 rgba(255,255,255,0.05) inset;
-}
-
-.dark-mode .modal-header {
-  border-color: rgba(77,182,172,0.15);
-}
-.dark-mode .modal-header h2 { color: #e0e0e0; }
-.dark-mode .modal-close { color: #888; }
-.dark-mode .modal-close:hover { color: #e0e0e0; }
-
-.dark-mode .login-box { background: transparent; }
-.dark-mode .login-header h2 { color: #e0e0e0; }
-.dark-mode .login-header p { color: #888; }
-
-.dark-mode .login-box input {
-  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
-  color: #e0e0e0;
-  border-color: #2a2a5a;
-  box-shadow:
-    0 2px 4px rgba(0,0,0,0.3) inset,
-    0 1px 0 rgba(255,255,255,0.03);
-}
-.dark-mode .login-box input:focus {
-  border-color: #4db6ac;
-  box-shadow:
-    0 0 0 4px rgba(77,182,172,0.2),
-    0 2px 4px rgba(0,0,0,0.3) inset;
-}
-
-.dark-mode .azienda-nome { color: #e0e0e0; }
-
-.dark-mode .richiesta-card {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-  box-shadow:
-    0 2px 6px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.03) inset;
-}
-.dark-mode .richiesta-card .info strong { color: #e0e0e0; }
-.dark-mode .richiesta-card .info small { color: #aaa; }
-
-.dark-mode .edit-input {
-  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
-  color: #e0e0e0;
-  border-color: #2a2a5a;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3) inset;
-}
-.dark-mode .edit-input:focus {
-  border-color: #4db6ac;
-}
-
-.dark-mode .info-msg {
-  background: linear-gradient(180deg, #1a2a4a 0%, #14203a 100%);
-  color: #90caf9;
-  border-color: #2196F3;
-  box-shadow:
-    0 2px 4px rgba(33,150,243,0.2),
-    0 1px 0 rgba(255,255,255,0.03) inset;
-}
-
-.dark-mode input[disabled] {
-  background: linear-gradient(180deg, #1a2340 0%, #16213e 100%) !important;
-  color: #888 !important;
-}
-
-.dark-mode #select-azienda {
-  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
-  color: #e0e0e0;
-  border-color: #2a2a5a;
-}
-
-/* DARK MODE - MODALE BACKUP */
-.dark-mode .backup-opzione {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-}
-.dark-mode .backup-opzione:hover {
-  border-color: #4db6ac;
-  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
-}
-.dark-mode .backup-opzione strong { color: #e0e0e0; }
-.dark-mode .backup-opzione small { color: #aaa; }
-
-/* DARK MODE - MODALE DETTAGLIO COMMESSA */
-.dark-mode .filtri-commessa {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-  box-shadow:
-    0 2px 6px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.03) inset;
-}
-
-.dark-mode .filtro-group label { color: #e0e0e0; }
-
-.dark-mode .filtro-group input {
-  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
-  color: #e0e0e0;
-  border-color: #2a2a5a;
-}
-
-.dark-mode .filtro-dipendenti-list {
-  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
-  border-color: #2a2a5a;
-}
-
-.dark-mode .filtro-dipendente-item {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-  color: #e0e0e0;
-  box-shadow:
-    0 1px 2px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.03) inset;
-}
-
-.dark-mode .filtro-dipendente-item:hover {
-  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
-  border-color: #4db6ac;
-}
-
-.dark-mode .filtro-dipendente-item.attivo {
-  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
-  border-color: #4db6ac;
-  color: white;
-}
-
-.dark-mode .gruppo-dipendente {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-  box-shadow:
-    0 3px 10px rgba(0,0,0,0.3),
-    0 1px 0 rgba(255,255,255,0.03) inset;
-}
-
-.dark-mode .totale-generale {
-  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
-  border-color: #ffc107;
-  color: #ffc107;
-  box-shadow:
-    0 3px 10px rgba(255,193,7,0.15),
-    0 1px 0 rgba(255,255,255,0.05) inset;
-}
-
-.dark-mode .modal-header-left h2 { color: #4db6ac; }
-.dark-mode .modal-header-left small { color: #aaa; }
-
-/* ============================================
-   RESPONSIVE
-   ============================================ */
-@media (max-width: 768px) {
-  .container { padding: 15px; border-radius: 16px; }
-  .form-row { flex-direction: column; }
-  .form-row .form-group { min-width: 100%; }
-  .tab { flex: 1; text-align: center; padding: 8px 12px; font-size: 0.8em; }
-  header { flex-direction: column; align-items: flex-start; }
-  .header-left { flex-direction: column; align-items: flex-start; width: 100%; }
-  .user-badge { width: 100%; justify-content: center; }
-  .btn-logout { width: 100%; justify-content: center; }
-  .btn-password { align-self: center; }
-  .btn-darkmode { align-self: center; }
-  .calendario-grid { gap: 3px; }
-  .calendario-giorno { min-height: 40px; padding: 5px 2px; font-size: 0.7em; }
-  .calendario-giorno .numero { font-size: 0.9em; }
-  .logo-img { max-width: 100px; max-height: 100px; }
-  .azienda-nome { font-size: 1.2em; }
-  .richiesta-card { flex-direction: column; align-items: stretch; }
-  .richiesta-card .azioni { justify-content: center; }
-  .login-box { padding: 15px; }
-  #select-azienda { width: 100%; }
-
-  /* MODALE DETTAGLIO COMMESSA - RESPONSIVE */
-  .modal-dettaglio-commessa-content {
-    max-width: 100% !important;
-    width: 100% !important;
-    max-height: 100vh !important;
-    border-radius: 0 !important;
-  }
-
-  .modal-header-left {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .modal-logo {
-    max-height: 40px;
-    max-width: 40px;
-  }
-
-  .modal-header-left h2 {
-    font-size: 1.1em;
-  }
-
-  .filtri-row {
-    flex-direction: column;
-  }
-
-  .filtro-group {
-    min-width: 100%;
-  }
-
-  .filtri-azioni {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filtri-azioni button {
-    width: 100%;
-  }
-
-  .contatore-registrazioni {
-    text-align: center;
-    margin-top: 10px;
-  }
-
-  .filtro-dipendenti-list {
-    max-height: 120px;
-  }
-
-  .gruppo-dipendente-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-}
-
-@media (max-width: 480px) {
-  .tab { font-size: 0.7em; padding: 6px 8px; }
-  .calendario-giorno { min-height: 30px; padding: 3px 1px; font-size: 0.6em; }
-
-  .dettaglio-output table {
-    font-size: 0.8em;
-  }
-
-  .dettaglio-output th,
-  .dettaglio-output td {
-    padding: 6px 4px;
-  }
-}
-
-/* ============================================
-   MODALE DETTAGLIO DIPENDENTE
-   ============================================ */
-
+/* ============================================ */
+/* MODALE DETTAGLIO DIPENDENTE                  */
+/* ============================================ */
 .dipendente-info-box {
   background: linear-gradient(180deg, #00917d 0%, #00695C 50%, #005e51 100%);
   color: white;
@@ -1644,7 +1302,9 @@ body.dark-mode::before {
   box-shadow: 0 1px 2px rgba(0,0,0,0.15) inset;
 }
 
-/* Raggruppamento per giorno */
+/* ============================================ */
+/* GRUPPO GIORNO (modale dipendente)            */
+/* ============================================ */
 .gruppo-giorno {
   margin-bottom: 25px;
   background: linear-gradient(180deg, #ffffff 0%, #fafdfc 100%);
@@ -1722,76 +1382,14 @@ body.dark-mode::before {
   font-style: italic;
 }
 
-/* Colori testo tipo registrazione */
-.tipo-lavoro { color: #2e7d32; font-weight: 600; }
-.tipo-ferie { color: #0d47a1; font-weight: 600; }
-.tipo-permesso { color: #e65100; font-weight: 600; }
-.tipo-malattia { color: #b71c1c; font-weight: 600; }
-.tipo-recupero { color: #856404; font-weight: 600; }
-
-/* Icona tipo nella tabella */
 .icona-tipo {
   font-size: 1.1em;
   margin-right: 6px;
 }
 
-/* Dark mode - Modale dettaglio dipendente */
-.dark-mode .dipendente-info-box {
-  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #004D40 100%);
-}
-.dark-mode .gruppo-giorno {
-  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
-  border-color: #2a2a5a;
-}
-.dark-mode .gruppo-giorno-header {
-  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #004D40 100%);
-}
-.dark-mode .riga-speciale.ferie td {
-  background: linear-gradient(180deg, #1a2a4a 0%, #14203a 100%);
-  color: #90caf9;
-}
-.dark-mode .riga-speciale.permesso td {
-  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
-  color: #ffb74d;
-}
-.dark-mode .riga-speciale.malattia td {
-  background: linear-gradient(180deg, #3a1a1a 0%, #2e1414 100%);
-  color: #ef9a9a;
-}
-.dark-mode .riga-speciale.assente td {
-  background: #1a1a1a;
-  color: #888;
-}
-.dark-mode .riga-speciale.weekend td {
-  background: #0f0f1a;
-  color: #666;
-}
-.dark-mode .tipo-lavoro { color: #81c784; }
-.dark-mode .tipo-ferie { color: #64b5f6; }
-.dark-mode .tipo-permesso { color: #ffb74d; }
-.dark-mode .tipo-malattia { color: #ef9a9a; }
-.dark-mode .tipo-recupero { color: #ffd54f; }
-
-/* Responsive modale dipendente */
-@media (max-width: 768px) {
-  .dipendente-info-box {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .dipendente-info-box .info-dettagli {
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-  }
-  .gruppo-giorno-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-/* ============================================
-   CALENDARIO - SELETTORE VISTA (solo dipendenti)
-   ============================================ */
+/* ============================================ */
+/* CALENDARIO DETTAGLIATO (vista dipendente)    */
+/* ============================================ */
 .cal-vista-selector {
   display: flex;
   gap: 15px;
@@ -1837,10 +1435,6 @@ body.dark-mode::before {
   display: none;
 }
 
-.vista-radio input[type="radio"]:checked + span {
-  color: #00695C;
-}
-
 .vista-radio:has(input[type="radio"]:checked) {
   background: linear-gradient(180deg, #00917d 0%, #00695C 50%, #005e51 100%);
   border-color: #004D40;
@@ -1860,9 +1454,6 @@ body.dark-mode::before {
   margin-right: 6px;
 }
 
-/* ============================================
-   CALENDARIO DETTAGLIATO (vista dipendente)
-   ============================================ */
 .calendario-dettagliato-info {
   background: linear-gradient(180deg, #00917d 0%, #00695C 50%, #005e51 100%);
   color: white;
@@ -1900,7 +1491,6 @@ body.dark-mode::before {
   box-shadow: 0 1px 2px rgba(0,0,0,0.15) inset;
 }
 
-/* Raggruppamento per giorno */
 .giorno-dettaglio {
   margin-bottom: 20px;
   background: linear-gradient(180deg, #ffffff 0%, #fafdfc 100%);
@@ -1948,7 +1538,6 @@ body.dark-mode::before {
   box-shadow: 0 1px 2px rgba(0,0,0,0.15) inset;
 }
 
-/* Riga speciale (FERIE/PERMESSO/MALATTIA/ASSENTE) */
 .riga-speciale-giorno td {
   text-align: center;
   padding: 20px;
@@ -1974,7 +1563,272 @@ body.dark-mode::before {
   font-style: italic;
 }
 
-/* Dark Mode - Calendario dettagliato */
+/* ============================================ */
+/* DARK MODE                                    */
+/* ============================================ */
+body.dark-mode {
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #0f1626 100%) !important;
+}
+
+body.dark-mode::before {
+  background:
+    radial-gradient(ellipse at 15% 20%, rgba(100,181,246,0.12) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 80%, rgba(77,182,172,0.08) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.05) 0%, transparent 60%);
+}
+
+.dark-mode .container {
+  background: linear-gradient(180deg, #1a2340 0%, #16213e 100%);
+  box-shadow:
+    0 25px 70px rgba(0,0,0,0.85),
+    0 1px 0 rgba(255,255,255,0.08) inset;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.dark-mode .form-card {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.3),
+    0 1px 0 rgba(255,255,255,0.05) inset;
+}
+
+.dark-mode .form-group input,
+.dark-mode .form-group select,
+.dark-mode .form-group textarea {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.3) inset,
+    0 1px 0 rgba(255,255,255,0.05);
+}
+
+.dark-mode .form-group input:focus,
+.dark-mode .form-group select:focus,
+.dark-mode .form-group textarea:focus {
+  border-color: #4db6ac;
+  box-shadow:
+    0 0 0 3px rgba(77,182,172,0.2),
+    0 2px 4px rgba(0,0,0,0.3) inset;
+}
+
+.dark-mode .tab {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  color: #aaa;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .tab.active {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #00594d 100%);
+  color: white;
+}
+
+.dark-mode .user-badge {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .panel h2 { color: #e0e0e0; }
+.dark-mode header h1 { color: #e0e0e0; }
+.dark-mode .subtitle { color: #aaa; }
+.dark-mode .text-muted { color: #888; }
+
+.dark-mode .table-wrapper {
+  border-color: #2a2a5a;
+  background: #0f1a30;
+}
+
+.dark-mode thead {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #00594d 100%);
+}
+
+.dark-mode tbody td { color: #e0e0e0; }
+.dark-mode tbody tr { border-color: #2a2a5a; }
+.dark-mode tbody tr:hover {
+  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
+}
+
+.dark-mode .btn-password,
+.dark-mode .btn-darkmode {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+  color: #e0e0e0;
+}
+
+.dark-mode .btn-password:hover,
+.dark-mode .btn-darkmode:hover {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
+  color: white;
+}
+
+.dark-mode .btn-notifica { color: #e0e0e0; }
+.dark-mode .btn-notifica:hover {
+  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
+}
+
+.dark-mode .legenda {
+  background: #1a2340;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .modal-content {
+  background: linear-gradient(180deg, #1a2340 0%, #16213e 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.dark-mode .modal-header {
+  border-color: rgba(77,182,172,0.15);
+}
+.dark-mode .modal-header h2 { color: #e0e0e0; }
+.dark-mode .modal-close { color: #888; }
+.dark-mode .modal-close:hover { color: #e0e0e0; }
+
+.dark-mode .login-box { background: transparent; }
+.dark-mode .login-header h2 { color: #e0e0e0; }
+.dark-mode .login-header p { color: #888; }
+
+.dark-mode .login-box input {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .login-box input:focus {
+  border-color: #4db6ac;
+}
+
+.dark-mode .azienda-nome { color: #e0e0e0; }
+
+.dark-mode .richiesta-card {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .richiesta-card .info strong { color: #e0e0e0; }
+.dark-mode .richiesta-card .info small { color: #aaa; }
+
+.dark-mode .edit-input {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .info-msg {
+  background: linear-gradient(180deg, #1a2a4a 0%, #14203a 100%);
+  color: #90caf9;
+  border-color: #2196F3;
+}
+
+.dark-mode input[disabled] {
+  background: linear-gradient(180deg, #1a2340 0%, #16213e 100%) !important;
+  color: #888 !important;
+}
+
+.dark-mode #select-azienda {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .backup-opzione {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .backup-opzione:hover {
+  border-color: #4db6ac;
+  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
+}
+
+.dark-mode .backup-opzione strong { color: #e0e0e0; }
+.dark-mode .backup-opzione small { color: #aaa; }
+
+.dark-mode .filtri-commessa {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .filtro-group label { color: #e0e0e0; }
+
+.dark-mode .filtro-group input,
+.dark-mode .filtro-group select {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .filtro-dipendenti-list {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .filtro-dipendente-item {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+  color: #e0e0e0;
+}
+
+.dark-mode .filtro-dipendente-item:hover {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
+  border-color: #4db6ac;
+}
+
+.dark-mode .filtro-dipendente-item.attivo {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
+  border-color: #4db6ac;
+  color: white;
+}
+
+.dark-mode .gruppo-dipendente {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .totale-generale {
+  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
+  border-color: #ffc107;
+  color: #ffc107;
+}
+
+.dark-mode .modal-header-left h2 { color: #4db6ac; }
+.dark-mode .modal-header-left small { color: #aaa; }
+
+.dark-mode .dipendente-info-box {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #004D40 100%);
+}
+
+.dark-mode .gruppo-giorno {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .gruppo-giorno-header {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #004D40 100%);
+}
+
+.dark-mode .riga-speciale.ferie td,
+.dark-mode .riga-speciale-giorno.ferie td {
+  background: linear-gradient(180deg, #1a2a4a 0%, #14203a 100%);
+  color: #90caf9;
+}
+.dark-mode .riga-speciale.permesso td,
+.dark-mode .riga-speciale-giorno.permesso td {
+  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
+  color: #ffb74d;
+}
+.dark-mode .riga-speciale.malattia td,
+.dark-mode .riga-speciale-giorno.malattia td {
+  background: linear-gradient(180deg, #3a1a1a 0%, #2e1414 100%);
+  color: #ef9a9a;
+}
+.dark-mode .riga-speciale.assente td,
+.dark-mode .riga-speciale-giorno.assente td {
+  background: #1a1a1a;
+  color: #888;
+}
+
 .dark-mode .cal-vista-selector {
   background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
   border-color: #2a2a5a;
@@ -1984,11 +1838,6 @@ body.dark-mode::before {
   background: linear-gradient(180deg, #16213e 0%, #0f3460 100%);
   border-color: #2a2a5a;
   color: #e0e0e0;
-}
-
-.dark-mode .vista-radio:hover {
-  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
-  border-color: #4db6ac;
 }
 
 .dark-mode .vista-radio:has(input[type="radio"]:checked) {
@@ -2010,25 +1859,689 @@ body.dark-mode::before {
   background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #004D40 100%);
 }
 
-.dark-mode .riga-speciale-giorno.ferie td {
-  background: linear-gradient(180deg, #1a2a4a 0%, #14203a 100%);
-  color: #90caf9;
+.dark-mode .ricordami-label { color: #e0e0e0; }
+.dark-mode .ricordami-label span { color: #aaa; }
+.dark-mode .ricordami-label:hover span { color: #4db6ac; }
+
+.dark-mode input.smart-time {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  color: #4db6ac;
+  border-color: #2a2a5a;
 }
-.dark-mode .riga-speciale-giorno.permesso td {
-  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
-  color: #ffb74d;
+
+.dark-mode input.smart-time:focus {
+  border-color: #4db6ac;
 }
-.dark-mode .riga-speciale-giorno.malattia td {
-  background: linear-gradient(180deg, #3a1a1a 0%, #2e1414 100%);
-  color: #ef9a9a;
+/* ============================================ */
+/* ⭐ NUMERI MANCANTI                           */
+/* ============================================ */
+
+/* ============================================ */
+/* PULSANTE NELLA LOGIN                         */
+/* ============================================ */
+.numeri-mancanti-login-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 18px 0 14px 0;
+  color: #999;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
-.dark-mode .riga-speciale-giorno.assente td {
-  background: #1a1a1a;
+
+.numeri-mancanti-login-separator::before,
+.numeri-mancanti-login-separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #dfe6e4;
+}
+
+.numeri-mancanti-login-separator span {
+  padding: 0 12px;
+}
+
+.btn-numeri-mancanti {
+  width: 100%;
+  padding: 14px;
+  font-size: 1.05em;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: linear-gradient(180deg, #ffffff 0%, #eef4f3 100%);
+  border: 2px solid #00695C;
+  color: #00695C;
+  box-shadow:
+    0 3px 6px rgba(0,105,92,0.12),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+  letter-spacing: 0.5px;
+}
+
+.btn-numeri-mancanti:hover {
+  background: linear-gradient(180deg, #00695C 0%, #005e51 100%);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 12px rgba(0,105,92,0.35),
+    0 1px 0 rgba(255,255,255,0.3) inset;
+}
+
+.btn-numeri-mancanti:active {
+  transform: translateY(1px);
+}
+
+.btn-numeri-mancanti i {
+  margin-right: 8px;
+}
+
+/* ============================================ */
+/* LISTA COMMESSE (SCHERMATA 1)                 */
+/* ============================================ */
+.nm-commesse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.nm-commessa-card {
+  display: flex;
+  align-items: stretch;
+  background: linear-gradient(180deg, #ffffff 0%, #f8faf9 100%);
+  border: 2px solid #dfe6e4;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s;
+  box-shadow:
+    0 2px 6px rgba(0,80,70,0.06),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+  position: relative;
+}
+
+.nm-commessa-card:hover {
+  border-color: #00917d;
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 16px rgba(0,105,92,0.15),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+}
+
+.nm-commessa-header {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  cursor: pointer;
+  color: #333;
+}
+
+.nm-commessa-header > i.fa-folder {
+  font-size: 1.8em;
+  color: #00695C;
+  flex-shrink: 0;
+}
+
+.nm-commessa-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.nm-commessa-codice {
+  font-weight: 700;
+  font-size: 1.05em;
+  color: #00695C;
+  margin-bottom: 3px;
+  word-break: break-all;
+}
+
+.nm-commessa-meta {
+  font-size: 0.8em;
   color: #888;
 }
 
-/* Responsive - Calendario dettagliato */
+.nm-btn-cancella-commessa {
+  background: linear-gradient(180deg, #ef4a5c 0%, #dc3545 100%);
+  color: white;
+  border: none;
+  padding: 0 16px;
+  cursor: pointer;
+  font-size: 1.1em;
+  transition: all 0.2s;
+  border-left: 2px solid #b81e2d;
+}
+
+.nm-btn-cancella-commessa:hover {
+  background: linear-gradient(180deg, #f05a6b 0%, #c82333 100%);
+}
+
+/* ============================================ */
+/* SCHERMATA 5 CARTELLE (SCHERMATA 2)           */
+/* ============================================ */
+.nm-cartelle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.nm-cartella {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f7f5 100%);
+  border: 2px solid #dfe6e4;
+  border-radius: 14px;
+  padding: 25px 15px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow:
+    0 3px 8px rgba(0,80,70,0.06),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.nm-cartella:hover {
+  border-color: #00917d;
+  transform: translateY(-3px);
+  box-shadow:
+    0 8px 20px rgba(0,105,92,0.2),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+  background: linear-gradient(180deg, #ffffff 0%, #e3f5f1 100%);
+}
+
+.nm-cartella-nome {
+  font-weight: 700;
+  font-size: 1.05em;
+  color: #00695C;
+  letter-spacing: 0.5px;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.nm-cartella-count {
+  display: inline-block;
+  background: linear-gradient(180deg, #00917d 0%, #00695C 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 0.85em;
+  padding: 4px 14px;
+  border-radius: 12px;
+  min-width: 40px;
+  box-shadow:
+    0 2px 4px rgba(0,105,92,0.3),
+    0 1px 0 rgba(255,255,255,0.2) inset;
+}
+
+/* ============================================ */
+/* PULSANTE CONDIVIDI COMMESSA                  */
+/* ============================================ */
+.nm-condividi-commessa-wrapper {
+  margin: 15px 0 25px 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.btn-condividi-commessa {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.btn-condividi-commessa i {
+  font-size: 1.05em;
+}
+
+/* ============================================ */
+/* MODALE CREA COMMESSA                         */
+/* ============================================ */
+.nm-formato-commessa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 20px 0;
+  padding: 16px;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  border: 2px solid #dfe6e4;
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+
+.nm-prefisso,
+.nm-separatore {
+  font-weight: 700;
+  font-size: 1.4em;
+  color: #00695C;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+}
+
+.nm-input-cifre,
+.nm-input-chars {
+  padding: 10px 12px;
+  border: 2px solid #00917d;
+  border-radius: 8px;
+  font-size: 1.3em;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 3px;
+  color: #00695C;
+  background: white;
+  transition: all 0.2s;
+  box-shadow:
+    0 0 0 3px rgba(0,145,125,0.1),
+    0 2px 4px rgba(0,0,0,0.05) inset;
+}
+
+.nm-input-cifre {
+  width: 90px;
+}
+
+.nm-input-chars {
+  width: 130px;
+  text-transform: uppercase;
+}
+
+.nm-input-cifre:focus,
+.nm-input-chars:focus {
+  outline: none;
+  border-color: #004D40;
+  box-shadow:
+    0 0 0 4px rgba(0,145,125,0.2),
+    0 2px 4px rgba(0,0,0,0.05) inset;
+}
+
+.nm-preview {
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  font-size: 1.05em;
+  font-weight: 700;
+  color: #555;
+  padding: 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  letter-spacing: 1px;
+}
+
+/* ============================================ */
+/* MODALE POPUP NUMERI                          */
+/* ============================================ */
+.nm-popup-content {
+  max-width: 700px !important;
+  width: 95% !important;
+  max-height: 85vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.nm-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px 25px;
+  overflow: hidden;
+  max-height: calc(85vh - 80px);
+}
+
+.nm-input-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.nm-input-numero {
+  flex: 1;
+  padding: 14px 18px;
+  border: 2px solid #dfe6e4;
+  border-radius: 10px;
+  font-size: 1.05em;
+  font-family: Arial, sans-serif;
+  transition: all 0.2s;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  box-shadow: 0 2px 3px rgba(0,0,0,0.04) inset;
+}
+
+.nm-input-numero:focus {
+  outline: none;
+  border-color: #00917d;
+  background: white;
+  box-shadow:
+    0 0 0 3px rgba(0,145,125,0.15),
+    0 2px 3px rgba(0,0,0,0.04) inset;
+}
+
+.nm-input-wrapper .btn-primary {
+  padding: 14px 20px;
+  white-space: nowrap;
+}
+
+.nm-lista-numeri {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #e3ebe9;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fafcfb;
+  min-height: 150px;
+  max-height: 45vh;
+}
+
+.nm-numero-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  border: 1px solid #eef2f1;
+  transition: all 0.15s;
+}
+
+.nm-numero-item:hover {
+  border-color: #00917d;
+  box-shadow: 0 2px 6px rgba(0,105,92,0.08);
+}
+
+.nm-numero-testo {
+  flex: 1;
+  font-size: 1em;
+  color: #333;
+  font-family: Arial, sans-serif;
+  word-break: break-word;
+  padding-right: 10px;
+}
+
+.nm-numero-azioni {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.nm-btn-azione {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nm-btn-modifica {
+  background: linear-gradient(180deg, #ffd23c 0%, #ffc107 100%);
+  color: #4d3d00;
+  box-shadow: 0 2px 4px rgba(255,193,7,0.35);
+}
+
+.nm-btn-modifica:hover {
+  background: linear-gradient(180deg, #ffdb60 0%, #ffc93c 100%);
+  transform: scale(1.1);
+}
+
+.nm-btn-cancella {
+  background: linear-gradient(180deg, #ef4a5c 0%, #dc3545 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(220,53,69,0.35);
+}
+
+.nm-btn-cancella:hover {
+  background: linear-gradient(180deg, #f05a6b 0%, #c82333 100%);
+  transform: scale(1.1);
+}
+
+.nm-popup-azioni {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.nm-popup-azioni .btn-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* ============================================ */
+/* DARK MODE — Numeri Mancanti                  */
+/* ============================================ */
+.dark-mode .btn-numeri-mancanti {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #4db6ac;
+  color: #4db6ac;
+}
+
+.dark-mode .btn-numeri-mancanti:hover {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
+  color: white;
+  border-color: #4db6ac;
+}
+
+.dark-mode .numeri-mancanti-login-separator {
+  color: #888;
+}
+
+.dark-mode .numeri-mancanti-login-separator::before,
+.dark-mode .numeri-mancanti-login-separator::after {
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-commessa-card {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-commessa-card:hover {
+  border-color: #4db6ac;
+  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
+}
+
+.dark-mode .nm-commessa-header {
+  color: #e0e0e0;
+}
+
+.dark-mode .nm-commessa-codice {
+  color: #4db6ac;
+}
+
+.dark-mode .nm-commessa-meta {
+  color: #888;
+}
+
+.dark-mode .nm-cartella {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-cartella:hover {
+  background: linear-gradient(180deg, #1a2a4a 0%, #16213e 100%);
+  border-color: #4db6ac;
+}
+
+.dark-mode .nm-cartella-nome {
+  color: #4db6ac;
+}
+
+.dark-mode .nm-formato-commessa {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-prefisso,
+.dark-mode .nm-separatore {
+  color: #4db6ac;
+}
+
+.dark-mode .nm-input-cifre,
+.dark-mode .nm-input-chars {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  border-color: #4db6ac;
+  color: #4db6ac;
+}
+
+.dark-mode .nm-input-cifre:focus,
+.dark-mode .nm-input-chars:focus {
+  border-color: #4db6ac;
+  box-shadow:
+    0 0 0 4px rgba(77,182,172,0.2),
+    0 2px 4px rgba(0,0,0,0.3) inset;
+}
+
+.dark-mode .nm-preview {
+  background: linear-gradient(180deg, #3a2a1a 0%, #2e2014 100%);
+  border-color: #ffc107;
+  color: #ffd54f;
+}
+
+.dark-mode .nm-input-numero {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  color: #e0e0e0;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-input-numero:focus {
+  border-color: #4db6ac;
+}
+
+.dark-mode .nm-lista-numeri {
+  background: #0f1a30;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-numero-item {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-numero-item:hover {
+  border-color: #4db6ac;
+  box-shadow: 0 2px 6px rgba(77,182,172,0.15);
+}
+
+.dark-mode .nm-numero-testo {
+  color: #e0e0e0;
+}
+
+.dark-mode .btn-condividi-commessa {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #4db6ac;
+  color: #4db6ac;
+}
+
+.dark-mode .btn-condividi-commessa:hover {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 100%);
+  color: white;
+}
+
+/* ============================================ */
+/* RESPONSIVE                                   */
+/* ============================================ */
 @media (max-width: 768px) {
+  .container { padding: 15px; border-radius: 16px; }
+  .form-row { flex-direction: column; }
+  .form-row .form-group { min-width: 100%; }
+  .tab { flex: 1; text-align: center; padding: 8px 12px; font-size: 0.8em; }
+  header { flex-direction: column; align-items: flex-start; }
+  .header-left { flex-direction: column; align-items: flex-start; width: 100%; }
+  .user-badge { width: 100%; justify-content: center; }
+  .btn-logout { width: 100%; justify-content: center; }
+  .btn-password { align-self: center; }
+  .btn-darkmode { align-self: center; }
+  .calendario-grid { gap: 3px; }
+  .calendario-giorno { min-height: 40px; padding: 5px 2px; font-size: 0.7em; }
+  .calendario-giorno .numero { font-size: 0.9em; }
+  .logo-img { max-width: 100px; max-height: 100px; }
+  .azienda-nome { font-size: 1.2em; }
+  .richiesta-card { flex-direction: column; align-items: stretch; }
+  .richiesta-card .azioni { justify-content: center; }
+  .login-box { padding: 15px; }
+  #select-azienda { width: 100%; }
+
+  /* Modale dettaglio commessa responsive */
+  .modal-dettaglio-commessa-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+
+  .modal-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .modal-logo {
+    max-height: 40px;
+    max-width: 40px;
+  }
+
+  .modal-header-left h2 {
+    font-size: 1.1em;
+  }
+
+  .filtri-row {
+    flex-direction: column;
+  }
+
+  .filtro-group {
+    min-width: 100%;
+  }
+
+  .filtri-azioni {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filtri-azioni button {
+    width: 100%;
+  }
+
+  .contatore-registrazioni {
+    text-align: center;
+    margin-top: 10px;
+  }
+
+  .filtro-dipendenti-list {
+    max-height: 120px;
+  }
+
+  .gruppo-dipendente-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  /* Modale dipendente responsive */
+  .dipendente-info-box {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .dipendente-info-box .info-dettagli {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .gruppo-giorno-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Calendario dettagliato responsive */
   .cal-vista-selector { flex-direction: column; }
   .vista-radio { min-width: 100%; }
   .calendario-dettagliato-info {
@@ -2039,198 +2552,234 @@ body.dark-mode::before {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  /* Numeri Mancanti responsive */
+  .nm-commesse-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nm-cartelle-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .nm-cartella {
+    padding: 20px 10px;
+    min-height: 110px;
+  }
+
+  .nm-cartella-nome {
+    font-size: 0.9em;
+  }
+
+  .nm-formato-commessa {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .nm-prefisso,
+  .nm-separatore {
+    font-size: 1.15em;
+  }
+
+  .nm-input-cifre {
+    width: 70px;
+    font-size: 1.1em;
+    padding: 8px;
+    letter-spacing: 2px;
+  }
+
+  .nm-input-chars {
+    width: 110px;
+    font-size: 1.1em;
+    padding: 8px;
+    letter-spacing: 2px;
+  }
+
+  .nm-popup-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+
+  .nm-input-wrapper {
+    flex-direction: column;
+  }
+
+  .nm-input-wrapper .btn-primary {
+    width: 100%;
+  }
+
+  .nm-numero-item {
+    padding: 8px 10px;
+  }
+
+  .nm-numero-testo {
+    font-size: 0.95em;
+  }
+
+  .nm-btn-azione {
+    width: 30px;
+    height: 30px;
+    font-size: 0.85em;
+  }
+
+  .nm-condividi-commessa-wrapper {
+    justify-content: stretch;
+  }
+  .btn-condividi-commessa {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
-/* ============================================
-   CHECKBOX "RICORDAMI" (pagina login)
-   ============================================ */
-.ricordami-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0;
-  cursor: pointer;
-  font-size: 0.9em;
-  color: #555;
-  user-select: none;
-}
+@media (max-width: 480px) {
+  .tab { font-size: 0.7em; padding: 6px 8px; }
+  .calendario-giorno { min-height: 30px; padding: 3px 1px; font-size: 0.6em; }
 
-.ricordami-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: #00695C;
-}
+  .dettaglio-output table {
+    font-size: 0.8em;
+  }
 
-.ricordami-label span { color: #666; }
-.ricordami-label:hover span { color: #00695C; }
+  .dettaglio-output th,
+  .dettaglio-output td {
+    padding: 6px 4px;
+  }
 
-/* Dark Mode */
-.dark-mode .ricordami-label { color: #e0e0e0; }
-.dark-mode .ricordami-label span { color: #aaa; }
-.dark-mode .ricordami-label:hover span { color: #4db6ac; }
+  .nm-cartelle-grid {
+    grid-template-columns: 1fr;
+  }
 
-/* ============================================ */
-/* SMART TIME INPUT — Ore/Minuti auto-format   */
-/* ============================================ */
-input.smart-time {
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #dfe6e4;
-  border-radius: 10px;
-  font-size: 1.4em;
-  font-family: 'Courier New', monospace;
-  font-weight: 700;
-  text-align: center;
-  letter-spacing: 3px;
-  color: #00695C;
-  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
-  transition: all 0.2s;
-  box-shadow:
-    0 2px 4px rgba(0,0,0,0.05) inset,
-    0 1px 0 rgba(255,255,255,0.9);
-}
-
-input.smart-time:focus {
-  outline: none;
-  border-color: #00917d;
-  background: #ffffff;
-  box-shadow:
-    0 0 0 4px rgba(0,145,125,0.15),
-    0 2px 4px rgba(0,0,0,0.05) inset;
-}
-
-input.smart-time::placeholder {
-  color: #bbb;
-  letter-spacing: 3px;
-}
-
-/* Dark mode */
-.dark-mode input.smart-time {
-  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
-  color: #4db6ac;
-  border-color: #2a2a5a;
-  box-shadow:
-    0 2px 4px rgba(0,0,0,0.3) inset,
-    0 1px 0 rgba(255,255,255,0.03);
-}
-.dark-mode input.smart-time:focus {
-  border-color: #4db6ac;
-  box-shadow:
-    0 0 0 4px rgba(77,182,172,0.2),
-    0 2px 4px rgba(0,0,0,0.3) inset;
-}
-.dark-mode input.smart-time::placeholder { color: #556; }
-
-/* ============================================ */
-/* ANIMAZIONI LOGIN                             */
-/* ============================================ */
-
-/* --- Keyframes --- */
-
-@keyframes loginFadeSlideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes loginZoomIn {
-  from { opacity: 0; transform: scale(0.8); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-@keyframes loginFadeOut {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.95); }
-}
-
-@keyframes loginShake {
-  0%, 100% { transform: translateX(0); }
-  10% { transform: translateX(-8px); }
-  20% { transform: translateX(8px); }
-  30% { transform: translateX(-6px); }
-  40% { transform: translateX(6px); }
-  50% { transform: translateX(-4px); }
-  60% { transform: translateX(4px); }
-  70% { transform: translateX(-2px); }
-  80% { transform: translateX(2px); }
-  90% { transform: translateX(-1px); }
-}
-
-/* --- Animazione iniziale: applicata ai FIGLI del login-box --- */
-/* (NON al .login-box stesso, così lo shake può partire)      */
-
-#login-page .login-header {
-  animation: loginFadeSlideUp 0.35s ease-out both;
-}
-
-#login-page .logo-container {
-  animation: loginZoomIn 0.45s ease-out both;
-  animation-delay: 0.05s;
-}
-
-.login-anim-1,
-.login-anim-2,
-.login-anim-3,
-.login-anim-4 {
-  opacity: 0;
-  animation: loginFadeSlideUp 0.28s ease-out forwards;
-}
-
-.login-anim-1 { animation-delay: 0.15s; }
-.login-anim-2 { animation-delay: 0.23s; }
-.login-anim-3 { animation-delay: 0.31s; }
-.login-anim-4 { animation-delay: 0.39s; }
-
-/* --- Feedback tap sul pulsante Entra --- */
-
-#login-page .login-box button:active {
-  transform: scale(0.97);
-  transition: transform 0.08s ease;
-}
-
-/* --- Shake quando le credenziali sono sbagliate --- */
-
-.login-box.shake {
-  animation: loginShake 0.5s ease-in-out !important;
-}
-
-/* --- Fade-out del login quando si entra --- */
-
-.login-box.fade-out {
-  animation: loginFadeOut 0.22s ease-in forwards !important;
-  pointer-events: none;
-}
-
-/* --- Rispetta "Riduci animazioni" --- */
-
-@media (prefers-reduced-motion: reduce) {
-  #login-page .login-header,
-  #login-page .logo-container,
-  .login-anim-1,
-  .login-anim-2,
-  .login-anim-3,
-  .login-anim-4,
-  .login-box.shake,
-  .login-box.fade-out {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
+  .nm-preview {
+    font-size: 0.9em;
+    padding: 8px;
   }
 }
 /* ============================================ */
-/* TITOLO HEADER "GESTIONE LAVORO"              */
+/* INPUT MAIUSCOLO AUTOMATICO (Numeri Mancanti) */
 /* ============================================ */
-header h1 {
-  font-size: 1.15em;
-  font-weight: 700;
-  color: #222;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.nm-input-numero,
+.nm-cavo-input {
+  text-transform: uppercase;
 }
 
-header h1 i {
-  font-size: 0.9em;
+/* ============================================ */
+/* INPUT DOPPIO PER CAVO                        */
+/* ============================================ */
+.nm-input-wrapper-cavo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nm-cavo-box {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 140px;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  border: 2px solid #dfe6e4;
+  border-radius: 10px;
+  padding: 0 12px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 3px rgba(0,0,0,0.04) inset;
+}
+
+.nm-cavo-box:focus-within {
+  border-color: #00917d;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 3px rgba(0,145,125,0.15),
+    0 2px 3px rgba(0,0,0,0.04) inset;
+}
+
+.nm-cavo-trattino {
+  font-weight: 700;
+  font-size: 1.1em;
   color: #00695C;
+  margin-right: 4px;
+  font-family: 'Courier New', monospace;
+  user-select: none;
+}
+
+.nm-cavo-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 12px 0;
+  font-size: 1em;
+  font-family: Arial, sans-serif;
+  color: #00695C;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.nm-cavo-input::placeholder {
+  color: #bbb;
+  font-weight: normal;
+}
+
+.nm-cavo-separatore {
+  font-weight: 700;
+  font-size: 1.5em;
+  color: #00695C;
+  font-family: 'Courier New', monospace;
+  user-select: none;
+  padding: 0 4px;
+  /* Centrato verticalmente */
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.nm-input-wrapper-cavo .btn-primary {
+  padding: 14px 20px;
+  white-space: nowrap;
+}
+
+/* Dark mode */
+.dark-mode .nm-cavo-box {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .nm-cavo-box:focus-within {
+  border-color: #4db6ac;
+  box-shadow:
+    0 0 0 3px rgba(77,182,172,0.2),
+    0 2px 3px rgba(0,0,0,0.3) inset;
+}
+
+.dark-mode .nm-cavo-trattino,
+.dark-mode .nm-cavo-separatore {
+  color: #4db6ac;
+}
+
+.dark-mode .nm-cavo-input {
+  color: #e0e0e0;
+}
+
+/* Responsive mobile */
+@media (max-width: 600px) {
+  .nm-input-wrapper-cavo {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nm-cavo-separatore {
+    align-self: center;
+    font-size: 1.3em;
+    padding: 4px 0;
+  }
+
+  .nm-cavo-box {
+    min-width: 100%;
+  }
+
+  .nm-input-wrapper-cavo .btn-primary {
+    width: 100%;
+  }
 }
