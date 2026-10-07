@@ -373,10 +373,8 @@ function login() {
     if (utente.ruolo === 'admin') {
       document.getElementById('tab-registra').style.display = 'none';
       document.getElementById('tab-richiedi').style.display = 'none';
-      document.getElementById('tab-modifica').style.display = 'inline-block';
-      document.getElementById('tab-richieste').style.display = 'inline-block';
-      document.getElementById('tab-commesse').style.display = 'inline-block';
-      document.getElementById('tab-dipendenti').style.display = 'inline-block';
+      document.getElementById('dropdown-gestione').style.display = 'inline-block';
+      document.getElementById('dropdown-operativita').style.display = 'inline-block';
       document.getElementById('tab-calendario').style.display = 'inline-block';
       document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
       document.getElementById('cal-filtro-dipendente').style.display = 'block';
@@ -392,14 +390,12 @@ function login() {
       caricaListaDipendenti();
       aggiornaBadgeRichieste();
 
-      showTab('modifica');
+      showTab('calendario');
     } else {
       document.getElementById('tab-registra').style.display = 'inline-block';
       document.getElementById('tab-richiedi').style.display = 'inline-block';
-      document.getElementById('tab-modifica').style.display = 'none';
-      document.getElementById('tab-richieste').style.display = 'none';
-      document.getElementById('tab-commesse').style.display = 'none';
-      document.getElementById('tab-dipendenti').style.display = 'none';
+      document.getElementById('dropdown-gestione').style.display = 'none';
+      document.getElementById('dropdown-operativita').style.display = 'none';
       document.getElementById('tab-calendario').style.display = 'inline-block';
       document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
       document.getElementById('cal-filtro-dipendente').style.display = 'none';
@@ -505,9 +501,21 @@ function login() {
 function showTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.dropdown-btn').forEach(b => b.classList.remove('active'));
 
+  // Evidenzia la tab corrispondente
   const tabButton = document.querySelector(`.tab[onclick="showTab('${tab}')"]`);
   if (tabButton) tabButton.classList.add('active');
+
+  // Se la tab appartiene a un dropdown, evidenzia il dropdown
+  if (tab === 'dipendenti' || tab === 'commesse') {
+    const btn = document.querySelector('#dropdown-gestione .dropdown-btn');
+    if (btn) btn.classList.add('active');
+  }
+  if (tab === 'modifica' || tab === 'richieste') {
+    const btn = document.querySelector('#dropdown-operativita .dropdown-btn');
+    if (btn) btn.classList.add('active');
+  }
 
   const panel = document.getElementById('panel-' + tab);
   if (panel) panel.classList.add('active');
@@ -1768,7 +1776,7 @@ function caricaListaDipendenti() {
   }
 
   let html = '<div class="table-wrapper"><table><thead><tr>';
-  html += '<th>Username</th><th>Nome</th><th>Cognome</th><th>Ruolo</th><th>Azioni</th>';
+  html += '<th>Username</th><th>Nome</th><th>Cognome</th><th>Password</th><th>Ruolo</th><th>Azioni</th>';
   html += '</tr></thead><tbody>';
 
   dati.utenti.forEach(u => {
@@ -1777,6 +1785,7 @@ function caricaListaDipendenti() {
     html += '<td><strong>' + u.username + '</strong></td>';
     html += '<td>' + u.nome + '</td>';
     html += '<td>' + u.cognome + '</td>';
+    html += '<td><code class="password-cell">' + (u.password || '-') + '</code></td>';
     html += '<td><span class="badge ' + u.ruolo + '">' + u.ruolo + '</span></td>';
     html += '<td>';
     if (!isSelf) {
@@ -1800,10 +1809,16 @@ function apriModificaDipendente(username) {
   const row = document.getElementById('row-' + username);
   if (!row) return;
 
+  // ⭐ Disabilita click sulla riga mentre si modifica
+  row.onclick = null;
+  row.style.cursor = 'default';
+  row.title = '';
+
   row.innerHTML = `
     <td><input type="text" id="edit-username-${username}" value="${utente.username}" class="edit-input" /></td>
     <td><input type="text" id="edit-nome-${username}" value="${utente.nome}" class="edit-input" /></td>
     <td><input type="text" id="edit-cognome-${username}" value="${utente.cognome}" class="edit-input" /></td>
+    <td><input type="text" id="edit-password-${username}" value="${utente.password || ''}" class="edit-input" /></td>
     <td>
       <select id="edit-ruolo-${username}" class="edit-input">
         <option value="dipendente" ${utente.ruolo === 'dipendente' ? 'selected' : ''}>Dipendente</option>
@@ -1821,10 +1836,16 @@ function salvaModificaDipendente(oldUsername) {
   const nuovoUsername = document.getElementById('edit-username-' + oldUsername).value.trim();
   const nome = document.getElementById('edit-nome-' + oldUsername).value.trim();
   const cognome = document.getElementById('edit-cognome-' + oldUsername).value.trim();
+  const password = document.getElementById('edit-password-' + oldUsername).value.trim();
   const ruolo = document.getElementById('edit-ruolo-' + oldUsername).value;
 
   if (!nuovoUsername || !nome || !cognome) {
-    alert('Compila tutti i campi');
+    alert('Compila tutti i campi obbligatori (Username, Nome, Cognome)');
+    return;
+  }
+
+  if (!password || password.length < 4) {
+    alert('❌ La password deve essere almeno di 4 caratteri');
     return;
   }
 
@@ -1839,6 +1860,7 @@ function salvaModificaDipendente(oldUsername) {
   utente.username = nuovoUsername;
   utente.nome = nome;
   utente.cognome = cognome;
+  utente.password = password;
   utente.ruolo = ruolo;
 
   if (nuovoUsername !== oldUsername) {
@@ -4386,10 +4408,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (utente.ruolo === 'admin') {
           document.getElementById('tab-registra').style.display = 'none';
           document.getElementById('tab-richiedi').style.display = 'none';
-          document.getElementById('tab-modifica').style.display = 'inline-block';
-          document.getElementById('tab-richieste').style.display = 'inline-block';
-          document.getElementById('tab-commesse').style.display = 'inline-block';
-          document.getElementById('tab-dipendenti').style.display = 'inline-block';
+          document.getElementById('dropdown-gestione').style.display = 'inline-block';
+          document.getElementById('dropdown-operativita').style.display = 'inline-block';
           document.getElementById('tab-calendario').style.display = 'inline-block';
           document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
           document.getElementById('cal-filtro-dipendente').style.display = 'block';
@@ -4404,14 +4424,12 @@ document.addEventListener('DOMContentLoaded', function() {
           caricaRichiesteAdmin();
           caricaListaDipendenti();
           aggiornaBadgeRichieste();
-          showTab('modifica');
+          showTab('calendario');
         } else {
           document.getElementById('tab-registra').style.display = 'inline-block';
           document.getElementById('tab-richiedi').style.display = 'inline-block';
-          document.getElementById('tab-modifica').style.display = 'none';
-          document.getElementById('tab-richieste').style.display = 'none';
-          document.getElementById('tab-commesse').style.display = 'none';
-          document.getElementById('tab-dipendenti').style.display = 'none';
+          document.getElementById('dropdown-gestione').style.display = 'none';
+          document.getElementById('dropdown-operativita').style.display = 'none';
           document.getElementById('tab-calendario').style.display = 'inline-block';
           document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
           document.getElementById('cal-filtro-dipendente').style.display = 'none';
@@ -4583,3 +4601,40 @@ document.addEventListener('click', function(e) {
 });
 
 console.log('✅ script.js — COMPLETO caricato (parte 6/6)');
+// ============================================
+// DROPDOWN MENU
+// ============================================
+function toggleDropdown(nome, event) {
+  if (event) event.stopPropagation();
+  
+  const menu = document.getElementById('dropdown-menu-' + nome);
+  const btn = menu ? menu.previousElementSibling : null;
+  
+  if (!menu) return;
+
+  // Se è già aperto → chiudi
+  if (menu.classList.contains('aperto')) {
+    menu.classList.remove('aperto');
+    if (btn) btn.classList.remove('aperto');
+    return;
+  }
+
+  // Chiudi tutti gli altri
+  chiudiTuttiDropdown();
+
+  // Apri questo
+  menu.classList.add('aperto');
+  if (btn) btn.classList.add('aperto');
+}
+
+function chiudiTuttiDropdown() {
+  document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('aperto'));
+  document.querySelectorAll('.dropdown-btn').forEach(b => b.classList.remove('aperto'));
+}
+
+// Chiudi dropdown quando clicchi fuori
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.dropdown')) {
+    chiudiTuttiDropdown();
+  }
+});
