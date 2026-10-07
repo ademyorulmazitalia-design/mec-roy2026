@@ -3518,6 +3518,11 @@ async function nmAggiungiNumero() {
     testo = input.value.trim().toUpperCase();
 
     if (!testo) { input.focus(); return; }
+
+    // ⭐ Aggiungi il trattino se non c'è già
+    if (!testo.startsWith('-')) {
+      testo = '-' + testo;
+    }
   }
 
   try {
@@ -3602,6 +3607,11 @@ async function nmModificaNumero(idNumero) {
       if (!nuovo.trim()) { alert('❌ Il numero non può essere vuoto'); return; }
 
       nuovoTesto = nuovo.trim().toUpperCase();
+
+      // ⭐ Aggiungi il trattino se non c'è già
+      if (!nuovoTesto.startsWith('-')) {
+        nuovoTesto = '-' + nuovoTesto;
+      }
     }
 
     numero.testo = nuovoTesto;
@@ -3780,15 +3790,20 @@ async function nmCondividiCartella() {
         const numeriColonna = numeriPagina.slice(startIdx, startIdx + righeBilanciate);
 
         const colX = margin + (c * colonnaW) + paddingColonna;
+      numeriColonna.forEach((num, i) => {
+        const rigaY = y + ((i + 1) * lineHeight);
+        let testo = num.testo || '';
 
-        numeriColonna.forEach((num, i) => {
-          const rigaY = y + ((i + 1) * lineHeight);
-          let testo = num.testo || '';
-          if (testo.length > maxChars) {
-            testo = testo.substring(0, maxChars - 2) + '..';
-          }
-          pdf.text(testo, colX, rigaY);
-        });
+        // ⭐ Aggiungi il trattino se non c'è già
+        if (testo && !testo.startsWith('-')) {
+          testo = '-' + testo;
+        }
+
+        if (testo.length > maxChars) {
+          testo = testo.substring(0, maxChars - 2) + '..';
+        }
+        pdf.text(testo, colX, rigaY);
+      });
       }
     }
 
