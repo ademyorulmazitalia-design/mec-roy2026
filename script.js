@@ -1199,7 +1199,6 @@ async function inviaRichiesta() {
   const data_inizio = document.getElementById('richiesta-data-inizio').value;
   const data_fine = document.getElementById('richiesta-data-fine').value;
   const note = document.getElementById('richiesta-note').value.trim();
-  const certificato = document.getElementById('certificato').files[0];
 
   if (!data_inizio || !data_fine) {
     msg.innerHTML = '<div class="error">Inserisci le date</div>';
@@ -1235,6 +1234,16 @@ async function inviaRichiesta() {
     }
   }
 
+  // ⭐ Se è malattia, valida il protocollo (9 cifre)
+  let protocollo = '';
+  if (tipo === 'malattia') {
+    protocollo = nmLeggiProtocollo();
+    if (protocollo.length !== 9 || !/^\d{9}$/.test(protocollo)) {
+      msg.innerHTML = '<div class="error">❌ Inserisci tutte e 9 le cifre del protocollo del certificato</div>';
+      return;
+    }
+  }
+
   const richiesta = {
     id: prossimoId++,
     utente_id: utenteCorrente.username,
@@ -1246,9 +1255,9 @@ async function inviaRichiesta() {
     data_richiesta: new Date().toISOString()
   };
 
-  if (certificato) {
-    richiesta.certificato = certificato.name;
-    richiesta.certificato_tipo = certificato.type;
+  // ⭐ Se malattia, salva il protocollo
+  if (tipo === 'malattia') {
+    richiesta.protocollo = protocollo;
   }
 
   dati.richieste.push(richiesta);
@@ -1275,8 +1284,12 @@ async function inviaRichiesta() {
 
   msg.innerHTML = '<div class="success">✅ Richiesta inviata! Attendi la risposta.</div>';
 
-  document.getElementById('richiesta-note').value = '';
-  document.getElementById('certificato').value = '';
+document.getElementById('richiesta-note').value = '';
+
+  // ⭐ Svuota le caselle protocollo
+  if (tipo === 'malattia') {
+    nmSvuotaProtocollo();
+  }
 
   caricaRichiesteDipendente();
   aggiornaBadgeRichieste();
@@ -1320,6 +1333,12 @@ function caricaRichiesteDipendente() {
     } else {
       periodo = r.data_inizio + ' → ' + r.data_fine;
     }
+    
+    // ⭐ Se è malattia, mostra anche il protocollo
+    if (r.tipo === 'malattia' && r.protocollo) {
+      periodo += '<br><small style="color:#00695C;">📄 Protocollo: <strong>' + r.protocollo + '</strong></small>';
+    }
+    
     html += '<tr>';
     html += '<td>' + (emoji[r.tipo] || '📌') + ' ' + r.tipo.replace('_', ' ').charAt(0).toUpperCase() + r.tipo.replace('_', ' ').slice(1) + '</td>';
     html += '<td>' + periodo + '</td>';
@@ -1364,8 +1383,14 @@ function caricaRichiesteAdmin() {
       dettagli = `
         <small>Dal ${r.data_inizio} al ${r.data_fine}</small>
         ${r.note ? `<br><small>📝 ${r.note}</small>` : ''}
-        ${r.certificato ? `<br><small>📎 Certificato: ${r.certificato}</small>` : ''}
+        ${r.tipo === 'malattia' && r.protocollo ? `<br><small style="color:#00695C;font-weight:bold;">📄 Protocollo: ${r.protocollo}</small>` : ''}
       `;
+    }
+
+    // ⭐ Se malattia, mostra pulsante per modificare il protocollo
+    let pulsanteProtocollo = '';
+    if (r.tipo === 'malattia') {
+      pulsanteProtocollo = `<button class="btn-warning" onclick="apriModificaProtocollo(${r.id})" style="margin-left:5px;" title="Modifica protocollo"><i class="fas fa-edit"></i> Protocollo</button>`;
     }
 
     html += `<div class="richiesta-card pending">
@@ -1377,6 +1402,7 @@ function caricaRichiesteAdmin() {
       <div class="azioni">
         <button class="btn-approva" onclick="approvaRichiesta(${r.id})"><i class="fas fa-check"></i> Approva</button>
         <button class="btn-rifiuta" onclick="rifiutaRichiesta(${r.id})"><i class="fas fa-times"></i> Rifiuta</button>
+        ${pulsanteProtocollo}
       </div>
     </div>`;
   });
@@ -2380,8 +2406,13 @@ function caricaCalendarioDettagliato() {
       const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
       const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
       const emojiChar = emoji[richiesta.tipo] || '📌';
+      
+      // ⭐ Aggiungi protocollo se malattia
+      const protocolloHTML = (richiesta.tipo === 'malattia' && richiesta.protocollo) 
+        ? `<br><span style="font-size:0.85em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiesta.protocollo}</span>` 
+        : '';
 
-      html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${richiesta.tipo}"><td>${emojiChar} <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}</td></tr></tbody></table></div></div>`;
+      html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${richiesta.tipo}"><td>${emojiChar} <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
       continue;
     }
 
@@ -2904,7 +2935,23 @@ function applicaFiltriDipendente() {
         const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
         const emojiChar = emoji[richiesta.tipo] || '📌';
 
-        html += `<div class="gruppo-giorno"><div class="gruppo-giorno-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="subtotale-giorno">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale ${richiesta.tipo}"><td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}</td></tr></tbody></table></div></div>`;
+        html += `<div class="gruppo-giorno">`;
+        html += `<div class="gruppo-giorno-header">`;
+        html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+        html += `<span class="subtotale-giorno">${emojiChar} ${tipo}</span>`;
+        html += `</div>`;
+        html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+        html += `<table><tbody>`;
+        html += `<tr class="riga-speciale ${richiesta.tipo}">`;
+        html += `<td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>`;
+        if (richiesta.note) html += ` - ${richiesta.note}`;
+        // ⭐ Aggiungi protocollo se malattia
+        if (richiesta.tipo === 'malattia' && richiesta.protocollo) {
+          html += `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiesta.protocollo}</span>`;
+        }
+        html += `</td></tr>`;
+        html += `</tbody></table></div>`;
+        html += `</div>`;
         continue;
       }
 
@@ -4890,3 +4937,246 @@ async function scaricaOCondividiPDF(pdf, nomeFile) {
     alert('📄 PDF scaricato!\n\nApri il file nella cartella Download per condividerlo o stamparlo.');
   }
 }
+// ============================================
+// PROTOCOLLO — 9 CASELLE CON AUTO-SCROLL
+// ============================================
+function nmInitProtocolloInputs() {
+  const inputs = document.querySelectorAll('.protocollo-digit');
+  if (inputs.length === 0) return;
+
+  inputs.forEach((input, index) => {
+    // Evita doppia inizializzazione
+    if (input.dataset.protocolloInit === '1') return;
+    input.dataset.protocolloInit = '1';
+
+    // Su INPUT: se digiti una cifra, vai alla prossima
+    input.addEventListener('input', (e) => {
+      // Rimuovi caratteri non numerici
+      e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1);
+
+      // Se c'è una cifra, vai alla prossima casella
+      if (e.target.value.length === 1 && index < inputs.length - 1) {
+        inputs[index + 1].focus();
+      }
+    });
+
+    // Su KEYDOWN: gestisci Backspace e frecce
+    input.addEventListener('keydown', (e) => {
+      // Backspace su casella vuota → torna indietro
+      if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+        e.preventDefault();
+        inputs[index - 1].focus();
+        inputs[index - 1].value = '';
+      }
+
+      // Freccia sinistra → casella precedente
+      if (e.key === 'ArrowLeft' && index > 0) {
+        e.preventDefault();
+        inputs[index - 1].focus();
+      }
+
+      // Freccia destra → casella successiva
+      if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+        e.preventDefault();
+        inputs[index + 1].focus();
+      }
+    });
+
+    // Su PASTE: se incolli 9 cifre, riempi tutte le caselle
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const testoIncollato = (e.clipboardData || window.clipboardData).getData('text');
+      const cifre = testoIncollato.replace(/[^0-9]/g, '').slice(0, 9);
+
+      if (cifre.length > 0) {
+        for (let i = 0; i < inputs.length; i++) {
+          inputs[i].value = cifre[i] || '';
+        }
+        // Focus sull'ultima casella piena
+        const ultimaPiena = Math.min(cifre.length, inputs.length) - 1;
+        if (ultimaPiena >= 0) inputs[ultimaPiena].focus();
+      }
+    });
+  });
+
+  console.log('✅ Protocollo input inizializzati:', inputs.length, 'caselle');
+}
+
+// Funzione per leggere il protocollo completo
+function nmLeggiProtocollo() {
+  const inputs = document.querySelectorAll('.protocollo-digit');
+  let protocollo = '';
+  inputs.forEach(input => {
+    protocollo += input.value;
+  });
+  return protocollo;
+}
+
+// Funzione per svuotare le caselle
+function nmSvuotaProtocollo() {
+  document.querySelectorAll('.protocollo-digit').forEach(input => {
+    input.value = '';
+  });
+}
+
+// Funzione per compilare le caselle con un protocollo esistente
+function nmCompilaProtocollo(protocollo) {
+  const inputs = document.querySelectorAll('.protocollo-digit');
+  const cifre = String(protocollo || '').replace(/[^0-9]/g, '');
+  inputs.forEach((input, i) => {
+    input.value = cifre[i] || '';
+  });
+}
+
+// Inizializza al caricamento
+document.addEventListener('DOMContentLoaded', () => {
+  nmInitProtocolloInputs();
+});
+// ============================================
+// MODALE MODIFICA PROTOCOLLO
+// ============================================
+let _idRichiestaProtocollo = null;
+
+function apriModificaProtocollo(idRichiesta) {
+  const richiesta = dati.richieste.find(r => r.id === idRichiesta);
+  if (!richiesta) {
+    alert('❌ Richiesta non trovata');
+    return;
+  }
+
+  if (richiesta.tipo !== 'malattia') {
+    alert('⚠️ Il protocollo è solo per le richieste di malattia');
+    return;
+  }
+
+  _idRichiestaProtocollo = idRichiesta;
+
+  // Popola le caselle con il protocollo esistente (se c'è)
+  nmCompilaProtocolloModale(richiesta.protocollo || '');
+
+  // Apri modale
+  document.getElementById('modal-protocollo').classList.add('active');
+
+  // Focus sulla prima casella vuota
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.protocollo-digit-modale');
+    for (const input of inputs) {
+      if (!input.value) {
+        input.focus();
+        break;
+      }
+    }
+  }, 200);
+}
+
+function chiudiModificaProtocollo() {
+  document.getElementById('modal-protocollo').classList.remove('active');
+  _idRichiestaProtocollo = null;
+}
+
+function nmCompilaProtocolloModale(protocollo) {
+  const inputs = document.querySelectorAll('.protocollo-digit-modale');
+  const cifre = String(protocollo || '').replace(/[^0-9]/g, '');
+  inputs.forEach((input, i) => {
+    input.value = cifre[i] || '';
+  });
+}
+
+function nmLeggiProtocolloModale() {
+  const inputs = document.querySelectorAll('.protocollo-digit-modale');
+  let protocollo = '';
+  inputs.forEach(input => {
+    protocollo += input.value;
+  });
+  return protocollo;
+}
+
+function nmInitProtocolloModale() {
+  const inputs = document.querySelectorAll('.protocollo-digit-modale');
+  if (inputs.length === 0) return;
+
+  inputs.forEach((input, index) => {
+    if (input.dataset.protocolloInit === '1') return;
+    input.dataset.protocolloInit = '1';
+
+    input.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1);
+      if (e.target.value.length === 1 && index < inputs.length - 1) {
+        inputs[index + 1].focus();
+      }
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+        e.preventDefault();
+        inputs[index - 1].focus();
+        inputs[index - 1].value = '';
+      }
+      if (e.key === 'ArrowLeft' && index > 0) {
+        e.preventDefault();
+        inputs[index - 1].focus();
+      }
+      if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+        e.preventDefault();
+        inputs[index + 1].focus();
+      }
+    });
+
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const testoIncollato = (e.clipboardData || window.clipboardData).getData('text');
+      const cifre = testoIncollato.replace(/[^0-9]/g, '').slice(0, 9);
+      if (cifre.length > 0) {
+        for (let i = 0; i < inputs.length; i++) {
+          inputs[i].value = cifre[i] || '';
+        }
+        const ultimaPiena = Math.min(cifre.length, inputs.length) - 1;
+        if (ultimaPiena >= 0) inputs[ultimaPiena].focus();
+      }
+    });
+  });
+}
+
+async function salvaProtocolloModale() {
+  if (!_idRichiestaProtocollo) return;
+
+  const protocollo = nmLeggiProtocolloModale();
+  const msg = document.getElementById('msg-protocollo');
+
+  if (protocollo.length !== 9 || !/^\d{9}$/.test(protocollo)) {
+    msg.innerHTML = '<div class="error">❌ Inserisci tutte e 9 le cifre</div>';
+    return;
+  }
+
+  try {
+    const richiesta = dati.richieste.find(r => r.id === _idRichiestaProtocollo);
+    if (!richiesta) {
+      msg.innerHTML = '<div class="error">❌ Richiesta non trovata</div>';
+      return;
+    }
+
+    // Aggiorna il protocollo
+    richiesta.protocollo = protocollo;
+
+    // Salva su Firestore
+    await salvaDati();
+
+    console.log('✅ Protocollo aggiornato:', protocollo);
+    msg.innerHTML = '<div class="success">✅ Protocollo aggiornato!</div>';
+
+    // Ricarica le liste
+    setTimeout(() => {
+      chiudiModificaProtocollo();
+      caricaRichiesteAdmin();
+    }, 800);
+
+  } catch (err) {
+    console.error('❌ Errore salvataggio protocollo:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+}
+
+// Inizializza le caselle della modale al caricamento
+document.addEventListener('DOMContentLoaded', () => {
+  nmInitProtocolloModale();
+});
