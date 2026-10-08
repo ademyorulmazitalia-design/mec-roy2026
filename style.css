@@ -2401,16 +2401,17 @@ body.dark-mode::before {
 
   /* TABS */
   .tabs {
-    gap: 4px;
-    padding-bottom: 6px;
-    margin-bottom: 12px;
+    gap: 3px;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
   }
 
   .tab,
   .dropdown-btn {
-    padding: 6px 10px !important;
-    font-size: 0.72em !important;
+    padding: 4px 8px !important;
+    font-size: 0.7em !important;
     flex: 0 1 auto;
+    min-height: 26px !important;
   }
 
   .tab i,
@@ -2438,41 +2439,40 @@ body.dark-mode::before {
 
   /* PANEL / TITOLI */
   .panel h2 {
-    font-size: 1.1em !important;
-    margin-bottom: 3px;
-  }
-  .panel h2 i { margin-right: 6px; }
-  .subtitle {
-    font-size: 0.75em !important;
-    margin-bottom: 12px;
-  }
-
-  /* FORM CARD */
-  .form-card {
-    padding: 10px !important;
-    border-radius: 10px;
-  }
-
-  .form-group { margin-bottom: 6px; }
-  .form-group label {
-    font-size: 0.75em !important;
+    font-size: 1em !important;
     margin-bottom: 2px;
+  }
+  .panel h2 i { margin-right: 5px; }
+  .subtitle {
+    font-size: 0.72em !important;
+    margin-bottom: 8px;
+  }
+
+  .form-card {
+    padding: 8px !important;
+    border-radius: 8px;
+  }
+
+  .form-group { margin-bottom: 4px; }
+  .form-group label {
+    font-size: 0.72em !important;
+    margin-bottom: 1px;
   }
   .form-group input,
   .form-group select,
   .form-group textarea {
-    padding: 5px 10px !important;
-    font-size: 0.85em !important;
-    border-radius: 6px;
-    min-height: 32px !important;
-    line-height: 1.2 !important;
+    padding: 4px 8px !important;
+    font-size: 0.8em !important;
+    border-radius: 5px;
+    min-height: 26px !important;
+    line-height: 1.1 !important;
   }
   .form-group textarea {
-    min-height: 50px !important;
-    padding: 6px 10px !important;
+    min-height: 42px !important;
+    padding: 4px 8px !important;
   }
   .form-row {
-    gap: 6px !important;
+    gap: 4px !important;
   }
 
   .form-row {
@@ -2485,27 +2485,27 @@ body.dark-mode::before {
   .btn-primary,
   .btn-secondary,
   .btn-info {
-    padding: 6px 12px !important;
-    font-size: 0.78em !important;
-    border-radius: 6px;
-    min-height: 30px !important;
+    padding: 4px 10px !important;
+    font-size: 0.75em !important;
+    border-radius: 5px;
+    min-height: 24px !important;
   }
   .btn-lg {
-    padding: 7px 14px !important;
-    font-size: 0.82em !important;
-    border-radius: 8px;
-    min-height: 34px !important;
+    padding: 5px 12px !important;
+    font-size: 0.78em !important;
+    border-radius: 6px;
+    min-height: 28px !important;
   }
 
   /* TABELLE */
   .table-wrapper {
-    border-radius: 8px;
-    margin-top: 6px;
+    border-radius: 6px;
+    margin-top: 4px;
   }
-  .table-wrapper table { font-size: 0.72em !important; }
+  .table-wrapper table { font-size: 0.7em !important; }
   th, td {
-    padding: 6px 6px !important;
-    font-size: 0.9em;
+    padding: 4px 5px !important;
+    font-size: 0.85em;
   }
 
   /* BADGE */
@@ -2586,9 +2586,10 @@ body.dark-mode::before {
     font-size: 0.95em !important;
   }
   .ricordami-label {
-    font-size: 0.8em;
-    margin: 8px 0;
+    font-size: 0.75em;
+    margin: 5px 0;
   }
+
   .btn-numeri-mancanti {
     padding: 10px !important;
     font-size: 0.9em !important;
@@ -2652,25 +2653,25 @@ body.dark-mode::before {
   /* Gruppi giorno/dipendente */
   .gruppo-dipendente,
   .gruppo-giorno {
-    margin-bottom: 15px;
-    border-radius: 8px;
+    margin-bottom: 10px;
+    border-radius: 6px;
   }
   .gruppo-dipendente-header,
   .gruppo-giorno-header {
-    padding: 8px 12px !important;
+    padding: 5px 10px !important;
     flex-direction: column;
     align-items: flex-start;
-    gap: 6px;
+    gap: 4px;
   }
   .gruppo-dipendente-header h4,
-  .gruppo-giorno-header h4 { font-size: 0.85em !important; }
+  .gruppo-giorno-header h4 { font-size: 0.8em !important; }
   .subtotale,
-  .subtotale-giorno { font-size: 0.75em !important; padding: 2px 8px !important; }
+  .subtotale-giorno { font-size: 0.7em !important; padding: 1px 6px !important; }
 
   .totale-generale {
-    padding: 10px !important;
-    font-size: 0.9em !important;
-    border-radius: 8px;
+    padding: 6px !important;
+    font-size: 0.85em !important;
+    border-radius: 6px;
   }
 
   /* Calendario dettagliato */
@@ -2963,4 +2964,229 @@ body.dark-mode::before {
 
   .logo-small-img { max-height: 28px !important; }
   .azienda-small { font-size: 1em !important; }
+}
+/* ============================================ */
+/* PROTOCOLLO CERTIFICATO — 9 CASSELLE          */
+/* ============================================ */
+.protocollo-input-wrapper {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.protocollo-digit {
+  width: 38px;
+  height: 44px;
+  text-align: center;
+  font-size: 1.4em;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  color: #00695C;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  border: 2px solid #dfe6e4;
+  border-radius: 8px;
+  transition: all 0.15s;
+  padding: 0;
+  caret-color: #00917d;
+  text-transform: uppercase;
+}
+
+.protocollo-digit:focus {
+  outline: none;
+  border-color: #00917d;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 3px rgba(0,145,125,0.15),
+    0 2px 3px rgba(0,0,0,0.04) inset;
+  transform: scale(1.05);
+}
+
+.protocollo-digit:not(:placeholder-shown) {
+  background: linear-gradient(180deg, #e8f5e9 0%, #d4edda 100%);
+  border-color: #28a745;
+}
+
+/* Nasconde le freccette incrementali (browser vecchi) */
+.protocollo-digit::-webkit-outer-spin-button,
+.protocollo-digit::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ============================================ */
+/* DARK MODE — Protocollo                       */
+/* ============================================ */
+.dark-mode .protocollo-digit {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  border-color: #2a2a5a;
+  color: #4db6ac;
+}
+
+.dark-mode .protocollo-digit:focus {
+  border-color: #4db6ac;
+  box-shadow: 0 0 0 3px rgba(77,182,172,0.2);
+}
+
+.dark-mode .protocollo-digit:not(:placeholder-shown) {
+  background: linear-gradient(180deg, #1a3a2a 0%, #142e20 100%);
+  border-color: #4CAF50;
+  color: #81c784;
+}
+
+/* ============================================ */
+/* RESPONSIVE — Protocollo                      */
+/* ============================================ */
+@media (max-width: 768px) {
+  .protocollo-input-wrapper {
+    gap: 4px;
+    justify-content: center;
+  }
+
+  .protocollo-digit {
+    width: 32px;
+    height: 38px;
+    font-size: 1.15em;
+    border-radius: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .protocollo-input-wrapper {
+    gap: 3px;
+  }
+
+  .protocollo-digit {
+    width: 28px;
+    height: 34px;
+    font-size: 1em;
+  }
+}
+/* ============================================ */
+/* PROTOCOLLO CERTIFICATO — 9 CASSELLE          */
+/* ============================================ */
+.protocollo-input-wrapper {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.protocollo-digit {
+  width: 32px !important;
+  height: 38px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  text-align: center !important;
+  font-size: 1.1em !important;
+  font-family: 'Courier New', monospace !important;
+  font-weight: 700 !important;
+  color: #00695C !important;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%) !important;
+  border: 2px solid #dfe6e4 !important;
+  border-radius: 6px !important;
+  transition: all 0.15s;
+  caret-color: #00917d;
+  box-sizing: border-box !important;
+}
+
+.protocollo-digit:focus {
+  outline: none !important;
+  border-color: #00917d !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(0,145,125,0.15) !important;
+  transform: scale(1.05);
+}
+
+.protocollo-digit:not(:placeholder-shown) {
+  background: linear-gradient(180deg, #e8f5e9 0%, #d4edda 100%) !important;
+  border-color: #28a745 !important;
+}
+
+/* ============================================ */
+/* MODALE PROTOCOLLO — stessa grafica           */
+/* ============================================ */
+.protocollo-digit-modale {
+  width: 32px !important;
+  height: 38px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  text-align: center !important;
+  font-size: 1.1em !important;
+  font-family: 'Courier New', monospace !important;
+  font-weight: 700 !important;
+  color: #00695C !important;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%) !important;
+  border: 2px solid #dfe6e4 !important;
+  border-radius: 6px !important;
+  transition: all 0.15s;
+  caret-color: #00917d;
+  box-sizing: border-box !important;
+}
+
+.protocollo-digit-modale:focus {
+  outline: none !important;
+  border-color: #00917d !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(0,145,125,0.15) !important;
+  transform: scale(1.05);
+}
+
+.protocollo-digit-modale:not(:placeholder-shown) {
+  background: linear-gradient(180deg, #e8f5e9 0%, #d4edda 100%) !important;
+  border-color: #28a745 !important;
+}
+
+/* ============================================ */
+/* DARK MODE — Protocollo                       */
+/* ============================================ */
+.dark-mode .protocollo-digit,
+.dark-mode .protocollo-digit-modale {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%) !important;
+  border-color: #2a2a5a !important;
+  color: #4db6ac !important;
+}
+
+.dark-mode .protocollo-digit:focus,
+.dark-mode .protocollo-digit-modale:focus {
+  border-color: #4db6ac !important;
+}
+
+/* ============================================ */
+/* RESPONSIVE — Protocollo su mobile            */
+/* ============================================ */
+@media (max-width: 768px) {
+  .protocollo-input-wrapper {
+    gap: 3px !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+  }
+  .protocollo-digit,
+  .protocollo-digit-modale {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 1 1 0 !important;
+    height: 34px !important;
+    font-size: 1em !important;
+    border-radius: 5px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .protocollo-digit,
+  .protocollo-digit-modale {
+    height: 30px !important;
+    font-size: 0.9em !important;
+  }
 }
