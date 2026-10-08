@@ -2449,21 +2449,30 @@ body.dark-mode::before {
 
   /* FORM CARD */
   .form-card {
-    padding: 12px !important;
+    padding: 10px !important;
     border-radius: 10px;
   }
 
-  .form-group { margin-bottom: 10px; }
+  .form-group { margin-bottom: 6px; }
   .form-group label {
-    font-size: 0.78em !important;
-    margin-bottom: 3px;
+    font-size: 0.75em !important;
+    margin-bottom: 2px;
   }
   .form-group input,
   .form-group select,
   .form-group textarea {
-    padding: 8px 10px !important;
+    padding: 5px 10px !important;
     font-size: 0.85em !important;
     border-radius: 6px;
+    min-height: 32px !important;
+    line-height: 1.2 !important;
+  }
+  .form-group textarea {
+    min-height: 50px !important;
+    padding: 6px 10px !important;
+  }
+  .form-row {
+    gap: 6px !important;
   }
 
   .form-row {
@@ -2476,14 +2485,16 @@ body.dark-mode::before {
   .btn-primary,
   .btn-secondary,
   .btn-info {
-    padding: 8px 14px !important;
-    font-size: 0.8em !important;
+    padding: 6px 12px !important;
+    font-size: 0.78em !important;
     border-radius: 6px;
+    min-height: 30px !important;
   }
   .btn-lg {
-    padding: 10px 18px !important;
-    font-size: 0.85em !important;
+    padding: 7px 14px !important;
+    font-size: 0.82em !important;
     border-radius: 8px;
+    min-height: 34px !important;
   }
 
   /* TABELLE */
@@ -2522,19 +2533,20 @@ body.dark-mode::before {
 
   /* Riquadro TOTALE MESE (in alto) */
   #calendario-output > div:first-child {
-    padding: 10px 12px !important;
+    padding: 8px 10px !important;
     border-radius: 8px !important;
-    margin-bottom: 12px !important;
+    margin-bottom: 8px !important;
   }
   #calendario-output > div:first-child h4 {
-    font-size: 0.85em !important;
+    font-size: 0.78em !important;
+    margin-bottom: 2px !important;
   }
   #calendario-output > div:first-child p {
-    font-size: 1em !important;
-    margin: 3px 0 !important;
+    font-size: 0.9em !important;
+    margin: 2px 0 !important;
   }
   #calendario-output > div:first-child small {
-    font-size: 0.7em !important;
+    font-size: 0.65em !important;
   }
 
   /* Legenda */
@@ -2663,14 +2675,15 @@ body.dark-mode::before {
 
   /* Calendario dettagliato */
   .cal-vista-selector {
-    padding: 8px !important;
-    gap: 6px;
+    padding: 6px !important;
+    gap: 4px;
     flex-direction: column;
+    margin-bottom: 10px !important;
   }
   .vista-radio {
     min-width: 100%;
-    padding: 8px 12px !important;
-    font-size: 0.8em !important;
+    padding: 5px 10px !important;
+    font-size: 0.78em !important;
   }
   .calendario-dettagliato-info {
     padding: 10px 12px !important;
