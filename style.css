@@ -3190,3 +3190,77 @@ body.dark-mode::before {
     font-size: 0.9em !important;
   }
 }
+
+/* ============================================ */
+/* NUMERI MANCANTI — "HO STAMPATO"              */
+/* ============================================ */
+.btn-stampato {
+  background: linear-gradient(180deg, #4CAF50 0%, #2e7d32 100%);
+  color: white;
+  border: 1px solid #1b5e20;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow:
+    0 3px 6px rgba(46,125,50,0.35),
+    0 1px 0 rgba(255,255,255,0.3) inset,
+    0 -2px 0 rgba(0,0,0,0.15) inset;
+  transition: all 0.2s;
+  font-size: 0.95em;
+  font-family: inherit;
+}
+
+.btn-stampato:hover {
+  background: linear-gradient(180deg, #66BB6A 0%, #388E3C 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 12px rgba(46,125,50,0.5),
+    0 1px 0 rgba(255,255,255,0.4) inset;
+}
+
+.btn-stampato:active {
+  transform: translateY(1px);
+}
+
+/* Numeri già stampati → sfondo verde */
+.nm-numero-item.stampato {
+  background: linear-gradient(180deg, #e8f5e9 0%, #d4edda 100%);
+  border-color: #4CAF50;
+}
+
+.nm-numero-item.stampato .nm-numero-testo {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+/* Dark mode — "Ho stampato" */
+.dark-mode .btn-stampato {
+  background: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
+  border-color: #4CAF50;
+  color: white;
+}
+
+.dark-mode .btn-stampato:hover {
+  background: linear-gradient(180deg, #388E3C 0%, #2e7d32 100%);
+}
+
+.dark-mode .nm-numero-item.stampato {
+  background: linear-gradient(180deg, #1a3a2a 0%, #142e20 100%);
+  border-color: #4CAF50;
+}
+
+.dark-mode .nm-numero-item.stampato .nm-numero-testo {
+  color: #81c784;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .btn-stampato {
+    padding: 8px 12px !important;
+    font-size: 0.8em !important;
+  }
+}
