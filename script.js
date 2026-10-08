@@ -379,7 +379,7 @@ function login() {
       document.getElementById('cal-filtro-dipendente').style.display = 'block';
       document.getElementById('btn-password').style.display = 'flex';
       document.getElementById('azienda-container').style.display = 'inline-block';
-      document.getElementById('cal-vista-selector').style.display = 'none';
+      document.getElementById('cal-vista-selector').style.display = 'flex';
 
       caricaSelectAziende();
       caricaSelectAziendeCommesse();
@@ -502,11 +502,9 @@ function showTab(tab) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.dropdown-btn').forEach(b => b.classList.remove('active'));
 
-  // Evidenzia la tab corrispondente
   const tabButton = document.querySelector(`.tab[onclick="showTab('${tab}')"]`);
   if (tabButton) tabButton.classList.add('active');
 
-  // Se la tab appartiene a un dropdown, evidenzia il dropdown
   if (tab === 'dipendenti' || tab === 'commesse') {
     const btn = document.querySelector('#dropdown-gestione .dropdown-btn');
     if (btn) btn.classList.add('active');
@@ -534,9 +532,7 @@ function showTab(tab) {
     nmCaricaListaCommesse();
   }
 
-  // ⭐ NUOVO: se è il calendario, carica subito il mese corrente
   if (tab === 'calendario') {
-    // Imposta mese/anno correnti (solo se non sono già impostati)
     const adesso = new Date();
     const meseSelect = document.getElementById('cal-mese');
     const annoInput = document.getElementById('cal-anno');
@@ -544,7 +540,6 @@ function showTab(tab) {
     if (meseSelect) meseSelect.value = adesso.getMonth() + 1;
     if (annoInput) annoInput.value = adesso.getFullYear();
 
-    // Carica subito il calendario
     caricaCalendario();
   }
 }
@@ -1703,11 +1698,76 @@ function esportaOreMese() {
 // ============================================
 // EXPORT PDF CALENDARIO
 // ============================================
+// ============================================
+// EXPORT PDF CALENDARIO
+// ============================================
+// ============================================
+// EXPORT PDF CALENDARIO (A4 ORIZZONTALE)
+// ============================================
 async function esportaPDF() {
   const output = document.getElementById('calendario-output');
-  const content = output.innerHTML;
+  if (!output) return;
 
-  if (!content || content.includes('Seleziona mese/anno')) {
+  // Recupera mese/anno
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+
+  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese - 1];
+  const meseAnnoLabel = `${meseNome.toUpperCase()} ${anno}`;
+
+  // ⭐ Clona il contenuto per non modificare quello a video
+  const clone = output.cloneNode(true);
+
+  // ❌ 1) Rimuovi il box "TOTALE MESE"
+  const totaleMeseBox = clone.querySelector('div[style*="border:2px solid #4CAF50"]');
+  if (totaleMeseBox) totaleMeseBox.remove();
+
+  // ❌ 2) Rimuovi il titolo "Ottobre 2026" (h4 subito dopo, ridondante)
+  const h4Titolo = clone.querySelector('h4');
+  if (h4Titolo && /^\s*\w+\s+\d{4}\s*$/.test(h4Titolo.textContent)) {
+    h4Titolo.remove();
+  }
+
+  // ❌ 3) Rimuovi "Recupero" dalla legenda
+  clone.querySelectorAll('span').forEach(span => {
+    if (span.textContent.trim() === 'Recupero') {
+      const parentSpan = span.closest('span');
+      if (parentSpan && parentSpan.parentElement) {
+        parentSpan.parentElement.removeChild(parentSpan);
+      }
+    }
+  });
+
+  // ❌ 4) Rimuovi il triangolo ⚠️ dai totali (sostituisci la stringa)
+  clone.querySelectorAll('td').forEach(td => {
+    if (td.innerHTML.includes('⚠️')) {
+      td.innerHTML = td.innerHTML.replace(/\s*⚠️\s*/g, '');
+    }
+  });
+
+  // ❌ 5) Rimuovi il colore giallo "recupero" dalla tabella
+  clone.querySelectorAll('td').forEach(td => {
+    const style = td.getAttribute('style') || '';
+    // Se la cella ha sfondo giallo #fff3cd → cambia a bianco
+    if (style.includes('#fff3cd') || style.includes('#fff3CD')) {
+      td.setAttribute('style', style.replace(/#fff3cd/gi, '#ffffff'));
+    }
+  });
+  // Ricontrolla anche il bordo giallo, se presente
+  clone.querySelectorAll('td').forEach(td => {
+    const style = td.getAttribute('style') || '';
+    if (style.includes('#ffc107')) {
+      td.setAttribute('style', style.replace(/#ffc107/gi, '#ddd'));
+    }
+  });
+
+  const content = clone.innerHTML;
+
+  // ⭐ 6) Costruisci la sezione malattie
+  const sezioneMalattieHTML = costruisciSezioneMalattie(mese, anno);
+
+  if (!content || content.trim() === '') {
     alert('⚠️ Prima genera il report nel calendario');
     return;
   }
@@ -1720,18 +1780,181 @@ async function esportaPDF() {
     <html>
     <head>
       <meta charset="utf-8">
+      <title>Report ${meseAnnoLabel} - MEC-ROY</title>
       <style>
-        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        @page {
+          size: A4 landscape;
+          margin: 10mm;
+        }
+        * { box-sizing: border-box; }
+        body {
+          font-family: Arial, sans-serif;
+          padding: 15px;
+          color: #333;
+          margin: 0;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 10px;
+          margin-bottom: 10px;
+          table-layout: fixed;
+        }
+        th, td {
+          border: 1px solid #ddd;
+          padding: 3px 2px;
+          text-align: center;
+          word-wrap: break-word;
+        }
         th { background: #00695C; color: white; font-weight: bold; }
+
+        /* ⭐ INTESTAZIONE */
+        .intestazione-report {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 20px;
+          padding-bottom: 12px;
+          margin-bottom: 15px;
+          border-bottom: 3px solid #00695C;
+        }
+        .intestazione-sinistra {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+        .intestazione-sinistra .logo-small-img { max-height: 45px; }
+        .intestazione-sinistra .azienda-small {
+          font-weight: 700;
+          color: #00695C;
+          font-size: 18px;
+        }
+        .intestazione-sinistra h2 {
+          color: #00695C;
+          margin: 0;
+          font-size: 18px;
+        }
+
+        .intestazione-centro {
+          flex: 1;
+          text-align: center;
+          align-self: center;
+        }
+        .intestazione-centro .mese-grande {
+          font-size: 20px;
+          font-weight: 700;
+          color: #00695C;
+          letter-spacing: 1px;
+        }
+
+        .intestazione-destra {
+          text-align: right;
+          font-size: 10px;
+          color: #333;
+          line-height: 1.5;
+          flex-shrink: 0;
+        }
+        .intestazione-destra .commercialista-nome {
+          font-weight: 700;
+          font-size: 11px;
+          color: #00695C;
+        }
+
+        /* Adatta la tabella calendario al foglio */
+        .intestazione-report + div table th,
+        .intestazione-report + div table td {
+          font-size: 9px;
+          padding: 2px 1px;
+        }
+
+        table th:first-child,
+        table td:first-child {
+          width: 120px;
+          text-align: left;
+          padding-left: 5px;
+        }
+
+        table th:last-child,
+        table td:last-child {
+          width: 50px;
+        }
+
+        /* ⭐ SEZIONE MALATTIE */
+        .sezione-malattie {
+          margin-top: 25px;
+          page-break-inside: avoid;
+        }
+        .sezione-malattie h3 {
+          color: #00695C;
+          font-size: 13px;
+          margin: 0 0 10px 0;
+          border-bottom: 2px solid #00695C;
+          padding-bottom: 4px;
+        }
+        .sezione-malattie table {
+          width: 100%;
+          font-size: 11px;
+          margin-bottom: 0;
+          table-layout: auto;
+        }
+        .sezione-malattie th {
+          background: #b71c1c;
+          color: white;
+          padding: 8px 12px;
+          text-align: left;
+        }
+        .sezione-malattie td {
+          padding: 8px 12px;
+          text-align: left;
+          background: #fff;
+        }
+        .sezione-malattie tr:nth-child(even) td {
+          background: #fce8eb;
+        }
+        .sezione-malattie .col-dip {
+          width: 35%;
+          font-weight: 600;
+        }
+        .sezione-malattie .col-prot {
+          width: 65%;
+          font-family: 'Courier New', monospace;
+        }
+
+        @media print {
+          .intestazione-report { page-break-inside: avoid; }
+          body { padding: 0; }
+          .sezione-malattie { page-break-before: auto; }
+        }
       </style>
     </head>
     <body>
-      <div style="text-align:center;padding:20px;">${logoHTML}</div>
-      <h2 style="text-align:center;">Report Ore Mensile</h2>
-      ${content}
-      <div style="text-align:center;padding:10px;font-size:11px;color:#888;">
+
+      <!-- INTESTAZIONE -->
+      <div class="intestazione-report">
+        <div class="intestazione-sinistra">
+          ${logoHTML}
+        </div>
+        <div class="intestazione-centro">
+          <div class="mese-grande">${meseAnnoLabel}</div>
+        </div>
+        <div class="intestazione-destra">
+          <div class="commercialista-nome">Dott.ssa ELENA ROBERTI</div>
+          <div>Studio Elaborazione Paghe</div>
+          <div>Piazza I.Alpi, 1 42019 Scandiano (RE)</div>
+          <div>Tel 0522 856515</div>
+          <div>elenaroberti@studiocostetti.com</div>
+        </div>
+      </div>
+
+      <!-- CONTENUTO (senza TOTALE MESE, senza Recupero, senza ⚠️) -->
+      <div>${content}</div>
+
+      <!-- ⭐ SEZIONE MALATTIE -->
+      ${sezioneMalattieHTML}
+
+      <!-- FOOTER -->
+      <div style="text-align:center;padding:8px;font-size:10px;color:#888;margin-top:15px;border-top:1px solid #ddd;">
         MEC-ROY srls - Generato il ${new Date().toLocaleDateString('it-IT')}
       </div>
     </body>
@@ -1739,7 +1962,7 @@ async function esportaPDF() {
   `;
 
   const blob = new Blob([fullHTML], { type: 'text/html' });
-  const file = new File([blob], 'Report_MEC-ROY.html', { type: 'text/html' });
+  const file = new File([blob], `Report_${meseAnnoLabel.replace(/\s+/g, '_')}_MEC-ROY.html`, { type: 'text/html' });
 
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
@@ -1758,9 +1981,77 @@ async function esportaPDF() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'Report_MEC-ROY.html';
+  a.download = `Report_${meseAnnoLabel.replace(/\s+/g, '_')}_MEC-ROY.html`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ============================================
+// COSTRUISCI SEZIONE MALATTIE (per PDF)
+// ============================================
+function costruisciSezioneMalattie(mese, anno) {
+  const mesePadded = String(mese).padStart(2, '0');
+  const prefissoData = `${anno}-${mesePadded}`;
+
+  // Trova tutte le richieste di malattia approvate nel mese
+  const richiesteMalattia = (dati.richieste || []).filter(r =>
+    r.tipo === 'malattia' &&
+    r.stato === 'approvata' &&
+    r.data_inizio && r.data_inizio.startsWith(prefissoData)
+  );
+
+  if (richiesteMalattia.length === 0) {
+    return ''; // Nessuna malattia → niente sezione
+  }
+
+  // Raggruppa per dipendente
+  const perDipendente = {};
+  richiesteMalattia.forEach(r => {
+    const username = r.utente_id;
+    if (!perDipendente[username]) perDipendente[username] = [];
+    if (r.protocollo) {
+      perDipendente[username].push(r.protocollo);
+    }
+  });
+
+  // Se nessun protocollo trovato, non mostro nulla
+  const dipendentiConProtocollo = Object.keys(perDipendente).filter(u => perDipendente[u].length > 0);
+  if (dipendentiConProtocollo.length === 0) {
+    return '';
+  }
+
+  let righe = '';
+  dipendentiConProtocollo.forEach(username => {
+    const utente = (dati.utenti || []).find(u => u.username === username);
+    const nomeCompleto = utente ? `${utente.nome} ${utente.cognome}` : username;
+
+    // Se più protocolli → separati da virgola
+    const protocolli = perDipendente[username].join(', ');
+
+    righe += `
+      <tr>
+        <td class="col-dip">${nomeCompleto}</td>
+        <td class="col-prot">MALATTIA - PROTOCOLLO ${protocolli}</td>
+      </tr>
+    `;
+  });
+
+  return `
+    <div class="sezione-malattie">
+      <h3>📄 Certificati di Malattia del mese</h3>
+      <table>
+        <thead>
+          <tr>
+            <th class="col-dip">DIPENDENTE</th>
+            <th class="col-prot">MALATTIA - PROTOCOLLO</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${righe}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 // ============================================
@@ -1848,7 +2139,6 @@ function apriModificaDipendente(username) {
   const row = document.getElementById('row-' + username);
   if (!row) return;
 
-  // ⭐ Disabilita click sulla riga mentre si modifica
   row.onclick = null;
   row.style.cursor = 'default';
   row.title = '';
@@ -2097,12 +2387,11 @@ function caricaCalendario() {
     return;
   }
 
-  if (utenteCorrente.ruolo === 'dipendente') {
-    const vistaScelta = document.querySelector('input[name="cal-vista"]:checked');
-    if (vistaScelta && vistaScelta.value === 'dettagliato') {
-      caricaCalendarioDettagliato();
-      return;
-    }
+  // ⭐ Sia admin che dipendente possono scegliere la vista
+  const vistaScelta = document.querySelector('input[name="cal-vista"]:checked');
+  if (vistaScelta && vistaScelta.value === 'dettagliato') {
+    caricaCalendarioDettagliato();
+    return;
   }
 
   const isAdmin = utenteCorrente.ruolo === 'admin';
@@ -2149,17 +2438,31 @@ function caricaCalendario() {
 
   html += '<div style="overflow-x:auto;">';
   html += '<table style="width:100%;border-collapse:collapse;font-size:0.85em;">';
-  html += '<thead><tr><th style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:120px;">Dipendente</th>';
+  // ⭐ RIGA 1: numeri dei giorni (1, 2, 3, ...)
+  html += '<thead>';
+  html += '<tr>';
+  html += '<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:120px;vertical-align:middle;">Dipendente</th>';
 
   const giorniSett = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
   for (let g = 1; g <= giorniMese; g++) {
     const giornoSett = new Date(anno, mese - 1, g).getDay();
     const isWeekend = giornoSett === 0 || giornoSett === 6;
     const bgColor = isWeekend ? '#f5f5f5' : 'white';
-    html += `<th style="padding:6px;border:1px solid #ddd;text-align:center;background:${bgColor};min-width:35px;font-size:0.75em;">${g}<br><span style="font-weight:normal;font-size:0.7em;color:#888;">${giorniSett[giornoSett]}</span></th>`;
+    html += `<th style="padding:4px;border:1px solid #ddd;text-align:center;background:${bgColor};min-width:35px;font-size:0.85em;font-weight:bold;color:#00695C;">${g}</th>`;
   }
-  html += '<th style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;">Totale</th>';
-  html += '</tr></thead><tbody>';
+  html += '<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;vertical-align:middle;">Totale</th>';
+  html += '</tr>';
+
+  // ⭐ RIGA 2: nomi giorni settimana (Gio, Ven, Sab, ...)
+  html += '<tr>';
+  for (let g = 1; g <= giorniMese; g++) {
+    const giornoSett = new Date(anno, mese - 1, g).getDay();
+    const isWeekend = giornoSett === 0 || giornoSett === 6;
+    const bgColor = isWeekend ? '#f5f5f5' : 'white';
+    html += `<th style="padding:4px;border:1px solid #ddd;text-align:center;background:${bgColor};min-width:35px;font-size:0.7em;font-weight:normal;color:#888;">${giorniSett[giornoSett]}</th>`;
+  }
+  html += '</tr>';
+  html += '</thead><tbody>';
 
   dipendentiDaMostrare.forEach(dip => {
     html += `<tr>`;
@@ -2288,7 +2591,6 @@ function caricaCalendario() {
   html += '</tbody></table></div>';
   output.innerHTML = html;
 
-  // Aggiungi totale mese
   setTimeout(() => {
     if (output && !output.innerHTML.includes('📊 TOTALE MESE')) {
       mostraTotaliMese();
@@ -2354,6 +2656,11 @@ function cambiaVistaCalendario() {
 // ============================================
 // CALENDARIO DETTAGLIATO (vista dipendente)
 // ============================================
+// ============================================
+// CALENDARIO DETTAGLIATO
+// - Dipendente: vede solo le sue ore
+// - Admin: vede le ore di TUTTI i dipendenti (filtrabili)
+// ============================================
 function caricaCalendarioDettagliato() {
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
@@ -2364,7 +2671,26 @@ function caricaCalendarioDettagliato() {
     return;
   }
 
-  const username = utenteCorrente.username;
+  const isAdmin = utenteCorrente.ruolo === 'admin';
+
+  // ⭐ Per l'admin: prendi il filtro dipendente (se selezionato)
+  let dipendentiDaMostrare = [];
+  if (isAdmin) {
+    const filtroDip = document.getElementById('cal-dipendente').value;
+    if (filtroDip) {
+      dipendentiDaMostrare = dati.utenti.filter(u => u.username === filtroDip);
+    } else {
+      dipendentiDaMostrare = dati.utenti.filter(u => u.ruolo === 'dipendente');
+    }
+  } else {
+    dipendentiDaMostrare = dati.utenti.filter(u => u.username === utenteCorrente.username);
+  }
+
+  if (dipendentiDaMostrare.length === 0) {
+    output.innerHTML = '<p class="text-muted">Nessun dipendente trovato</p>';
+    return;
+  }
+
   const giorniMese = new Date(anno, mese, 0).getDate();
   const mesePadded = String(mese).padStart(2, '0');
   const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
@@ -2375,98 +2701,164 @@ function caricaCalendarioDettagliato() {
   let registrazioniTotali = 0;
   let giorniLavorati = 0;
 
-  for (let g = 1; g <= giorniMese; g++) {
-    const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
-    const dataObj = new Date(data + 'T00:00:00');
-    const giornoSett = dataObj.getDay();
-    const isWeekend = giornoSett === 0 || giornoSett === 6;
+  // ⭐ Per ogni dipendente, genera un blocco di dettaglio
+  dipendentiDaMostrare.forEach((dip, idxDip) => {
 
-    const registrazioni = dati.registrazioni.filter(r =>
-      r.utente_id === username && r.data === data
-    );
+    let htmlDip = '';
+    let totaleMeseDip = 0;
+    let registrazioniDip = 0;
+    let giorniLavoratiDip = 0;
 
-    const richiesta = dati.richieste.find(r =>
-      r.utente_id === username &&
-      r.stato === 'approvata' &&
-      r.data_inizio <= data && r.data_fine >= data
-    );
+    for (let g = 1; g <= giorniMese; g++) {
+      const data = `${anno}-${mesePadded}-${String(g).padStart(2, '0')}`;
+      const dataObj = new Date(data + 'T00:00:00');
+      const giornoSett = dataObj.getDay();
+      const isWeekend = giornoSett === 0 || giornoSett === 6;
 
-    if (isWeekend && registrazioni.length === 0 && !richiesta) continue;
+      const registrazioni = dati.registrazioni.filter(r =>
+        r.utente_id === dip.username && r.data === data
+      );
 
-    if (!isWeekend && registrazioni.length === 0 && !richiesta) {
-      const oggi = new Date();
-      oggi.setHours(0, 0, 0, 0);
-      if (dataObj < oggi) {
-        html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">⬜ ASSENTE</span></div></div>`;
+      const richiesta = dati.richieste.find(r =>
+        r.utente_id === dip.username &&
+        r.stato === 'approvata' &&
+        r.data_inizio <= data && r.data_fine >= data
+      );
+
+      if (isWeekend && registrazioni.length === 0 && !richiesta) continue;
+
+      if (!isWeekend && registrazioni.length === 0 && !richiesta) {
+        const oggi = new Date();
+        oggi.setHours(0, 0, 0, 0);
+        if (dataObj < oggi) {
+          htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">⬜ ASSENTE</span></div></div>`;
+        }
+        continue;
       }
-      continue;
-    }
 
-    if (richiesta && registrazioni.length === 0) {
-      const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
-      const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
-      const emojiChar = emoji[richiesta.tipo] || '📌';
-      
-      // ⭐ Aggiungi protocollo se malattia
-      const protocolloHTML = (richiesta.tipo === 'malattia' && richiesta.protocollo) 
-        ? `<br><span style="font-size:0.85em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiesta.protocollo}</span>` 
-        : '';
+      // Riga speciale (ferie/permesso/malattia da richiesta approvata)
+      if (richiesta && registrazioni.length === 0) {
+        const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+        const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
+        const emojiChar = emoji[richiesta.tipo] || '📌';
 
-      html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${richiesta.tipo}"><td>${emojiChar} <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
-      continue;
-    }
+        const protocolloHTML = (richiesta.tipo === 'malattia' && richiesta.protocollo)
+          ? `<br><span style="font-size:0.85em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiesta.protocollo}</span>`
+          : '';
 
-    let totaleGiorno = 0;
-    registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+        htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${richiesta.tipo}"><td>${emojiChar} <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
+        continue;
+      }
 
-    registrazioni.forEach(r => {
-      if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+      // Riga speciale da registrazione (malattia/ferie/permesso registrata)
+      const regSpeciale = registrazioni.find(r =>
+        r.tipo === 'malattia' || r.tipo === 'ferie' || r.tipo === 'permesso'
+      );
+
+      if (regSpeciale) {
+        const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
+        const tipo = regSpeciale.tipo.toUpperCase();
+        const emojiChar = emoji[regSpeciale.tipo] || '📌';
+
+        const richiestaCollegata = dati.richieste.find(r =>
+          r.utente_id === dip.username &&
+          r.stato === 'approvata' &&
+          r.tipo === regSpeciale.tipo &&
+          r.data_inizio <= data && r.data_fine >= data
+        );
+
+        const protocolloHTML = (regSpeciale.tipo === 'malattia' && richiestaCollegata && richiestaCollegata.protocollo)
+          ? `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiestaCollegata.protocollo}</span>`
+          : '';
+
+        htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${regSpeciale.tipo}"><td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>${regSpeciale.descrizione ? ' - ' + regSpeciale.descrizione : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
+        continue;
+      }
+
+      // Giornata di lavoro normale
+      let totaleGiorno = 0;
+      registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+
+      registrazioni.forEach(r => {
+        if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+          const [h1, m1] = r.ora_inizio.split(':').map(Number);
+          const [h2, m2] = r.ora_fine.split(':').map(Number);
+          totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+        }
+      });
+
+      registrazioniDip += registrazioni.length;
+      totaleMeseDip += totaleGiorno;
+      if (totaleGiorno > 0) giorniLavoratiDip++;
+
+      const isOltre8 = totaleGiorno > 8;
+      const bgHeader = isOltre8 ? '#b71c1c' : '#00695C';
+
+      htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header" style="background:${bgHeader};"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span></div>`;
+
+      htmlDip += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><thead><tr><th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
+
+      registrazioni.forEach(r => {
+        const commessa = dati.commesse.find(c => c.id === r.commessa_id);
         const [h1, m1] = r.ora_inizio.split(':').map(Number);
         const [h2, m2] = r.ora_fine.split(':').map(Number);
-        totaleGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-      }
-    });
+        const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
+        const isStraordinario = r.straordinario ? ' ⭐' : '';
+        const isRecupero = r.recupero ? ' ⏰' : '';
 
-    registrazioniTotali += registrazioni.length;
-    totaleMese += totaleGiorno;
-    if (totaleGiorno > 0) giorniLavorati++;
+        htmlDip += `<tr><td><strong>${commessa?.nome || 'N/A'}</strong></td><td>${r.ora_inizio || '-'}</td><td>${r.ora_fine || '-'}</td><td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td><td>${r.descrizione || '-'}</td></tr>`;
+      });
 
-    const isOltre8 = totaleGiorno > 8;
-    const bgHeader = isOltre8 ? '#b71c1c' : '#00695C';
+      htmlDip += `</tbody></table></div></div>`;
+    }
 
-    html += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header" style="background:${bgHeader};"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span></div>`;
+    // ⭐ Header del blocco dipendente (solo per admin, per separare i dipendenti)
+    if (isAdmin) {
+      html += `<div class="calendario-dettagliato-info" style="margin-top:${idxDip > 0 ? '30px' : '0'};">
+        <h3><i class="fas fa-user"></i> ${dip.nome} ${dip.cognome}</h3>
+        <div class="info-totali">
+          <span>📊 ${registrazioniDip} registrazioni</span>
+          <span>📅 ${giorniLavoratiDip} giorni lavorati</span>
+          <span>⏱️ Totale: ${totaleMeseDip.toFixed(2)}h</span>
+        </div>
+      </div>`;
+    }
 
-    html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><thead><tr><th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
+    if (htmlDip === '') {
+      html += `<p class="text-muted" style="margin-bottom:20px;">Nessuna registrazione per ${dip.nome} ${dip.cognome} in questo mese.</p>`;
+    } else {
+      html += htmlDip;
+    }
 
-    registrazioni.forEach(r => {
-      const commessa = dati.commesse.find(c => c.id === r.commessa_id);
-      const [h1, m1] = r.ora_inizio.split(':').map(Number);
-      const [h2, m2] = r.ora_fine.split(':').map(Number);
-      const ore = r.ore || (((h2 * 60 + m2) - (h1 * 60 + m1)) / 60);
-      const isStraordinario = r.straordinario ? ' ⭐' : '';
-      const isRecupero = r.recupero ? ' ⏰' : '';
+    totaleMese += totaleMeseDip;
+    registrazioniTotali += registrazioniDip;
+    giorniLavorati += giorniLavoratiDip;
+  });
 
-      html += `<tr><td><strong>${commessa?.nome || 'N/A'}</strong></td><td>${r.ora_inizio || '-'}</td><td>${r.ora_fine || '-'}</td><td><strong>${ore.toFixed(2)}h${isStraordinario}${isRecupero}</strong></td><td>${r.descrizione || '-'}</td></tr>`;
-    });
-
-    html += `</tbody></table></div></div>`;
-  }
-
-  if (html === '') {
-    output.innerHTML = '<p class="text-muted">Nessuna registrazione per questo mese.</p>';
-    return;
-  }
-
-  const headerHTML = `
-    <div class="calendario-dettagliato-info">
-      <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
-      <div class="info-totali">
-        <span>📊 ${registrazioniTotali} registrazioni</span>
-        <span>📅 ${giorniLavorati} giorni lavorati</span>
-        <span>⏱️ Totale: ${totaleMese.toFixed(2)}h</span>
+  // Header riepilogo generale (per dipendente singolo o admin multi)
+  let headerHTML = '';
+  if (!isAdmin) {
+    headerHTML = `
+      <div class="calendario-dettagliato-info">
+        <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno}</h3>
+        <div class="info-totali">
+          <span>📊 ${registrazioniTotali} registrazioni</span>
+          <span>📅 ${giorniLavorati} giorni lavorati</span>
+          <span>⏱️ Totale: ${totaleMese.toFixed(2)}h</span>
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  } else {
+    headerHTML = `
+      <div class="calendario-dettagliato-info">
+        <h3><i class="fas fa-chart-bar"></i> Riepilogo ${meseNome} ${anno} — ${dipendentiDaMostrare.length} dipendenti</h3>
+        <div class="info-totali">
+          <span>📊 ${registrazioniTotali} registrazioni totali</span>
+          <span>⏱️ Totale: ${totaleMese.toFixed(2)}h</span>
+        </div>
+      </div>
+    `;
+  }
 
   output.innerHTML = headerHTML + html;
 }
@@ -2847,10 +3239,17 @@ function applicaFiltriDipendente() {
     html += `<div class="gruppo-giorno"><div class="gruppo-giorno-header"><h4><i class="fas fa-calendar-day"></i> ${dataFormattata}</h4>`;
 
     if (richiesta) {
-      const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
-      const tipo = richiesta.tipo.toUpperCase();
-      html += `<span class="subtotale-giorno">${emoji[richiesta.tipo] || '📌'} ${tipo}</span></div>`;
-      html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale ${richiesta.tipo}"><td><span class="icona-tipo">${emoji[richiesta.tipo] || '📌'}</span> <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}</td></tr></tbody></table></div></div>`;
+      const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+      const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
+      const emojiChar = emoji[richiesta.tipo] || '📌';
+
+      // ⭐ PROTOCCOLLO MALATTIA
+      const protocolloHTML = (richiesta.tipo === 'malattia' && richiesta.protocollo)
+        ? `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiesta.protocollo}</span>`
+        : '';
+
+      html += `<span class="subtotale-giorno">${emojiChar} ${tipo}</span></div>`;
+      html += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale ${richiesta.tipo}"><td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
       output.innerHTML = html;
       return;
     }
@@ -2949,6 +3348,43 @@ function applicaFiltriDipendente() {
         if (richiesta.tipo === 'malattia' && richiesta.protocollo) {
           html += `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiesta.protocollo}</span>`;
         }
+        html += `</td></tr>`;
+        html += `</tbody></table></div>`;
+        html += `</div>`;
+        continue;
+      }
+            // ⭐ Se tra le registrazioni c'è malattia/ferie/permesso (non lavoro), mostra riga speciale
+      const regSpeciale = registrazioni.find(r => 
+        r.tipo === 'malattia' || r.tipo === 'ferie' || r.tipo === 'permesso'
+      );
+      
+      if (regSpeciale) {
+        const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
+        const tipo = regSpeciale.tipo.toUpperCase();
+        const emojiChar = emoji[regSpeciale.tipo] || '📌';
+        
+        const richiestaCollegata = dati.richieste.find(r =>
+          r.utente_id === dipendenteCorrenteDettaglio &&
+          r.stato === 'approvata' &&
+          r.tipo === regSpeciale.tipo &&
+          r.data_inizio <= data && r.data_fine >= data
+        );
+        
+        const protocolloHTML = (regSpeciale.tipo === 'malattia' && richiestaCollegata && richiestaCollegata.protocollo) 
+          ? `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiestaCollegata.protocollo}</span>` 
+          : '';
+        
+        html += `<div class="gruppo-giorno">`;
+        html += `<div class="gruppo-giorno-header">`;
+        html += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-settimana">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4>`;
+        html += `<span class="subtotale-giorno">${emojiChar} ${tipo}</span>`;
+        html += `</div>`;
+        html += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+        html += `<table><tbody>`;
+        html += `<tr class="riga-speciale ${regSpeciale.tipo}">`;
+        html += `<td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>`;
+        if (regSpeciale.descrizione) html += ` - ${regSpeciale.descrizione}`;
+        html += `${protocolloHTML}`;
         html += `</td></tr>`;
         html += `</tbody></table></div>`;
         html += `</div>`;
@@ -3449,18 +3885,15 @@ async function nmApriCartella(tipo) {
 
   document.getElementById('nm-popup-titolo').textContent = NM_CARTELLE_LABEL[tipo];
 
-  // Mostra/nascondi i 2 tipi di input in base alla cartella
   const inputSingolo = document.getElementById('nm-input-singolo');
   const inputDoppio = document.getElementById('nm-input-doppio');
 
   if (tipo === 'cavo') {
-    // CAVO → mostra doppio input
     inputSingolo.style.display = 'none';
     inputDoppio.style.display = 'flex';
     document.getElementById('nm-cavo-sinistra').value = '';
     document.getElementById('nm-cavo-destra').value = '';
   } else {
-    // Altre cartelle → input singolo
     inputSingolo.style.display = 'flex';
     inputDoppio.style.display = 'none';
     document.getElementById('nm-input-numero').value = '';
@@ -3508,8 +3941,11 @@ async function nmCaricaNumeriCartella() {
 
     let html = '';
     numeri.forEach((numero) => {
+      // ⭐ Se il numero è già stato stampato, aggiungi la classe "stampato"
+      const classeStampato = numero.stampato ? ' stampato' : '';
+
       html += `
-        <div class="nm-numero-item" data-id="${numero.id}">
+        <div class="nm-numero-item${classeStampato}" data-id="${numero.id}">
           <span class="nm-numero-testo">${nmEscapaHtml(numero.testo)}</span>
           <div class="nm-numero-azioni">
             <button class="nm-btn-azione nm-btn-modifica" onclick="nmModificaNumero('${numero.id}')" title="Modifica"><i class="fas fa-edit"></i></button>
@@ -3533,7 +3969,6 @@ async function nmAggiungiNumero() {
   let testo = '';
 
   if (nmCartellaCorrente === 'cavo') {
-    // CAVO → leggi dalle 2 caselle
     const sinistraInput = document.getElementById('nm-cavo-sinistra');
     const destraInput = document.getElementById('nm-cavo-destra');
     const sinistra = sinistraInput.value.trim().toUpperCase();
@@ -3560,13 +3995,11 @@ async function nmAggiungiNumero() {
     testo = '-' + sinistra + '/-' + destra;
 
   } else {
-    // Altre cartelle → 1 casella
     const input = document.getElementById('nm-input-numero');
     testo = input.value.trim().toUpperCase();
 
     if (!testo) { input.focus(); return; }
 
-    // ⭐ Aggiungi il trattino se non c'è già
     if (!testo.startsWith('-')) {
       testo = '-' + testo;
     }
@@ -3587,7 +4020,8 @@ async function nmAggiungiNumero() {
       id: 'n_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       testo: testo,
       ordine: commessa.cartelle[nmCartellaCorrente].length,
-      data_aggiunta: new Date().toISOString()
+      data_aggiunta: new Date().toISOString(),
+      stampato: false  // ⭐ NUOVO numero: non ancora stampato
     };
 
     commessa.cartelle[nmCartellaCorrente].push(nuovoNumero);
@@ -3595,7 +4029,6 @@ async function nmAggiungiNumero() {
 
     await docRef.set(commessa);
 
-    // Svuota gli input corretti
     if (nmCartellaCorrente === 'cavo') {
       document.getElementById('nm-cavo-sinistra').value = '';
       document.getElementById('nm-cavo-destra').value = '';
@@ -3630,9 +4063,6 @@ async function nmModificaNumero(idNumero) {
     let nuovoTesto = '';
 
     if (nmCartellaCorrente === 'cavo') {
-      // CAVO → prompt separato per sinistra e destra
-      // Estrai i 2 pezzi dal testo attuale
-      // Formato attuale: -SINISTRA/-DESTRA
       const parti = numero.testo.replace(/^-/, '').split('/-');
       const sinistraAttuale = parti[0] || '';
       const destraAttuale = parti[1] || '';
@@ -3648,14 +4078,12 @@ async function nmModificaNumero(idNumero) {
       nuovoTesto = '-' + nuovaSinistra.trim().toUpperCase() + '/-' + nuovaDestra.trim().toUpperCase();
 
     } else {
-      // Altre cartelle → prompt singolo
       const nuovo = prompt('Modifica il numero:', numero.testo);
       if (nuovo === null) return;
       if (!nuovo.trim()) { alert('❌ Il numero non può essere vuoto'); return; }
 
       nuovoTesto = nuovo.trim().toUpperCase();
 
-      // ⭐ Aggiungi il trattino se non c'è già
       if (!nuovoTesto.startsWith('-')) {
         nuovoTesto = '-' + nuovoTesto;
       }
@@ -3673,6 +4101,7 @@ async function nmModificaNumero(idNumero) {
     alert('❌ Errore: ' + err.message);
   }
 }
+
 async function nmCancellaNumero(idNumero) {
   if (!nmCommessaCorrente || !nmCartellaCorrente) return;
   if (!confirm('Cancellare questo numero?')) return;
@@ -3696,6 +4125,95 @@ async function nmCancellaNumero(idNumero) {
     alert('❌ Errore: ' + err.message);
   }
 }
+
+// ============================================
+// "HO STAMPATO" — evidenzia tutti i numeri della cartella corrente
+// ============================================
+async function nmHoStampato() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) return;
+
+  if (!confirm('Segnare tutti i numeri di questa cartella come STAMPATI?\n\nVerranno evidenziati in verde.')) return;
+
+  try {
+    const docRef = nmGetCollection().doc(nmCommessaCorrente);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      alert('❌ Commessa non trovata');
+      return;
+    }
+
+    const commessa = doc.data();
+    if (!commessa.cartelle || !Array.isArray(commessa.cartelle[nmCartellaCorrente])) {
+      alert('⚠️ Nessun numero in questa cartella');
+      return;
+    }
+
+    // Marca tutti i numeri attuali come stampati
+    commessa.cartelle[nmCartellaCorrente].forEach(numero => {
+      numero.stampato = true;
+    });
+    commessa.data_modifica = new Date().toISOString();
+
+    await docRef.set(commessa);
+    await nmCaricaNumeriCartella();
+    console.log('✅ Tutti i numeri segnati come stampati');
+
+  } catch (err) {
+    console.error('❌ Errore "Ho stampato":', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
+// ============================================
+// "HO STAMPATO TUTTO" — segna tutti i numeri di tutte le cartelle
+// ============================================
+async function nmHoStampatoTutto() {
+  if (!nmCommessaCorrente) return;
+
+  if (!confirm('Segnare TUTTI i numeri di TUTTE le cartelle come STAMPATI?\n\nVerranno evidenziati in verde.')) return;
+
+  try {
+    const docRef = nmGetCollection().doc(nmCommessaCorrente);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      alert('❌ Commessa non trovata');
+      return;
+    }
+
+    const commessa = doc.data();
+    if (!commessa.cartelle) {
+      alert('⚠️ Nessun numero in questa commessa');
+      return;
+    }
+
+    const ordine = ['filo', 'cavo', 'adesive', 'targhette', 'morsetti'];
+    let totale = 0;
+
+    ordine.forEach(tipo => {
+      const numeri = commessa.cartelle[tipo] || [];
+      numeri.forEach(numero => {
+        numero.stampato = true;
+        totale++;
+      });
+    });
+
+    if (totale === 0) {
+      alert('⚠️ Nessun numero da segnare come stampato');
+      return;
+    }
+
+    commessa.data_modifica = new Date().toISOString();
+
+    await docRef.set(commessa);
+    await nmAggiornaConteggiCartelle();
+    console.log(`✅ Segnati come stampati ${totale} numeri in tutte le cartelle`);
+
+  } catch (err) {
+    console.error('❌ Errore "Ho stampato tutto":', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
 // ============================================
 // CONDIVIDI / STAMPA SINGOLA CARTELLA (PDF)
 // ============================================
@@ -3731,15 +4249,11 @@ async function nmCondividiCartella() {
     const colorPrimary = [0, 105, 92];
     const colorText = [34, 34, 34];
 
-    // Carica logo
     const logo = await caricaLogoPerPDF();
-
-    // Data
     const dataGenerazione = new Date().toLocaleDateString('it-IT');
 
     let y = margin + 2;
 
-    // Logo a sinistra
     const logoMaxH = 12;
     let logoH = 0;
     let logoW = 0;
@@ -3753,25 +4267,21 @@ async function nmCondividiCartella() {
       }
     }
 
-    // Nome azienda accanto al logo
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(14);
     pdf.setTextColor(...colorPrimary);
     pdf.text('MEC-ROY SRLS', margin + (logo ? logoW + 4 : 0), y + logoH / 2 + 2);
 
-    // Data a destra
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11);
     pdf.setTextColor(...colorText);
     pdf.text(dataGenerazione, pageW - margin, y + logoH / 2 + 2, { align: 'right' });
 
-    // Linea
     y += logoH + 4;
     pdf.setDrawColor(...colorPrimary);
     pdf.setLineWidth(0.5);
     pdf.line(margin, y, pageW - margin, y);
 
-    // Titolo
     y += 8;
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(14);
@@ -3781,28 +4291,21 @@ async function nmCondividiCartella() {
       margin,
       y
     );
-    // ============================================
-    // NUMERI IN COLONNE AFFIANCATE
-    // ============================================
+
     y += 8;
 
-    // Font dinamico in base alle colonne
     let fontSizeRighe = 10;
     if (numColonne >= 6) fontSizeRighe = 8;
     else if (numColonne >= 4) fontSizeRighe = 9;
     else if (numColonne === 2) fontSizeRighe = 9;
     else fontSizeRighe = 10;
 
-    // Altezza di una riga in mm
     const lineHeight = fontSizeRighe * 0.55;
 
-    // Altezza disponibile nella pagina (dopo header/titolo)
     const altezzaDisponibile = pageH - y - margin - 5;
 
-    // Numero MASSIMO di righe che ci stanno in una colonna
     const righeMaxPerColonna = Math.floor(altezzaDisponibile / lineHeight);
 
-    // Larghezza di una colonna
     const colonnaW = contentW / numColonne;
     const paddingColonna = 2;
     const larghezzaUtile = colonnaW - paddingColonna * 2;
@@ -3812,13 +4315,8 @@ async function nmCondividiCartella() {
     pdf.setFontSize(fontSizeRighe);
     pdf.setTextColor(...colorText);
 
-    // ============================================
-    // CALCOLO BILANCIATO: distribuisci i numeri equamente
-    // ============================================
-    // Quanti numeri per pagina (se ci stanno tutti in una pagina)
     const numeriPerPaginaMax = righeMaxPerColonna * numColonne;
 
-    // Calcola quante pagine servono
     const numPagine = Math.ceil(numeri.length / numeriPerPaginaMax);
 
     for (let p = 0; p < numPagine; p++) {
@@ -3829,7 +4327,6 @@ async function nmCondividiCartella() {
 
       const numeriPagina = numeri.slice(p * numeriPerPaginaMax, (p + 1) * numeriPerPaginaMax);
 
-      // ⭐ Calcola righe per colonna in modo BILANCIATO per questa pagina
       const righeBilanciate = Math.ceil(numeriPagina.length / numColonne);
 
       for (let c = 0; c < numColonne; c++) {
@@ -3841,7 +4338,6 @@ async function nmCondividiCartella() {
         const rigaY = y + ((i + 1) * lineHeight);
         let testo = num.testo || '';
 
-        // ⭐ Aggiungi il trattino se non c'è già
         if (testo && !testo.startsWith('-')) {
           testo = '-' + testo;
         }
@@ -3916,9 +4412,6 @@ async function nmCondividiTuttaCommessa() {
     const logo = await caricaLogoPerPDF();
     const dataGenerazione = new Date().toLocaleDateString('it-IT');
 
-    // ============================================
-    // INTESTAZIONE (prima pagina)
-    // ============================================
     let y = margin + 2;
 
     const logoMaxH = 12;
@@ -3957,17 +4450,12 @@ async function nmCondividiTuttaCommessa() {
 
     y += 10;
 
-    // ============================================
-    // SEZIONI PER OGNI CARTELLA
-    // ============================================
-
     for (const cartella of cartelleDaStampare) {
       const tipo = cartella.tipo;
       const numeri = cartella.numeri;
       const label = NM_CARTELLE_LABEL[tipo];
       const numColonne = NM_CARTELLE_COLONNE[tipo] || 3;
 
-      // Font dinamico in base alle colonne
       let fontSizeRighe = 10;
       if (numColonne >= 6) fontSizeRighe = 8;
       else if (numColonne >= 4) fontSizeRighe = 9;
@@ -3976,19 +4464,15 @@ async function nmCondividiTuttaCommessa() {
 
       const lineHeight = fontSizeRighe * 0.55;
 
-      // ⭐ RIGHE PER COLONNA BILANCIATE
       const righeBilanciate = Math.ceil(numeri.length / numColonne);
 
-      // Altezza necessaria per questa cartella
       const altezzaSezione = righeBilanciate * lineHeight + 12;
 
-      // Se non ci sta nella pagina corrente, nuova pagina
       if (y + altezzaSezione > pageH - margin && y > margin + 10) {
         pdf.addPage();
         y = margin + 5;
       }
 
-      // Header sezione
       pdf.setFillColor(...colorPrimary);
       pdf.rect(margin, y, contentW, 7, 'F');
 
@@ -4002,7 +4486,6 @@ async function nmCondividiTuttaCommessa() {
 
       const yInizioNumeri = y + 10;
 
-      // Numeri in colonne
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(fontSizeRighe);
       pdf.setTextColor(...colorText);
@@ -4022,7 +4505,6 @@ async function nmCondividiTuttaCommessa() {
           const rigaY = yInizioNumeri + ((i + 1) * lineHeight);
           let testo = num.testo || '';
 
-          // ⭐ Aggiungi il trattino se non c'è già
           if (testo && !testo.startsWith('-')) {
             testo = '-' + testo;
           }
@@ -4034,7 +4516,6 @@ async function nmCondividiTuttaCommessa() {
         });
       }
 
-      // Prepara y per la prossima cartella
       y = yInizioNumeri + righeBilanciate * lineHeight + 8;
     }
 
@@ -4646,7 +5127,7 @@ document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('cal-filtro-dipendente').style.display = 'block';
           document.getElementById('btn-password').style.display = 'flex';
           document.getElementById('azienda-container').style.display = 'inline-block';
-          document.getElementById('cal-vista-selector').style.display = 'none';
+          document.getElementById('cal-vista-selector').style.display = 'flex';
 
           caricaSelectAziende();
           caricaSelectAziendeCommesse();
@@ -4843,17 +5324,14 @@ function toggleDropdown(nome, event) {
   
   if (!menu) return;
 
-  // Se è già aperto → chiudi
   if (menu.classList.contains('aperto')) {
     menu.classList.remove('aperto');
     if (btn) btn.classList.remove('aperto');
     return;
   }
 
-  // Chiudi tutti gli altri
   chiudiTuttiDropdown();
 
-  // Apri questo
   menu.classList.add('aperto');
   if (btn) btn.classList.add('aperto');
 }
@@ -4863,7 +5341,6 @@ function chiudiTuttiDropdown() {
   document.querySelectorAll('.dropdown-btn').forEach(b => b.classList.remove('aperto'));
 }
 
-// Chiudi dropdown quando clicchi fuori
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.dropdown')) {
     chiudiTuttiDropdown();
@@ -4898,11 +5375,9 @@ function caricaLogoPerPDF() {
 // HELPER: Salva o condividi PDF
 // ============================================
 async function scaricaOCondividiPDF(pdf, nomeFile) {
-  // Genera blob del PDF
   const pdfBlob = pdf.output('blob');
   const file = new File([pdfBlob], nomeFile, { type: 'application/pdf' });
 
-  // Prova a condividere (mobile)
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
@@ -4921,7 +5396,6 @@ async function scaricaOCondividiPDF(pdf, nomeFile) {
     }
   }
 
-  // Fallback: download diretto
   const url = URL.createObjectURL(pdfBlob);
   const a = document.createElement('a');
   a.href = url;
@@ -4945,44 +5419,35 @@ function nmInitProtocolloInputs() {
   if (inputs.length === 0) return;
 
   inputs.forEach((input, index) => {
-    // Evita doppia inizializzazione
     if (input.dataset.protocolloInit === '1') return;
     input.dataset.protocolloInit = '1';
 
-    // Su INPUT: se digiti una cifra, vai alla prossima
     input.addEventListener('input', (e) => {
-      // Rimuovi caratteri non numerici
       e.target.value = e.target.value.replace(/[^0-9]/g, '').slice(0, 1);
 
-      // Se c'è una cifra, vai alla prossima casella
       if (e.target.value.length === 1 && index < inputs.length - 1) {
         inputs[index + 1].focus();
       }
     });
 
-    // Su KEYDOWN: gestisci Backspace e frecce
     input.addEventListener('keydown', (e) => {
-      // Backspace su casella vuota → torna indietro
       if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
         e.preventDefault();
         inputs[index - 1].focus();
         inputs[index - 1].value = '';
       }
 
-      // Freccia sinistra → casella precedente
       if (e.key === 'ArrowLeft' && index > 0) {
         e.preventDefault();
         inputs[index - 1].focus();
       }
 
-      // Freccia destra → casella successiva
       if (e.key === 'ArrowRight' && index < inputs.length - 1) {
         e.preventDefault();
         inputs[index + 1].focus();
       }
     });
 
-    // Su PASTE: se incolli 9 cifre, riempi tutte le caselle
     input.addEventListener('paste', (e) => {
       e.preventDefault();
       const testoIncollato = (e.clipboardData || window.clipboardData).getData('text');
@@ -4992,7 +5457,6 @@ function nmInitProtocolloInputs() {
         for (let i = 0; i < inputs.length; i++) {
           inputs[i].value = cifre[i] || '';
         }
-        // Focus sull'ultima casella piena
         const ultimaPiena = Math.min(cifre.length, inputs.length) - 1;
         if (ultimaPiena >= 0) inputs[ultimaPiena].focus();
       }
@@ -5002,7 +5466,6 @@ function nmInitProtocolloInputs() {
   console.log('✅ Protocollo input inizializzati:', inputs.length, 'caselle');
 }
 
-// Funzione per leggere il protocollo completo
 function nmLeggiProtocollo() {
   const inputs = document.querySelectorAll('.protocollo-digit');
   let protocollo = '';
@@ -5012,14 +5475,12 @@ function nmLeggiProtocollo() {
   return protocollo;
 }
 
-// Funzione per svuotare le caselle
 function nmSvuotaProtocollo() {
   document.querySelectorAll('.protocollo-digit').forEach(input => {
     input.value = '';
   });
 }
 
-// Funzione per compilare le caselle con un protocollo esistente
 function nmCompilaProtocollo(protocollo) {
   const inputs = document.querySelectorAll('.protocollo-digit');
   const cifre = String(protocollo || '').replace(/[^0-9]/g, '');
@@ -5028,7 +5489,6 @@ function nmCompilaProtocollo(protocollo) {
   });
 }
 
-// Inizializza al caricamento
 document.addEventListener('DOMContentLoaded', () => {
   nmInitProtocolloInputs();
 });
@@ -5051,13 +5511,10 @@ function apriModificaProtocollo(idRichiesta) {
 
   _idRichiestaProtocollo = idRichiesta;
 
-  // Popola le caselle con il protocollo esistente (se c'è)
   nmCompilaProtocolloModale(richiesta.protocollo || '');
 
-  // Apri modale
   document.getElementById('modal-protocollo').classList.add('active');
 
-  // Focus sulla prima casella vuota
   setTimeout(() => {
     const inputs = document.querySelectorAll('.protocollo-digit-modale');
     for (const input of inputs) {
@@ -5155,16 +5612,13 @@ async function salvaProtocolloModale() {
       return;
     }
 
-    // Aggiorna il protocollo
     richiesta.protocollo = protocollo;
 
-    // Salva su Firestore
     await salvaDati();
 
     console.log('✅ Protocollo aggiornato:', protocollo);
     msg.innerHTML = '<div class="success">✅ Protocollo aggiornato!</div>';
 
-    // Ricarica le liste
     setTimeout(() => {
       chiudiModificaProtocollo();
       caricaRichiesteAdmin();
@@ -5176,7 +5630,6 @@ async function salvaProtocolloModale() {
   }
 }
 
-// Inizializza le caselle della modale al caricamento
 document.addEventListener('DOMContentLoaded', () => {
   nmInitProtocolloModale();
 });
