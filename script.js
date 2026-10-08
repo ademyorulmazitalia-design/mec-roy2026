@@ -3463,7 +3463,7 @@ async function nmCaricaNumeriCartella() {
     numeri.forEach((numero) => {
       html += `
         <div class="nm-numero-item" data-id="${numero.id}">
-          <span class="nm-numero-testo">- ${nmEscapaHtml(numero.testo)}</span>
+          <span class="nm-numero-testo">${nmEscapaHtml(numero.testo)}</span>
           <div class="nm-numero-azioni">
             <button class="nm-btn-azione nm-btn-modifica" onclick="nmModificaNumero('${numero.id}')" title="Modifica"><i class="fas fa-edit"></i></button>
             <button class="nm-btn-azione nm-btn-cancella" onclick="nmCancellaNumero('${numero.id}')" title="Cancella"><i class="fas fa-trash"></i></button>
@@ -3974,6 +3974,12 @@ async function nmCondividiTuttaCommessa() {
         numeriColonna.forEach((num, i) => {
           const rigaY = yInizioNumeri + ((i + 1) * lineHeight);
           let testo = num.testo || '';
+
+          // ⭐ Aggiungi il trattino se non c'è già
+          if (testo && !testo.startsWith('-')) {
+            testo = '-' + testo;
+          }
+
           if (testo.length > maxChars) {
             testo = testo.substring(0, maxChars - 2) + '..';
           }
