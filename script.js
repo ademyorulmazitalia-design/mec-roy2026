@@ -1347,7 +1347,7 @@ function caricaRichiesteDipendente() {
 }
 
 // ============================================
-// LISTA RICHIESTE ADMIN
+// LISTA RICHIESTE ADMIN (con tendina)
 // ============================================
 function caricaRichiesteAdmin() {
   const div = document.getElementById('lista-richieste-admin');
@@ -1382,27 +1382,159 @@ function caricaRichiesteAdmin() {
       `;
     }
 
-    // ⭐ Se malattia, mostra pulsante per modificare il protocollo
-    let pulsanteProtocollo = '';
-    if (r.tipo === 'malattia') {
-      pulsanteProtocollo = `<button class="btn-warning" onclick="apriModificaProtocollo(${r.id})" style="margin-left:5px;" title="Modifica protocollo"><i class="fas fa-edit"></i> Protocollo</button>`;
+    // Stato badge
+    let statoBadge = '';
+    if (r.stato === 'approvata') {
+      statoBadge = '<span style="background:#28a745;color:white;padding:2px 8px;border-radius:10px;font-size:0.75em;font-weight:bold;margin-left:8px;">✅ APPROVATA</span>';
     }
 
-    html += `<div class="richiesta-card pending">
+    // Etichette tendina in base al tipo
+    const labelApprova = r.tipo === 'malattia' ? 'Malattia' : 'Approva';
+    const labelAnnulla = r.tipo === 'malattia' ? 'Annulla malattia' : 'Rifiuta';
+    const iconApprova = '✅';
+    const iconAnnulla = r.tipo === 'malattia' ? '❌' : '❌';
+
+    html += `<div class="richiesta-card ${r.stato}">
       <div class="info">
-        <strong>${emoji[r.tipo] || '📌'} ${r.tipo.replace('_', ' ').charAt(0).toUpperCase() + r.tipo.replace('_', ' ').slice(1)} - ${nome}</strong>
+        <strong>${emoji[r.tipo] || '📌'} ${r.tipo.replace('_', ' ').charAt(0).toUpperCase() + r.tipo.replace('_', ' ').slice(1)} - ${nome}${statoBadge}</strong>
         ${dettagli}
         <small style="display:block;color:#999;">Richiesto il: ${new Date(r.data_richiesta).toLocaleDateString('it-IT')}</small>
       </div>
       <div class="azioni">
-        <button class="btn-approva" onclick="approvaRichiesta(${r.id})"><i class="fas fa-check"></i> Approva</button>
-        <button class="btn-rifiuta" onclick="rifiutaRichiesta(${r.id})"><i class="fas fa-times"></i> Rifiuta</button>
-        ${pulsanteProtocollo}
+        <div class="dropdown-richiesta">
+          <button class="btn-azioni-richiesta" onclick="toggleTendinaRichiesta(event, ${r.id})">
+            <i class="fas fa-ellipsis-v"></i> Azioni <i class="fas fa-chevron-down" style="font-size:0.7em;"></i>
+          </button>
+          <div class="dropdown-richiesta-menu" id="dropdown-richiesta-${r.id}">
+            <button class="dropdown-richiesta-item approva" onclick="approvaRichiesta(${r.id})">
+              ${iconApprova} ${labelApprova}
+            </button>
+            <button class="dropdown-richiesta-item annulla" onclick="annullaRichiesta(${r.id})">
+              ${iconAnnulla} ${labelAnnulla}
+            </button>
+          </div>
+        </div>
       </div>
     </div>`;
   });
 
   div.innerHTML = html;
+}
+
+// ============================================
+// TENDINA RICHIESTA
+// ============================================
+function toggleTendinaRichiesta(event, idRichiesta) {
+  if (event) event.stopPropagation();
+
+  const menu = document.getElementById('dropdown-richiesta-' + idRichiesta);
+  if (!menu) return;
+
+  // Chiudi tutte le altre
+  document.querySelectorAll('.dropdown-richiesta-menu').forEach(m => {
+    if (m.id !== 'dropdown-richiesta-' + idRichiesta) {
+      m.classList.remove('aperto');
+    }
+  });
+
+  menu.classList.toggle('aperto');
+}
+
+// Chiudi tendine quando clicchi fuori
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.dropdown-richiesta')) {
+    document.querySelectorAll('.dropdown-richiesta-menu').forEach(m => m.classList.remove('aperto'));
+  }
+});
+
+// ============================================
+// ANNULLA RICHIESTA (sostituisce rifiutaRichiesta)
+// - Se pending → stato annullata, nessuna registrazione da eliminare
+// - Se approvata → elimina registrazioni collegate + stato annullata
+// ============================================
+async function annullaRichiesta(id) {
+  try {
+    const datiFreschi = await caricaDaFirestore();
+    if (datiFreschi) {
+      dati = datiFreschi;
+      if (!dati.richieste) dati.richieste = [];
+      if (!dati.registrazioni) dati.registrazioni = [];
+    }
+  } catch (e) {
+    console.warn('⚠️ Impossibile rileggere Firestore:', e);
+  }
+
+  const richiesta = dati.richieste.find(r => r.id === id);
+  if (!richiesta) { alert('❌ Richiesta non trovata'); return; }
+
+  const eraApprovata = richiesta.stato === 'approvata';
+
+  const messaggioConferma = eraApprovata
+    ? '⚠️ Questa richiesta è GIÀ APPROVATA.\n\nAnnullandola verranno eliminate anche le registrazioni collegate.\n\nProcedere?'
+    : '❌ Annullare questa richiesta?';
+
+  if (!confirm(messaggioConferma)) return;
+
+  // ⭐ Se era approvata, elimina le registrazioni collegate
+  if (eraApprovata) {
+    // Per malattia/ferie/permesso: cerca per richiesta_id
+    if (richiesta.tipo !== 'recupero_ore') {
+      dati.registrazioni = dati.registrazioni.filter(r => r.richiesta_id !== richiesta.id);
+    } else {
+      // Per recupero ore: cerca per data + orario + utente + tipo lavoro + recupero:true
+      dati.registrazioni = dati.registrazioni.filter(r =>
+        !(r.utente_id === richiesta.utente_id &&
+          r.data === richiesta.data &&
+          r.tipo === 'lavoro' &&
+          r.recupero === true &&
+          r.ora_inizio === richiesta.ora_inizio &&
+          r.ora_fine === richiesta.ora_fine)
+      );
+    }
+  }
+
+  // ⭐ Stato → annullata (così non appare più nella lista admin)
+  richiesta.stato = 'annullata';
+  richiesta.data_annullamento = new Date().toISOString();
+
+  // ⭐ Notifica al dipendente
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  const tipoLabel = richiesta.tipo === 'recupero_ore' ? 'recupero ore' : richiesta.tipo;
+
+  aggiungiNotifica(
+    richiesta.utente_id,
+    'annullamento',
+    `${emoji[richiesta.tipo] || '📌'} La tua richiesta di ${tipoLabel} è stata ANNULLATA ❌`,
+    '#'
+  );
+
+  // ⭐ Trigger push (solo se non weekend)
+  if (!isWeekendOggi()) {
+    try {
+      await db.collection('richieste_trigger').add({
+        richiesta_id: richiesta.id,
+        utente_id: richiesta.utente_id,
+        tipo: richiesta.tipo,
+        azione: 'annullata',
+        data_inizio: richiesta.data_inizio || null,
+        data_fine: richiesta.data_fine || null,
+        data: richiesta.data || null,
+        ora_inizio: richiesta.ora_inizio || null,
+        ora_fine: richiesta.ora_fine || null,
+        creato_il: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('⚠️ Errore trigger annullamento:', err);
+    }
+  }
+
+  await salvaDati();
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  caricaRichiesteDipendente();
+  aggiornaBadgeNotifiche();
+
+  alert('✅ Richiesta annullata!');
 }
 
 function aggiornaBadgeRichieste() {
@@ -1696,19 +1828,12 @@ function esportaOreMese() {
 }
 
 // ============================================
-// EXPORT PDF CALENDARIO
-// ============================================
-// ============================================
-// EXPORT PDF CALENDARIO
-// ============================================
-// ============================================
-// EXPORT PDF CALENDARIO (A4 ORIZZONTALE)
+// EXPORT PDF CALENDARIO — PDF VERO (jsPDF + html2canvas)
 // ============================================
 async function esportaPDF() {
   const output = document.getElementById('calendario-output');
   if (!output) return;
 
-  // Recupera mese/anno
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
 
@@ -1716,20 +1841,20 @@ async function esportaPDF() {
     'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese - 1];
   const meseAnnoLabel = `${meseNome.toUpperCase()} ${anno}`;
 
-  // ⭐ Clona il contenuto per non modificare quello a video
+  // Clona il contenuto per non modificare quello a video
   const clone = output.cloneNode(true);
 
-  // ❌ 1) Rimuovi il box "TOTALE MESE"
+  // ❌ Rimuovi il box "TOTALE MESE"
   const totaleMeseBox = clone.querySelector('div[style*="border:2px solid #4CAF50"]');
   if (totaleMeseBox) totaleMeseBox.remove();
 
-  // ❌ 2) Rimuovi il titolo "Ottobre 2026" (h4 subito dopo, ridondante)
+  // ❌ Rimuovi il titolo "Ottobre 2026"
   const h4Titolo = clone.querySelector('h4');
   if (h4Titolo && /^\s*\w+\s+\d{4}\s*$/.test(h4Titolo.textContent)) {
     h4Titolo.remove();
   }
 
-  // ❌ 3) Rimuovi "Recupero" dalla legenda
+  // ❌ Rimuovi "Recupero" dalla legenda
   clone.querySelectorAll('span').forEach(span => {
     if (span.textContent.trim() === 'Recupero') {
       const parentSpan = span.closest('span');
@@ -1739,32 +1864,25 @@ async function esportaPDF() {
     }
   });
 
-  // ❌ 4) Rimuovi il triangolo ⚠️ dai totali (sostituisci la stringa)
+  // ❌ Rimuovi triangoli ⚠️
   clone.querySelectorAll('td').forEach(td => {
     if (td.innerHTML.includes('⚠️')) {
       td.innerHTML = td.innerHTML.replace(/\s*⚠️\s*/g, '');
     }
   });
 
-  // ❌ 5) Rimuovi il colore giallo "recupero" dalla tabella
+  // ❌ Rimuovi colore giallo recupero
   clone.querySelectorAll('td').forEach(td => {
     const style = td.getAttribute('style') || '';
-    // Se la cella ha sfondo giallo #fff3cd → cambia a bianco
     if (style.includes('#fff3cd') || style.includes('#fff3CD')) {
       td.setAttribute('style', style.replace(/#fff3cd/gi, '#ffffff'));
     }
-  });
-  // Ricontrolla anche il bordo giallo, se presente
-  clone.querySelectorAll('td').forEach(td => {
-    const style = td.getAttribute('style') || '';
     if (style.includes('#ffc107')) {
       td.setAttribute('style', style.replace(/#ffc107/gi, '#ddd'));
     }
   });
 
   const content = clone.innerHTML;
-
-  // ⭐ 6) Costruisci la sezione malattie
   const sezioneMalattieHTML = costruisciSezioneMalattie(mese, anno);
 
   if (!content || content.trim() === '') {
@@ -1775,215 +1893,158 @@ async function esportaPDF() {
   const logoHTML = document.querySelector('.logo-small') ?
     document.querySelector('.logo-small').outerHTML : '<h2>MEC-ROY srls</h2>';
 
-  const fullHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Report ${meseAnnoLabel} - MEC-ROY</title>
-      <style>
-        @page {
-          size: A4 landscape;
-          margin: 10mm;
-        }
-        * { box-sizing: border-box; }
-        body {
-          font-family: Arial, sans-serif;
-          padding: 15px;
-          color: #333;
-          margin: 0;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 10px;
-          margin-bottom: 10px;
-          table-layout: fixed;
-        }
-        th, td {
-          border: 1px solid #ddd;
-          padding: 3px 2px;
-          text-align: center;
-          word-wrap: break-word;
-        }
-        th { background: #00695C; color: white; font-weight: bold; }
-
-        /* ⭐ INTESTAZIONE */
-        .intestazione-report {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 20px;
-          padding-bottom: 12px;
-          margin-bottom: 15px;
-          border-bottom: 3px solid #00695C;
-        }
-        .intestazione-sinistra {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-shrink: 0;
-        }
-        .intestazione-sinistra .logo-small-img { max-height: 45px; }
-        .intestazione-sinistra .azienda-small {
-          font-weight: 700;
-          color: #00695C;
-          font-size: 18px;
-        }
-        .intestazione-sinistra h2 {
-          color: #00695C;
-          margin: 0;
-          font-size: 18px;
-        }
-
-        .intestazione-centro {
-          flex: 1;
-          text-align: center;
-          align-self: center;
-        }
-        .intestazione-centro .mese-grande {
-          font-size: 20px;
-          font-weight: 700;
-          color: #00695C;
-          letter-spacing: 1px;
-        }
-
-        .intestazione-destra {
-          text-align: right;
-          font-size: 10px;
-          color: #333;
-          line-height: 1.5;
-          flex-shrink: 0;
-        }
-        .intestazione-destra .commercialista-nome {
-          font-weight: 700;
-          font-size: 11px;
-          color: #00695C;
-        }
-
-        /* Adatta la tabella calendario al foglio */
-        .intestazione-report + div table th,
-        .intestazione-report + div table td {
-          font-size: 9px;
-          padding: 2px 1px;
-        }
-
-        table th:first-child,
-        table td:first-child {
-          width: 120px;
-          text-align: left;
-          padding-left: 5px;
-        }
-
-        table th:last-child,
-        table td:last-child {
-          width: 50px;
-        }
-
-        /* ⭐ SEZIONE MALATTIE */
-        .sezione-malattie {
-          margin-top: 25px;
-          page-break-inside: avoid;
-        }
-        .sezione-malattie h3 {
-          color: #00695C;
-          font-size: 13px;
-          margin: 0 0 10px 0;
-          border-bottom: 2px solid #00695C;
-          padding-bottom: 4px;
-        }
-        .sezione-malattie table {
-          width: 100%;
-          font-size: 11px;
-          margin-bottom: 0;
-          table-layout: auto;
-        }
-        .sezione-malattie th {
-          background: #b71c1c;
-          color: white;
-          padding: 8px 12px;
-          text-align: left;
-        }
-        .sezione-malattie td {
-          padding: 8px 12px;
-          text-align: left;
-          background: #fff;
-        }
-        .sezione-malattie tr:nth-child(even) td {
-          background: #fce8eb;
-        }
-        .sezione-malattie .col-dip {
-          width: 35%;
-          font-weight: 600;
-        }
-        .sezione-malattie .col-prot {
-          width: 65%;
-          font-family: 'Courier New', monospace;
-        }
-
-        @media print {
-          .intestazione-report { page-break-inside: avoid; }
-          body { padding: 0; }
-          .sezione-malattie { page-break-before: auto; }
-        }
-      </style>
-    </head>
-    <body>
-
-      <!-- INTESTAZIONE -->
-      <div class="intestazione-report">
-        <div class="intestazione-sinistra">
-          ${logoHTML}
-        </div>
-        <div class="intestazione-centro">
-          <div class="mese-grande">${meseAnnoLabel}</div>
-        </div>
-        <div class="intestazione-destra">
-          <div class="commercialista-nome">Dott.ssa ELENA ROBERTI</div>
-          <div>Studio Elaborazione Paghe</div>
-          <div>Piazza I.Alpi, 1 42019 Scandiano (RE)</div>
-          <div>Tel 0522 856515</div>
-          <div>elenaroberti@studiocostetti.com</div>
-        </div>
-      </div>
-
-      <!-- CONTENUTO (senza TOTALE MESE, senza Recupero, senza ⚠️) -->
-      <div>${content}</div>
-
-      <!-- ⭐ SEZIONE MALATTIE -->
-      ${sezioneMalattieHTML}
-
-      <!-- FOOTER -->
-      <div style="text-align:center;padding:8px;font-size:10px;color:#888;margin-top:15px;border-top:1px solid #ddd;">
-        MEC-ROY srls - Generato il ${new Date().toLocaleDateString('it-IT')}
-      </div>
-    </body>
-    </html>
-  `;
-
-  const blob = new Blob([fullHTML], { type: 'text/html' });
-  const file = new File([blob], `Report_${meseAnnoLabel.replace(/\s+/g, '_')}_MEC-ROY.html`, { type: 'text/html' });
-
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: 'Report Ore MEC-ROY',
-        text: 'In allegato il report ore.'
-      });
-      return;
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      console.warn('Errore condivisione, provo download...', error);
-    }
+  // Mostra "sto generando..."
+  const btnEsporta = document.querySelector('#panel-calendario button.btn-primary');
+  const testoOriginale = btnEsporta ? btnEsporta.innerHTML : '';
+  if (btnEsporta) {
+    btnEsporta.disabled = true;
+    btnEsporta.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generazione PDF...';
   }
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Report_${meseAnnoLabel.replace(/\s+/g, '_')}_MEC-ROY.html`;
-  a.click();
-  URL.revokeObjectURL(url);
+  // ⭐ Container temporaneo (invisibile, fuori schermo)
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-99999px';
+  container.style.top = '0';
+  container.style.width = '1600px';
+  container.style.background = 'white';
+  container.style.padding = '20px';
+  container.style.fontFamily = 'Arial, sans-serif';
+  container.innerHTML = `
+    <style>
+      .intestazione-report {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 20px; padding-bottom: 12px; margin-bottom: 15px;
+        border-bottom: 3px solid #00695C;
+      }
+      .intestazione-sinistra { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+      .intestazione-sinistra .logo-small-img { max-height: 45px; }
+      .intestazione-sinistra .azienda-small { font-weight: 700; color: #00695C; font-size: 18px; }
+      .intestazione-sinistra h2 { color: #00695C; margin: 0; font-size: 18px; }
+      .intestazione-centro { flex: 1; text-align: center; align-self: center; }
+      .intestazione-centro .mese-grande { font-size: 20px; font-weight: 700; color: #00695C; letter-spacing: 1px; }
+      .intestazione-destra { text-align: right; font-size: 10px; color: #333; line-height: 1.5; flex-shrink: 0; margin-right: 38px; }
+      .intestazione-destra .commercialista-nome { font-weight: 700; font-size: 11px; color: #00695C; }
+      table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; table-layout: fixed; }
+      th, td { border: 1px solid #ddd; padding: 3px 2px; text-align: center; word-wrap: break-word; }
+      th { background: #00695C; color: white; font-weight: bold; }
+      table th:first-child, table td:first-child { width: 110px; text-align: left; padding-left: 5px; }
+      table th:last-child, table td:last-child { width: 50px; }
+      .sezione-malattie { margin-top: 25px; }
+      .sezione-malattie h3 { color: #00695C; font-size: 13px; margin: 0 0 10px 0; border-bottom: 2px solid #00695C; padding-bottom: 4px; }
+      .sezione-malattie table { font-size: 11px; table-layout: auto; }
+      .sezione-malattie th { background: #b71c1c; color: white; padding: 8px 12px; text-align: left; }
+      .sezione-malattie td { padding: 8px 12px; text-align: left; }
+      .sezione-malattie tr:nth-child(even) td { background: #fce8eb; }
+      .sezione-malattie .col-dip { width: 35%; font-weight: 600; }
+      .sezione-malattie .col-prot { width: 65%; font-family: 'Courier New', monospace; }
+    </style>
+
+    <div class="intestazione-report">
+      <div class="intestazione-sinistra">${logoHTML}</div>
+      <div class="intestazione-centro"><div class="mese-grande">${meseAnnoLabel}</div></div>
+      <div class="intestazione-destra">
+        <div class="commercialista-nome">Dott.ssa ELENA ROBERTI</div>
+        <div>Studio Elaborazione Paghe</div>
+        <div>Piazza I.Alpi, 1 42019 Scandiano (RE)</div>
+        <div>Tel 0522 856515</div>
+        <div>elenaroberti@studiocostetti.com</div>
+      </div>
+    </div>
+
+    <div>${content}</div>
+    ${sezioneMalattieHTML}
+    <div style="text-align:center;padding:8px;font-size:10px;color:#888;margin-top:15px;border-top:1px solid #ddd;">
+      MEC-ROY srls - Generato il ${new Date().toLocaleDateString('it-IT')}
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  try {
+    await new Promise(r => setTimeout(r, 300));
+
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    const pageW = 297;
+    const pageH = 210;
+    const margin = 8;
+
+    const imgW = pageW - margin * 2;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+    let remainingHeight = imgH;
+    let yPos = margin;
+
+    while (remainingHeight > 0) {
+      const altezzaPagina = pageH - margin * 2;
+      const altezzaDaDisegnare = Math.min(remainingHeight, altezzaPagina);
+
+      pdf.addImage(
+        imgData, 'JPEG', margin, yPos, imgW, imgH, undefined, 'FAST',
+        0, -((imgH - remainingHeight) * canvas.width / imgW)
+      );
+
+      remainingHeight -= altezzaDaDisegnare;
+      if (remainingHeight > 0) {
+        pdf.addPage();
+        yPos = margin;
+      }
+    }
+
+    document.body.removeChild(container);
+
+    const nomeFile = `Report_${meseAnnoLabel.replace(/\s+/g, '_')}_MEC-ROY.pdf`;
+    const pdfBlob = pdf.output('blob');
+    const file = new File([pdfBlob], nomeFile, { type: 'application/pdf' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Report Ore MEC-ROY',
+          text: 'In allegato il report ore.'
+        });
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        console.warn('Condivisione fallita, uso download...', error);
+      }
+    }
+
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeFile;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log('✅ PDF generato:', nomeFile);
+
+  } catch (err) {
+    console.error('❌ Errore generazione PDF:', err);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+    alert('❌ Errore: ' + err.message);
+  } finally {
+    if (btnEsporta) {
+      btnEsporta.disabled = false;
+      btnEsporta.innerHTML = testoOriginale;
+    }
+  }
 }
 
 // ============================================
@@ -2261,8 +2322,9 @@ function caricaSelectDipendentiCalendario() {
 }
 
 console.log('✅ script.js — PARTE 4/6 caricata');
+
 // ============================================
-// CARICA REGISTRAZIONI MODIFICA (admin)
+// CARICA REGISTRAZIONI MODIFICA (admin) — commessa a tendina
 // ============================================
 function caricaRegistrazioniModifica() {
   const username = document.getElementById('modifica-dipendente').value;
@@ -2276,7 +2338,7 @@ function caricaRegistrazioniModifica() {
   }
 
   const registrazioni = dati.registrazioni.filter(r =>
-    r.utente_id === username && r.data === data && r.tipo === 'lavoro'
+    r.utente_id === username && r.data === data
   );
 
   if (registrazioni.length === 0) {
@@ -2284,8 +2346,16 @@ function caricaRegistrazioniModifica() {
     return;
   }
 
-  const totaleGiornata = calcolaOreGiornata(username, data);
+  // Calcola totale solo lavoro
+  const totaleGiornata = registrazioni
+    .filter(r => r.tipo === 'lavoro')
+    .reduce((sum, r) => sum + (r.ore || 0), 0);
   const isOltre8 = totaleGiornata > 8;
+
+  // ⭐ Opzioni commesse per la tendina
+  const opzioniCommesse = (dati.commesse || []).map(c =>
+    `<option value="${c.id}">${c.nome}</option>`
+  ).join('');
 
   let html = '<div class="table-wrapper"><table><thead><tr>';
   html += '<th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Tipo</th><th>Descrizione</th><th>Azioni</th>';
@@ -2293,17 +2363,37 @@ function caricaRegistrazioniModifica() {
 
   registrazioni.forEach(r => {
     const commessa = dati.commesse.find(c => c.id === r.commessa_id);
-    const [h1, m1] = r.ora_inizio.split(':').map(Number);
-    const [h2, m2] = r.ora_fine.split(':').map(Number);
-    const ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-    const isStraordinario = r.straordinario || false;
     const tipoCorrente = r.tipo || 'lavoro';
 
+    // Ore
+    let ore = 0;
+    if (r.ora_inizio && r.ora_fine && r.ora_inizio !== '00:00') {
+      const [h1, m1] = r.ora_inizio.split(':').map(Number);
+      const [h2, m2] = r.ora_fine.split(':').map(Number);
+      ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+    }
+    const isStraordinario = r.straordinario || false;
+
     html += '<tr' + (isOltre8 ? ' class="ore-straordinario"' : '') + '>';
-    html += '<td><strong>' + (commessa?.nome || 'N/A') + '</strong></td>';
-    html += '<td><input type="time" id="mod-inizio-' + r.id + '" value="' + r.ora_inizio + '" class="edit-input" /></td>';
-    html += '<td><input type="time" id="mod-fine-' + r.id + '" value="' + r.ora_fine + '" class="edit-input" /></td>';
+
+    // ⭐ COMMESSA → tendina modificabile
+    html += '<td>';
+    html += '<select id="mod-commessa-' + r.id + '" class="edit-input">';
+    html += '<option value="">-- Nessuna --</option>';
+    html += opzioniCommesse;
+    html += '</select>';
+    html += '</td>';
+
+    // Ora inizio
+    html += '<td><input type="time" id="mod-inizio-' + r.id + '" value="' + (r.ora_inizio || '') + '" class="edit-input" /></td>';
+
+    // Ora fine
+    html += '<td><input type="time" id="mod-fine-' + r.id + '" value="' + (r.ora_fine || '') + '" class="edit-input" /></td>';
+
+    // Ore (visualizzazione)
     html += '<td>' + ore.toFixed(2) + 'h' + (isStraordinario ? ' ⭐' : '') + '</td>';
+
+    // Tipo
     html += '<td>' +
       '<select id="mod-tipo-' + r.id + '" class="edit-input">' +
         '<option value="lavoro"' + (tipoCorrente === 'lavoro' ? ' selected' : '') + '>Lavoro</option>' +
@@ -2313,27 +2403,86 @@ function caricaRegistrazioniModifica() {
         '<option value="recupero_ore"' + (tipoCorrente === 'recupero_ore' ? ' selected' : '') + '>Recupero ore</option>' +
       '</select>' +
     '</td>';
-    html += '<td><input type="text" id="mod-desc-' + r.id + '" value="' + (r.descrizione || '') + '" class="edit-input" /></td>';
+
+    // Descrizione
+    html += '<td><input type="text" id="mod-desc-' + r.id + '" value="' + (r.descrizione || '').replace(/"/g, '&quot;') + '" class="edit-input" /></td>';
+
+    // Azioni
     html += '<td>';
-    html += '<button class="btn-warning" onclick="salvaModifica(' + r.id + ')"><i class="fas fa-save"></i></button>';
-    html += '<button class="btn-danger" onclick="eliminaRegistrazione(' + r.id + ')"><i class="fas fa-trash"></i></button>';
+    html += '<button class="btn-success" onclick="salvaModifica(' + r.id + ')" style="margin-right:5px;" title="Salva"><i class="fas fa-save"></i> Salva</button>';
+    html += '<button class="btn-danger" onclick="eliminaRegistrazione(' + r.id + ')" title="Elimina"><i class="fas fa-trash"></i> Elimina</button>';
     html += '</td>';
+
     html += '</tr>';
+
+    // ⭐ Se la registrazione ha una commessa → selezionala dopo il render
+    if (commessa) {
+      setTimeout(() => {
+        const sel = document.getElementById('mod-commessa-' + r.id);
+        if (sel) sel.value = commessa.id;
+      }, 0);
+    }
   });
 
   const bgColor = isOltre8 ? '#ffebee' : '#e8f5e9';
   const textColor = isOltre8 ? '#d32f2f' : '#2e7d32';
   html += `
     <tr style="font-weight:bold;">
-      <td colspan="3" style="text-align:right;background:${bgColor};color:${textColor};">TOTALE GIORNATA:</td>
-      <td colspan="3" style="background:${bgColor};color:${textColor};">
-        ${totaleGiornata.toFixed(2)}h ${isOltre8 ? '⚠️ STRAORDINARIO (> 8h)' : ''}
+      <td colspan="3" style="text-align:right;background:${bgColor};color:${textColor};">TOTALE GIORNATA (lavoro):</td>
+      <td colspan="4" style="background:${bgColor};color:${textColor};">
+        ${totaleGiornata.toFixed(2)}h ${isOltre8 ? '⚠️ > 8h' : ''}
       </td>
     </tr>
   `;
 
   html += '</tbody></table></div>';
   div.innerHTML = html;
+}
+
+// ============================================
+// SALVA MODIFICA (ora salva anche la commessa)
+// ============================================
+async function salvaModifica(id) {
+  const registro = dati.registrazioni.find(r => r.id === id);
+  if (!registro) return;
+
+  const nuovoTipo = document.getElementById('mod-tipo-' + id).value;
+  const nuovaCommessa = document.getElementById('mod-commessa-' + id).value;
+  const nuovaInizio = document.getElementById('mod-inizio-' + id).value;
+  const nuovaFine = document.getElementById('mod-fine-' + id).value;
+  const nuovaDesc = document.getElementById('mod-desc-' + id).value.trim();
+
+  // Validazione orari (solo se tipo lavoro o simili)
+  if (nuovoTipo === 'lavoro' || nuovoTipo === 'recupero_ore') {
+    if (!nuovaInizio || !nuovaFine) {
+      alert('❌ Inserisci ora inizio e ora fine');
+      return;
+    }
+    if (nuovaInizio >= nuovaFine) {
+      alert('❌ L\'ora fine deve essere dopo l\'ora inizio');
+      return;
+    }
+  }
+
+  // ⭐ Aggiorna commessa
+  registro.commessa_id = nuovaCommessa ? parseInt(nuovaCommessa) : null;
+  registro.tipo = nuovoTipo;
+  registro.ora_inizio = nuovaInizio;
+  registro.ora_fine = nuovaFine;
+  registro.descrizione = nuovaDesc;
+
+  // Ricalcola ore
+  if (nuovaInizio && nuovaFine && nuovaInizio !== '00:00') {
+    const [h1, m1] = nuovaInizio.split(':').map(Number);
+    const [h2, m2] = nuovaFine.split(':').map(Number);
+    registro.ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  } else {
+    registro.ore = 0;
+  }
+
+  await salvaDati();
+  caricaRegistrazioniModifica();
+  alert('✅ Registrazione modificata!');
 }
 
 async function salvaModifica(id) {
@@ -3061,6 +3210,9 @@ function chiudiDettaglioCommessa() {
   commessaCorrenteDettaglio = null;
 }
 
+// ============================================
+// EXPORT PDF COMMESSA — PDF VERO
+// ============================================
 async function esportaPDFCommessa() {
   if (!commessaCorrenteDettaglio) {
     alert('❌ Nessuna commessa selezionata');
@@ -3077,71 +3229,199 @@ async function esportaPDFCommessa() {
     return;
   }
 
+  // Info filtri
   let infoFiltri = '';
   if (filtriCommessa.dataInizio || filtriCommessa.dataFine) {
-    infoFiltri += `<p><strong>Periodo:</strong> `;
+    infoFiltri += `Periodo: `;
     if (filtriCommessa.dataInizio) infoFiltri += `dal ${filtriCommessa.dataInizio} `;
     if (filtriCommessa.dataFine) infoFiltri += `al ${filtriCommessa.dataFine}`;
-    infoFiltri += `</p>`;
+    infoFiltri += ' · ';
   }
   if (filtriCommessa.dipendenti.length > 0) {
     const nomiDip = filtriCommessa.dipendenti.map(u => {
       const ut = dati.utenti.find(x => x.username === u);
       return ut ? ut.nome + ' ' + ut.cognome : u;
     }).join(', ');
-    infoFiltri += `<p><strong>Dipendenti:</strong> ${nomiDip}</p>`;
+    infoFiltri += `Dipendenti: ${nomiDip} · `;
   }
   if (filtriCommessa.ricerca) {
-    infoFiltri += `<p><strong>Ricerca:</strong> "${filtriCommessa.ricerca}"</p>`;
+    infoFiltri += `Ricerca: "${filtriCommessa.ricerca}"`;
   }
-
-  const logoHTML = document.querySelector('.logo-small') ?
-    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
+  infoFiltri = infoFiltri.replace(/·\s*$/, '').trim();
 
   const dataCreazione = commessa.data_creazione ?
     new Date(commessa.data_creazione).toLocaleDateString('it-IT') : 'N/D';
 
-  const fullHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Report Commessa - ${commessa.nome}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-        th { background: #00695C; color: white; font-weight: bold; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
-        .header h2 { color: #00695C; margin: 5px 0; }
-        .header h3 { color: #333; margin: 5px 0; }
-        .info-filtri { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 12px; }
-        .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
-        .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
-        .logo-small-img { max-height: 50px; }
-        .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
-        .gruppo-dipendente-header { background: #00695C; color: white; padding: 8px 12px; border-radius: 6px 6px 0 0; }
-        .subtotale { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
-        .totale-generale { background: #fff3cd; border: 2px solid #ffc107; padding: 12px; text-align: center; font-weight: bold; border-radius: 8px; color: #856404; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        ${logoHTML}
-        <h2>REPORT COMMESSA</h2>
-        <h3>${commessa.nome}</h3>
-        <p style="color:#888;font-size:12px;margin:5px 0;">Data creazione: ${dataCreazione}</p>
-        <p style="color:#888;font-size:12px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
+  const logoHTML = document.querySelector('.logo-small') ?
+    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
+
+  // ⭐ Mostra "sto generando"
+  const btnEsporta = event?.target?.closest('button');
+  const testoOriginale = btnEsporta ? btnEsporta.innerHTML : '';
+  if (btnEsporta) {
+    btnEsporta.disabled = true;
+    btnEsporta.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generazione PDF...';
+  }
+
+  // ⭐ Container temporaneo
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-99999px';
+  container.style.top = '0';
+  container.style.width = '1200px';
+  container.style.background = 'white';
+  container.style.padding = '25px';
+  container.style.fontFamily = 'Arial, sans-serif';
+  container.innerHTML = `
+    <style>
+      table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+      th { background: #00695C; color: white; font-weight: bold; }
+      tr:nth-child(even) td { background: #f9f9f9; }
+      .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 3px solid #00695C; margin-bottom: 18px; }
+      .header-left { display: flex; align-items: center; gap: 10px; }
+      .header-left .logo-small-img { max-height: 50px; }
+      .header-left .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
+      .header-left h2 { color: #00695C; margin: 0; font-size: 20px; }
+      .header-right { text-align: right; font-size: 10px; line-height: 1.5; color: #333; }
+      .header-right .commercialista-nome { font-weight: 700; font-size: 11px; color: #00695C; }
+      .titolo-report { text-align: center; margin: 15px 0; }
+      .titolo-report h2 { color: #00695C; margin: 0; font-size: 18px; }
+      .titolo-report h3 { color: #333; margin: 5px 0 0 0; font-size: 14px; }
+      .titolo-report p { color: #888; font-size: 11px; margin: 5px 0; }
+      .info-filtri { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 11px; color: #555; }
+      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 20px; color: #888; font-size: 10px; }
+      .gruppo-dipendente { margin-bottom: 20px; }
+      .gruppo-dipendente-header { background: #00695C; color: white; padding: 8px 12px; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; }
+      .gruppo-dipendente-header h4 { margin: 0; color: white; font-size: 13px; }
+      .subtotale { background: rgba(255,255,255,0.2); padding: 2px 10px; border-radius: 10px; font-weight: bold; font-size: 12px; }
+      .totale-generale { background: #fff3cd; border: 2px solid #ffc107; padding: 12px; text-align: center; font-weight: bold; border-radius: 8px; color: #856404; font-size: 14px; }
+    </style>
+
+    <!-- ⭐ INTESTAZIONE -->
+    <div class="header">
+      <div class="header-left">${logoHTML}</div>
+      <div class="header-right">
+        <div class="commercialista-nome">Dott.ssa ELENA ROBERTI</div>
+        <div>Studio Elaborazione Paghe</div>
+        <div>Piazza I.Alpi, 1 42019 Scandiano (RE)</div>
+        <div>Tel 0522 856515</div>
+        <div>elenaroberti@studiocostetti.com</div>
       </div>
-      ${infoFiltri ? `<div class="info-filtri"><strong>🔍 Filtri applicati:</strong>${infoFiltri}</div>` : ''}
-      <div style="margin-top:10px;">${content}</div>
-      <div class="footer">MEC-ROY srls - Sistema di Gestione Lavoro<br>Documento generato automaticamente</div>
-    </body>
-    </html>
+    </div>
+
+    <!-- TITOLO -->
+    <div class="titolo-report">
+      <h2>REPORT COMMESSA</h2>
+      <h3>${commessa.nome}</h3>
+      <p>Data creazione: ${dataCreazione} · Generato il ${new Date().toLocaleDateString('it-IT')}</p>
+    </div>
+
+    ${infoFiltri ? `<div class="info-filtri"><strong>🔍 Filtri applicati:</strong> ${infoFiltri}</div>` : ''}
+
+    <div>${content}</div>
+
+    <div class="footer">MEC-ROY srls - Documento generato automaticamente</div>
   `;
 
-  await scaricaOCondividiFile(fullHTML, `Report_Commessa_${commessa.nome.replace(/\s+/g, '_')}`);
+  document.body.appendChild(container);
+
+  try {
+    await new Promise(r => setTimeout(r, 300));
+
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageW = 210;
+    const pageH = 297;
+    const margin = 8;
+
+    const imgW = pageW - margin * 2;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+    let remainingHeight = imgH;
+    let yPos = margin;
+
+    while (remainingHeight > 0) {
+      const altezzaPagina = pageH - margin * 2;
+      const altezzaDaDisegnare = Math.min(remainingHeight, altezzaPagina);
+
+      pdf.addImage(
+        imgData,
+        'JPEG',
+        margin,
+        yPos,
+        imgW,
+        imgH,
+        undefined,
+        'FAST',
+        0,
+        -((imgH - remainingHeight) * canvas.width / imgW)
+      );
+
+      remainingHeight -= altezzaDaDisegnare;
+      if (remainingHeight > 0) {
+        pdf.addPage();
+        yPos = margin;
+      }
+    }
+
+    document.body.removeChild(container);
+
+    const nomeFile = `Report_Commessa_${commessa.nome.replace(/\s+/g, '_')}.pdf`;
+    const pdfBlob = pdf.output('blob');
+    const file = new File([pdfBlob], nomeFile, { type: 'application/pdf' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Report Commessa MEC-ROY',
+          text: `Report commessa ${commessa.nome}`
+        });
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        console.warn('Condivisione fallita, uso download...', error);
+      }
+    }
+
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeFile;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log('✅ PDF Commessa generato:', nomeFile);
+
+  } catch (err) {
+    console.error('❌ Errore generazione PDF Commessa:', err);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+    alert('❌ Errore durante la generazione del PDF: ' + err.message);
+  } finally {
+    if (btnEsporta) {
+      btnEsporta.disabled = false;
+      btnEsporta.innerHTML = testoOriginale;
+    }
+  }
 }
 
 // ============================================
@@ -3466,6 +3746,9 @@ function chiudiDettaglioDipendente() {
   dipendenteCorrenteDettaglio = null;
 }
 
+// ============================================
+// EXPORT PDF DIPENDENTE — PDF VERO
+// ============================================
 async function esportaPDFDipendente() {
   if (!dipendenteCorrenteDettaglio) {
     alert('❌ Nessun dipendente selezionato');
@@ -3482,9 +3765,6 @@ async function esportaPDFDipendente() {
     return;
   }
 
-  const logoHTML = document.querySelector('.logo-small') ?
-    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
-
   const vista = filtriDipendente.vista;
   let periodo = '';
   const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
@@ -3498,52 +3778,181 @@ async function esportaPDFDipendente() {
     periodo = `${meseNome} ${filtriDipendente.anno}`;
   }
 
-  const fullHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Report Dipendente - ${utente.nome} ${utente.cognome}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 15px; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-        th { background: #00695C; color: white; font-weight: bold; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .header { text-align: center; padding: 10px 0; border-bottom: 3px solid #00695C; margin-bottom: 15px; }
-        .header h2 { color: #00695C; margin: 5px 0; }
-        .header h3 { color: #333; margin: 5px 0; }
-        .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 15px; color: #888; font-size: 11px; }
-        .logo-small { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
-        .logo-small-img { max-height: 50px; }
-        .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
-        .dipendente-info-box { background: #00695C; color: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
-        .dipendente-info-box h3 { margin: 0 0 5px 0; color: white; }
-        .gruppo-giorno { margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
-        .gruppo-giorno-header { background: #00695C; color: white; padding: 8px 12px; display: flex; justify-content: space-between; }
-        .gruppo-giorno-header h4 { margin: 0; color: white; }
-        .gruppo-giorno-header .subtotale-giorno { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
-        .riga-speciale.ferie td { background: #E3F2FD; color: #0d47a1; text-align: center; font-weight: bold; padding: 15px; }
-        .riga-speciale.permesso td { background: #FFF3E0; color: #e65100; text-align: center; font-weight: bold; padding: 15px; }
-        .riga-speciale.malattia td { background: #FFEBEE; color: #b71c1c; text-align: center; font-weight: bold; padding: 15px; }
-        .riga-speciale.assente td { background: #f5f5f5; color: #666; text-align: center; font-style: italic; padding: 15px; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        ${logoHTML}
-        <h2>REPORT DIPENDENTE</h2>
-        <h3>${utente.nome} ${utente.cognome}</h3>
-        <p style="color:#888;font-size:12px;margin:5px 0;">Periodo: ${periodo}</p>
-        <p style="color:#888;font-size:12px;margin:0;">Generato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'})}</p>
+  const logoHTML = document.querySelector('.logo-small') ?
+    document.querySelector('.logo-small').outerHTML : '<h2 style="color:#00695C;">MEC-ROY srls</h2>';
+
+  // ⭐ Mostra "sto generando"
+  const btnEsporta = event?.target?.closest('button');
+  const testoOriginale = btnEsporta ? btnEsporta.innerHTML : '';
+  if (btnEsporta) {
+    btnEsporta.disabled = true;
+    btnEsporta.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generazione PDF...';
+  }
+
+  // ⭐ Container temporaneo
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-99999px';
+  container.style.top = '0';
+  container.style.width = '1200px';
+  container.style.background = 'white';
+  container.style.padding = '25px';
+  container.style.fontFamily = 'Arial, sans-serif';
+  container.innerHTML = `
+    <style>
+      table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+      th { background: #00695C; color: white; font-weight: bold; }
+      tr:nth-child(even) td { background: #f9f9f9; }
+      .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 3px solid #00695C; margin-bottom: 18px; }
+      .header-left { display: flex; align-items: center; gap: 10px; }
+      .header-left .logo-small-img { max-height: 50px; }
+      .header-left .azienda-small { font-weight: 700; color: #00695C; font-size: 20px; }
+      .header-left h2 { color: #00695C; margin: 0; font-size: 20px; }
+      .header-right { text-align: right; font-size: 10px; line-height: 1.5; color: #333; }
+      .header-right .commercialista-nome { font-weight: 700; font-size: 11px; color: #00695C; }
+      .titolo-report { text-align: center; margin: 15px 0; }
+      .titolo-report h2 { color: #00695C; margin: 0; font-size: 18px; }
+      .titolo-report h3 { color: #333; margin: 5px 0 0 0; font-size: 14px; }
+      .titolo-report p { color: #888; font-size: 11px; margin: 5px 0; }
+      .footer { text-align: center; padding: 10px 0; border-top: 2px solid #ddd; margin-top: 20px; color: #888; font-size: 10px; }
+      .dipendente-info-box { background: #00695C; color: white; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+      .dipendente-info-box h3 { margin: 0; font-size: 14px; color: white; }
+      .dipendente-info-box .info-dettagli { display: flex; gap: 15px; font-size: 11px; }
+      .dipendente-info-box .info-dettagli span { background: rgba(255,255,255,0.22); padding: 3px 10px; border-radius: 10px; }
+      .gruppo-giorno { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
+      .gruppo-giorno-header { background: #00695C; color: white; padding: 8px 12px; display: flex; justify-content: space-between; }
+      .gruppo-giorno-header h4 { margin: 0; color: white; font-size: 12px; }
+      .gruppo-giorno-header .giorno-settimana { font-size: 0.85em; opacity: 0.9; margin-left: 6px; }
+      .gruppo-giorno-header .subtotale-giorno { background: rgba(255,255,255,0.22); padding: 3px 10px; border-radius: 10px; font-weight: bold; font-size: 11px; }
+      .riga-speciale.ferie td { background: #E3F2FD; color: #0d47a1; text-align: center; font-weight: bold; padding: 15px; }
+      .riga-speciale.permesso td { background: #FFF3E0; color: #e65100; text-align: center; font-weight: bold; padding: 15px; }
+      .riga-speciale.malattia td { background: #FFEBEE; color: #b71c1c; text-align: center; font-weight: bold; padding: 15px; }
+      .riga-speciale.assente td { background: #f5f5f5; color: #666; text-align: center; font-style: italic; padding: 15px; }
+    </style>
+
+    <!-- ⭐ INTESTAZIONE -->
+    <div class="header">
+      <div class="header-left">${logoHTML}</div>
+      <div class="header-right">
+        <div class="commercialista-nome">Dott.ssa ELENA ROBERTI</div>
+        <div>Studio Elaborazione Paghe</div>
+        <div>Piazza I.Alpi, 1 42019 Scandiano (RE)</div>
+        <div>Tel 0522 856515</div>
+        <div>elenaroberti@studiocostetti.com</div>
       </div>
-      <div style="margin-top:10px;">${content}</div>
-      <div class="footer">MEC-ROY srls - Sistema di Gestione Lavoro<br>Documento generato automaticamente</div>
-    </body>
-    </html>
+    </div>
+
+    <!-- TITOLO -->
+    <div class="titolo-report">
+      <h2>REPORT DIPENDENTE</h2>
+      <h3>${utente.nome} ${utente.cognome}</h3>
+      <p>Periodo: ${periodo} · Generato il ${new Date().toLocaleDateString('it-IT')}</p>
+    </div>
+
+    <div>${content}</div>
+
+    <div class="footer">MEC-ROY srls - Documento generato automaticamente</div>
   `;
 
-  await scaricaOCondividiFile(fullHTML, `Report_${utente.nome}_${utente.cognome}`);
+  document.body.appendChild(container);
+
+  try {
+    await new Promise(r => setTimeout(r, 300));
+
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageW = 210;
+    const pageH = 297;
+    const margin = 8;
+
+    const imgW = pageW - margin * 2;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+    let remainingHeight = imgH;
+    let yPos = margin;
+
+    while (remainingHeight > 0) {
+      const altezzaPagina = pageH - margin * 2;
+      const altezzaDaDisegnare = Math.min(remainingHeight, altezzaPagina);
+
+      pdf.addImage(
+        imgData,
+        'JPEG',
+        margin,
+        yPos,
+        imgW,
+        imgH,
+        undefined,
+        'FAST',
+        0,
+        -((imgH - remainingHeight) * canvas.width / imgW)
+      );
+
+      remainingHeight -= altezzaDaDisegnare;
+      if (remainingHeight > 0) {
+        pdf.addPage();
+        yPos = margin;
+      }
+    }
+
+    document.body.removeChild(container);
+
+    const nomeFile = `Report_${utente.nome}_${utente.cognome}.pdf`;
+    const pdfBlob = pdf.output('blob');
+    const file = new File([pdfBlob], nomeFile, { type: 'application/pdf' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Report Dipendente MEC-ROY',
+          text: `Report ${utente.nome} ${utente.cognome}`
+        });
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        console.warn('Condivisione fallita, uso download...', error);
+      }
+    }
+
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeFile;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log('✅ PDF Dipendente generato:', nomeFile);
+
+  } catch (err) {
+    console.error('❌ Errore generazione PDF Dipendente:', err);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+    alert('❌ Errore durante la generazione del PDF: ' + err.message);
+  } finally {
+    if (btnEsporta) {
+      btnEsporta.disabled = false;
+      btnEsporta.innerHTML = testoOriginale;
+    }
+  }
 }
 
 // ============================================
@@ -3848,8 +4257,13 @@ function nmApriCommessa(idCommessa) {
   if (titolo) titolo.textContent = idCommessa;
   nmAggiornaConteggiCartelle();
   nmMostraSchermataCartelle();
+  // ⭐ Aggiungi voce cronologia
+  nmPushHistory('cartelle');
 }
 
+// ============================================
+// AGGIORNA CONTEGGI CARTELLE (con stampati/nuovi)
+// ============================================
 async function nmAggiornaConteggiCartelle() {
   if (!nmCommessaCorrente) return;
 
@@ -3861,9 +4275,41 @@ async function nmAggiornaConteggiCartelle() {
     const cartelle = commessa.cartelle || {};
 
     ['filo', 'cavo', 'adesive', 'targhette', 'morsetti'].forEach(tipo => {
-      const count = (cartelle[tipo] || []).length;
+      const numeri = cartelle[tipo] || [];
+      const totale = numeri.length;
+      const stampati = numeri.filter(n => n.stampato === true).length;
+      const nuovi = totale - stampati;
+
+      // Aggiorna il conteggio principale (numero grande)
       const el = document.getElementById('nm-count-' + tipo);
-      if (el) el.textContent = count;
+      if (el) el.textContent = totale;
+
+      // ⭐ Aggiorna/crea il contatore stampati/nuovi sotto
+      const cartellaDiv = el ? el.closest('.nm-cartella') : null;
+      if (!cartellaDiv) return;
+
+      let contatore = cartellaDiv.querySelector('.nm-cartella-stampati-nuovi');
+      if (!contatore) {
+        contatore = document.createElement('div');
+        contatore.className = 'nm-cartella-stampati-nuovi';
+        el.parentElement.appendChild(contatore);
+      }
+
+      if (totale === 0) {
+        contatore.innerHTML = '';
+      } else if (nuovi === 0) {
+        // Tutti stampati → solo stampati
+        contatore.innerHTML = `<span class="nm-badge-stampati">🟢 ${stampati} stampati</span>`;
+      } else if (stampati === 0) {
+        // Nessuno stampato → solo nuovi
+        contatore.innerHTML = `<span class="nm-badge-nuovi">⚪ ${nuovi} nuovi</span>`;
+      } else {
+        // Mix
+        contatore.innerHTML = `
+          <span class="nm-badge-stampati">🟢 ${stampati}</span>
+          <span class="nm-badge-nuovi">⚪ ${nuovi}</span>
+        `;
+      }
     });
 
   } catch (err) {
@@ -3876,12 +4322,16 @@ function nmTornaAlleCommesse() {
   nmCartellaCorrente = null;
   nmMostraSchermataCommesse();
   nmCaricaListaCommesse();
+  window._nmHistoryState = 'commesse';  // ⭐
 }
 
 async function nmApriCartella(tipo) {
   if (!nmCommessaCorrente) return;
 
   nmCartellaCorrente = tipo;
+
+  // ⭐ Aggiungi voce cronologia per il popup
+  nmPushHistory('popup');
 
   document.getElementById('nm-popup-titolo').textContent = NM_CARTELLE_LABEL[tipo];
 
@@ -3916,8 +4366,12 @@ function nmChiudiPopup() {
   document.getElementById('nm-modal-popup').classList.remove('active');
   nmCartellaCorrente = null;
   nmAggiornaConteggiCartelle();
+  window._nmHistoryState = 'cartelle';  // ⭐
 }
 
+// ============================================
+// CARICA NUMERI CARTELLA (con ricerca + duplicazione)
+// ============================================
 async function nmCaricaNumeriCartella() {
   if (!nmCommessaCorrente || !nmCartellaCorrente) return;
 
@@ -3934,32 +4388,154 @@ async function nmCaricaNumeriCartella() {
     const commessa = doc.data();
     const numeri = (commessa.cartelle && commessa.cartelle[nmCartellaCorrente]) || [];
 
+    // ⭐ Aggiungi la barra di ricerca (solo se non esiste già)
+    let barraRicerca = document.getElementById('nm-barra-ricerca');
+    if (!barraRicerca) {
+      barraRicerca = document.createElement('div');
+      barraRicerca.id = 'nm-barra-ricerca';
+      barraRicerca.className = 'nm-barra-ricerca';
+      barraRicerca.innerHTML = `
+        <i class="fas fa-search"></i>
+        <input type="text" id="nm-input-ricerca" placeholder="Cerca numero..." autocomplete="off" oninput="nmFiltraNumeri()" />
+        <button class="nm-btn-clear-ricerca" onclick="nmPulisciRicerca()" title="Pulisci ricerca"><i class="fas fa-times"></i></button>
+      `;
+      // Inserisci la barra ricerca PRIMA della lista numeri
+      div.parentElement.insertBefore(barraRicerca, div);
+    }
+
+    // Svuota il campo ricerca quando apri una nuova cartella
+    const inputRicerca = document.getElementById('nm-input-ricerca');
+    if (inputRicerca) inputRicerca.value = '';
+
     if (numeri.length === 0) {
       div.innerHTML = '<p class="text-muted">Nessun numero inserito</p>';
       return;
     }
 
-    let html = '';
-    numeri.forEach((numero) => {
-      // ⭐ Se il numero è già stato stampato, aggiungi la classe "stampato"
-      const classeStampato = numero.stampato ? ' stampato' : '';
+    // Salva globalmente per filtri
+    window._nmNumeriCorrenti = numeri;
 
-      html += `
-        <div class="nm-numero-item${classeStampato}" data-id="${numero.id}">
-          <span class="nm-numero-testo">${nmEscapaHtml(numero.testo)}</span>
-          <div class="nm-numero-azioni">
-            <button class="nm-btn-azione nm-btn-modifica" onclick="nmModificaNumero('${numero.id}')" title="Modifica"><i class="fas fa-edit"></i></button>
-            <button class="nm-btn-azione nm-btn-cancella" onclick="nmCancellaNumero('${numero.id}')" title="Cancella"><i class="fas fa-trash"></i></button>
-          </div>
-        </div>
-      `;
-    });
-
-    div.innerHTML = html;
+    nmRenderNumeri(numeri);
 
   } catch (err) {
     console.error('❌ Errore caricamento numeri:', err);
     div.innerHTML = '<p class="error">Errore: ' + err.message + '</p>';
+  }
+}
+
+// ============================================
+// RENDER NUMERI (con duplicazione)
+// ============================================
+function nmRenderNumeri(numeri) {
+  const div = document.getElementById('nm-lista-numeri');
+  if (!div) return;
+
+  if (numeri.length === 0) {
+    div.innerHTML = '<p class="text-muted">Nessun numero trovato</p>';
+    return;
+  }
+
+  let html = '';
+  numeri.forEach((numero) => {
+    const classeStampato = numero.stampato ? ' stampato' : '';
+
+    html += `
+      <div class="nm-numero-item${classeStampato}" data-id="${numero.id}">
+        <span class="nm-numero-testo">${nmEscapaHtml(numero.testo)}</span>
+        <div class="nm-numero-azioni">
+          <button class="nm-btn-azione nm-btn-duplica" onclick="nmDuplicaNumero('${numero.id}')" title="Duplica"><i class="fas fa-copy"></i></button>
+          <button class="nm-btn-azione nm-btn-modifica" onclick="nmModificaNumero('${numero.id}')" title="Modifica"><i class="fas fa-edit"></i></button>
+          <button class="nm-btn-azione nm-btn-cancella" onclick="nmCancellaNumero('${numero.id}')" title="Cancella"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+    `;
+  });
+
+  div.innerHTML = html;
+}
+
+// ============================================
+// FILTRA NUMERI (ricerca)
+// ============================================
+function nmFiltraNumeri() {
+  const input = document.getElementById('nm-input-ricerca');
+  if (!input) return;
+
+  const query = input.value.trim().toUpperCase();
+  const numeri = window._nmNumeriCorrenti || [];
+
+  if (!query) {
+    nmRenderNumeri(numeri);
+    return;
+  }
+
+  const filtrati = numeri.filter(n =>
+    (n.testo || '').toUpperCase().includes(query)
+  );
+
+  nmRenderNumeri(filtrati);
+}
+
+// ============================================
+// PULISCI RICERCA
+// ============================================
+function nmPulisciRicerca() {
+  const input = document.getElementById('nm-input-ricerca');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  nmFiltraNumeri();
+}
+
+// ============================================
+// DUPLICA NUMERO (si inserisce subito sotto l'originale)
+// ============================================
+async function nmDuplicaNumero(idNumero) {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) return;
+
+  try {
+    const docRef = nmGetCollection().doc(nmCommessaCorrente);
+    const doc = await docRef.get();
+    if (!doc.exists) return;
+
+    const commessa = doc.data();
+    const numeri = commessa.cartelle[nmCartellaCorrente] || [];
+
+    // Trova indice dell'originale
+    const idxOriginale = numeri.findIndex(n => n.id === idNumero);
+    if (idxOriginale === -1) {
+      alert('❌ Numero non trovato');
+      return;
+    }
+
+    const originale = numeri[idxOriginale];
+
+    // ⭐ Crea il duplicato (etichetta identica)
+    const duplicato = {
+      id: 'n_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      testo: originale.testo,
+      ordine: idxOriginale + 1,
+      data_aggiunta: new Date().toISOString(),
+      stampato: false  // ⭐ Duplicato: NON stampato
+    };
+
+    // Inserisci subito sotto l'originale
+    numeri.splice(idxOriginale + 1, 0, duplicato);
+
+    // Ricalcola ordine di tutti
+    numeri.forEach((n, i) => { n.ordine = i; });
+
+    commessa.cartelle[nmCartellaCorrente] = numeri;
+    commessa.data_modifica = new Date().toISOString();
+
+    await docRef.set(commessa);
+    await nmCaricaNumeriCartella();
+    console.log('✅ Numero duplicato:', duplicato.testo);
+
+  } catch (err) {
+    console.error('❌ Errore duplicazione:', err);
+    alert('❌ Errore: ' + err.message);
   }
 }
 
@@ -5633,3 +6209,50 @@ async function salvaProtocolloModale() {
 document.addEventListener('DOMContentLoaded', () => {
   nmInitProtocolloModale();
 });
+
+// ============================================
+// GESTIONE TASTO "INDIETRO" DEL TELEFONO
+// (History API per la sezione Numeri Mancanti)
+// ============================================
+
+// Stato attuale della navigazione NM
+window._nmHistoryState = 'commesse'; // 'commesse' | 'cartelle' | 'popup'
+
+// Aggiungi voce cronologia quando cambi schermata
+function nmPushHistory(state) {
+  window._nmHistoryState = state;
+  history.pushState({ nmState: state }, '', location.pathname);
+}
+
+// Intercetta il tasto "Indietro"
+window.addEventListener('popstate', function(event) {
+  // Se non siamo nella sezione Numeri Mancanti → lascia fare al browser
+  const panelNM = document.getElementById('panel-numeri-mancanti');
+  if (!panelNM || !panelNM.classList.contains('active')) return;
+
+  const statoAttuale = window._nmHistoryState;
+
+  // Se c'è un popup aperto → chiudi popup, torna alle cartelle
+  if (statoAttuale === 'popup') {
+    const popupAperto = document.getElementById('nm-modal-popup')?.classList.contains('active');
+    if (popupAperto) {
+      nmChiudiPopup();
+      window._nmHistoryState = 'cartelle';
+      nmPushHistory('cartelle');
+      return;
+    }
+  }
+
+  // Se siamo nella schermata cartelle → torna alla lista commesse
+  if (statoAttuale === 'cartelle') {
+    const schermataCartelle = document.getElementById('nm-schermata-cartelle');
+    if (schermataCartelle && schermataCartelle.style.display !== 'none') {
+      nmTornaAlleCommesse();
+      window._nmHistoryState = 'commesse';
+      return;
+    }
+  }
+
+  // Se siamo nella lista commesse → esci (comportamento normale)
+  // Non facciamo nulla → il browser chiude l'app
+}, false);
