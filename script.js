@@ -6218,32 +6218,31 @@ document.addEventListener('DOMContentLoaded', () => {
 // Stato attuale della navigazione NM
 window._nmHistoryState = 'commesse'; // 'commesse' | 'cartelle' | 'popup'
 
-// Aggiungi voce cronologia quando cambi schermata
 function nmPushHistory(state) {
   window._nmHistoryState = state;
+  // ⭐ Doppio pushState per gestire meglio il tasto indietro su PWA Android
+  history.pushState({ nmState: state }, '', location.pathname);
   history.pushState({ nmState: state }, '', location.pathname);
 }
 
-// Intercetta il tasto "Indietro"
 window.addEventListener('popstate', function(event) {
-  // Se non siamo nella sezione Numeri Mancanti → lascia fare al browser
   const panelNM = document.getElementById('panel-numeri-mancanti');
   if (!panelNM || !panelNM.classList.contains('active')) return;
 
   const statoAttuale = window._nmHistoryState;
 
-  // Se c'è un popup aperto → chiudi popup, torna alle cartelle
+  // POPUP aperto → chiudi popup
   if (statoAttuale === 'popup') {
     const popupAperto = document.getElementById('nm-modal-popup')?.classList.contains('active');
     if (popupAperto) {
       nmChiudiPopup();
       window._nmHistoryState = 'cartelle';
-      nmPushHistory('cartelle');
+      history.pushState({ nmState: 'cartelle' }, '', location.pathname);
       return;
     }
   }
 
-  // Se siamo nella schermata cartelle → torna alla lista commesse
+  // CARTELLE aperte → torna alla lista commesse
   if (statoAttuale === 'cartelle') {
     const schermataCartelle = document.getElementById('nm-schermata-cartelle');
     if (schermataCartelle && schermataCartelle.style.display !== 'none') {
@@ -6253,6 +6252,4 @@ window.addEventListener('popstate', function(event) {
     }
   }
 
-  // Se siamo nella lista commesse → esci (comportamento normale)
-  // Non facciamo nulla → il browser chiude l'app
 }, false);
