@@ -3264,3 +3264,289 @@ body.dark-mode::before {
     font-size: 0.8em !important;
   }
 }
+
+/* ============================================ */
+/* TENDINA AZIONI RICHIESTA                     */
+/* ============================================ */
+.dropdown-richiesta {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-azioni-richiesta {
+  background: linear-gradient(180deg, #00917d 0%, #00695C 50%, #005e51 100%);
+  color: white;
+  border: 1px solid #004D40;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0,105,92,0.3), 0 1px 0 rgba(255,255,255,0.3) inset;
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+.btn-azioni-richiesta:hover {
+  background: linear-gradient(180deg, #00a58e 0%, #00796B 50%, #00695C 100%);
+  transform: translateY(-1px);
+}
+
+.dropdown-richiesta-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  min-width: 200px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faf9 100%);
+  border: 1px solid #dfe6e4;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  margin-top: 6px;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.dropdown-richiesta-menu.aperto {
+  display: block;
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+.dropdown-richiesta-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #333;
+  text-align: left;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.dropdown-richiesta-item.approva:hover {
+  background: linear-gradient(180deg, #e8f5e9 0%, #d4edda 100%);
+  color: #2e7d32;
+}
+
+.dropdown-richiesta-item.annulla:hover {
+  background: linear-gradient(180deg, #fce8eb 0%, #f8d7da 100%);
+  color: #b71c1c;
+}
+
+/* Stato approvata (bordo verde) */
+.richiesta-card.approvata {
+  border-left-color: #28a745;
+  background: linear-gradient(180deg, #f7fdf9 0%, #f0faf3 100%);
+}
+
+/* Dark mode tendina */
+.dark-mode .btn-azioni-richiesta {
+  background: linear-gradient(180deg, #00867a 0%, #00695C 50%, #004D40 100%);
+}
+
+.dark-mode .dropdown-richiesta-menu {
+  background: linear-gradient(180deg, #1e2a4a 0%, #1a2340 100%);
+  border-color: #2a2a5a;
+}
+
+.dark-mode .dropdown-richiesta-item {
+  color: #e0e0e0;
+}
+
+.dark-mode .dropdown-richiesta-item.approva:hover {
+  background: linear-gradient(180deg, #1a3a2a 0%, #142e20 100%);
+  color: #81c784;
+}
+
+.dark-mode .dropdown-richiesta-item.annulla:hover {
+  background: linear-gradient(180deg, #3a1a1a 0%, #2e1414 100%);
+  color: #ef9a9a;
+}
+
+.dark-mode .richiesta-card.approvata {
+  background: linear-gradient(180deg, #142a1e 0%, #0f1f14 100%);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .btn-azioni-richiesta {
+    padding: 6px 10px !important;
+    font-size: 0.8em !important;
+  }
+  .dropdown-richiesta-menu {
+    min-width: 180px;
+  }
+  .dropdown-richiesta-item {
+    padding: 8px 12px !important;
+    font-size: 0.85em !important;
+  }
+}
+
+/* ============================================ */
+/* NUMERI MANCANTI — Contatori cartelle         */
+/* ============================================ */
+.nm-cartella-stampati-nuovi {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.nm-badge-stampati {
+  display: inline-block;
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #4CAF50;
+  font-weight: 700;
+}
+
+.nm-badge-nuovi {
+  display: inline-block;
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #fff;
+  color: #666;
+  border: 1px dashed #bbb;
+  font-weight: 700;
+}
+
+/* ============================================ */
+/* NUMERI MANCANTI — Barra ricerca              */
+/* ============================================ */
+.nm-barra-ricerca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  border: 2px solid #dfe6e4;
+  border-radius: 10px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  transition: all 0.2s;
+}
+
+.nm-barra-ricerca:focus-within {
+  border-color: #00917d;
+  box-shadow: 0 0 0 3px rgba(0,145,125,0.15);
+}
+
+.nm-barra-ricerca > i.fa-search {
+  color: #00695C;
+  font-size: 0.95em;
+}
+
+.nm-barra-ricerca input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.95em;
+  font-family: inherit;
+  padding: 6px 0;
+  color: #333;
+}
+
+.nm-barra-ricerca input::placeholder {
+  color: #999;
+}
+
+.nm-btn-clear-ricerca {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s;
+  font-size: 1em;
+}
+
+.nm-btn-clear-ricerca:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+/* ============================================ */
+/* NUMERI MANCANTI — Pulsante duplica           */
+/* ============================================ */
+.nm-btn-duplica {
+  background: linear-gradient(180deg, #4dd0e1 0%, #00acc1 100%);
+  color: white;
+}
+.nm-btn-duplica:hover {
+  background: linear-gradient(180deg, #6ee0f0 0%, #26c6da 100%);
+  transform: scale(1.1);
+}
+
+/* ============================================ */
+/* Dark mode — Ricerca + duplica                */
+/* ============================================ */
+.dark-mode .nm-barra-ricerca {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  border-color: #2a2a5a;
+}
+.dark-mode .nm-barra-ricerca:focus-within {
+  border-color: #4db6ac;
+}
+.dark-mode .nm-barra-ricerca > i.fa-search { color: #4db6ac; }
+.dark-mode .nm-barra-ricerca input { color: #e0e0e0; }
+.dark-mode .nm-btn-clear-ricerca:hover {
+  background: #1a2a4a;
+  color: #e0e0e0;
+}
+
+.dark-mode .nm-badge-stampati {
+  background: linear-gradient(180deg, #1a3a2a 0%, #142e20 100%);
+  color: #81c784;
+  border-color: #4CAF50;
+}
+.dark-mode .nm-badge-nuovi {
+  background: #1e2a4a;
+  color: #aaa;
+  border-color: #555;
+}
+
+/* ============================================ */
+/* Mobile                                       */
+/* ============================================ */
+@media (max-width: 768px) {
+  .nm-barra-ricerca {
+    padding: 4px 10px;
+  }
+  .nm-barra-ricerca input {
+    font-size: 0.85em;
+    padding: 4px 0;
+  }
+
+  .nm-btn-duplica {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 0.7em !important;
+  }
+
+  .nm-cartella-stampati-nuovi {
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .nm-badge-stampati,
+  .nm-badge-nuovi {
+    font-size: 0.62em;
+    padding: 1px 6px;
+  }
+}
