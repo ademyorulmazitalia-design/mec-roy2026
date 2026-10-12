@@ -6440,77 +6440,12 @@ function apriModaleFoto(username) {
   document.getElementById('modal-foto').classList.add('active');
 }
 
-function aggiornaAnteprimaModaleFoto() {
-  const preview = document.getElementById('foto-modale-preview');
-  if (!preview) return;
-
-  if (_fotoModaleBase64) {
-    preview.innerHTML = `<img src="${_fotoModaleBase64}" alt="foto" />`;
-  } else {
-    preview.innerHTML = '<i class="fas fa-user"></i>';
-  }
-
-  const btnRimuovi = document.getElementById('foto-btn-rimuovi');
-  if (btnRimuovi) {
-    btnRimuovi.style.display = _fotoModaleBase64 ? 'inline-block' : 'none';
-  }
-}
-
-async function gestisciFileFoto(event) {
-  const file = event.target.files && event.target.files[0];
-  if (!file) return;
-
-  if (!file.type.startsWith('image/')) {
-    alert('⚠️ Seleziona un file immagine');
-    return;
-  }
-
-  try {
-    const base64 = await ridimensionaFoto(file);
-    _fotoModaleBase64 = base64;
-    aggiornaAnteprimaModaleFoto();
-  } catch (err) {
-    console.error('❌ Errore ridimensionamento foto:', err);
-    alert('❌ Errore nel caricamento della foto');
-  }
-}
-
 function rimuoviFotoModale() {
   if (!_fotoModaleBase64) return;
   if (!confirm('Rimuovere la foto di questo dipendente?')) return;
 
   _fotoModaleBase64 = null;
   aggiornaAnteprimaModaleFoto();
-}
-
-async function salvaFotoModale() {
-  if (!_usernameModaleFoto) return;
-
-  const utente = dati.utenti.find(u => u.username === _usernameModaleFoto);
-  if (!utente) return;
-
-  const msg = document.getElementById('msg-foto');
-
-  try {
-    if (_fotoModaleBase64) {
-      utente.foto = _fotoModaleBase64;
-    } else {
-      delete utente.foto;
-    }
-
-    await salvaDati();
-
-    msg.innerHTML = '<div class="success">✅ Foto aggiornata!</div>';
-
-    setTimeout(() => {
-      chiudiModaleFoto();
-      caricaListaDipendenti();
-    }, 800);
-
-  } catch (err) {
-    console.error('❌ Errore salvataggio foto:', err);
-    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
-  }
 }
 
 function chiudiModaleFoto() {
@@ -6686,3 +6621,371 @@ async function salvaRegistrazioneManuale() {
 }
 
 console.log('✅ script.js — Funzione Aggiungi Registrazione Manuale caricata');
+
+// ============================================
+// FOTO EDITOR — Zoom + Trascina (dita)
+// ============================================
+
+let _editorState = {
+  scale: 1,
+  x: 0,        // traslazione X in px (relativa al centro)
+  y: 0,        // traslazione Y in px (relativa al centro)
+  imgNaturalW: 0,
+  imgNaturalH: 0,
+  baseScale: 1,
+  minScale: 0.5,
+  maxScale: 4,
+  lastPinchDist: 0,
+  dragging: false,
+  lastX: 0,
+  lastY: 0
+};
+
+// Inizializza gli eventi sull'editor (una sola volta)
+function initFotoEditor() {
+  const viewport = document.getElementById('foto-editor-viewport');
+  if (!viewport || viewport.dataset.editorInit === '1') return;
+  viewport.dataset.editorInit = '1';
+
+  // --- MOUSE (PC) ---
+  viewport.addEventListener('mousedown', (e) => {
+    if (!_editorState.imgNaturalW) return;
+    _editorState.dragging = true;
+    _editorState.lastX = e.clientX;
+    _editorState.lastY = e.clientY;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!_editorState.dragging) return;
+    _editorState.x += e.clientX - _editorState.lastX;
+    _editorState.y += e.clientY - _editorState.lastY;
+    _editorState.lastX = e.clientX;
+    _editorState.lastY = e.clientY;
+    applicaTrasformazioneEditor();
+  });
+  window.addEventListener('mouseup', () => { _editorState.dragging = false; });
+
+  // --- ZOOM con rotella (PC) ---
+  viewport.addEventListener('wheel', (e) => {
+    if (!_editorState.imgNaturalW) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    cambiaZoomEditor(delta);
+  }, { passive: false });
+
+  // --- TOUCH (dita) ---
+  viewport.addEventListener('touchstart', (e) => {
+    if (!_editorState.imgNaturalW) return;
+    if (e.touches.length === 1) {
+      _editorState.dragging = true;
+      _editorState.lastX = e.touches[0].clientX;
+      _editorState.lastY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      _editorState.dragging = false;
+      _editorState.lastPinchDist = distanzaTouch(e.touches);
+    }
+  }, { passive: true });
+
+  viewport.addEventListener('touchmove', (e) => {
+    if (!_editorState.imgNaturalW) return;
+    e.preventDefault();
+
+    if (e.touches.length === 1 && _editorState.dragging) {
+      _editorState.x += e.touches[0].clientX - _editorState.lastX;
+      _editorState.y += e.touches[0].clientY - _editorState.lastY;
+      _editorState.lastX = e.touches[0].clientX;
+      _editorState.lastY = e.touches[0].clientY;
+      applicaTrasformazioneEditor();
+    } else if (e.touches.length === 2) {
+      const d = distanzaTouch(e.touches);
+      const delta = (d - _editorState.lastPinchDist) / 150;
+      _editorState.lastPinchDist = d;
+      cambiaZoomEditor(delta);
+    }
+  }, { passive: false });
+
+  viewport.addEventListener('touchend', () => {
+    _editorState.dragging = false;
+    _editorState.lastPinchDist = 0;
+  });
+}
+
+function distanzaTouch(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function cambiaZoomEditor(delta) {
+  const nuovo = Math.max(
+    _editorState.minScale,
+    Math.min(_editorState.maxScale, _editorState.scale + delta)
+  );
+  _editorState.scale = nuovo;
+  applicaTrasformazioneEditor();
+}
+
+function applicaTrasformazioneEditor() {
+  const img = document.getElementById('foto-editor-img');
+  if (!img) return;
+  img.style.transform =
+    `translate(-50%, -50%) translate(${_editorState.x}px, ${_editorState.y}px) scale(${_editorState.scale})`;
+}
+
+// Carica un'immagine base64 nell'editor
+function caricaImmagineEditor(base64) {
+  const img = document.getElementById('foto-editor-img');
+  const placeholder = document.getElementById('foto-editor-placeholder');
+  if (!img) return;
+
+  img.onload = () => {
+    const viewport = document.getElementById('foto-editor-viewport');
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+
+    _editorState.imgNaturalW = img.naturalWidth;
+    _editorState.imgNaturalH = img.naturalHeight;
+
+    // Calcola baseScale per "riempi il cerchio"
+    const circleSize = Math.min(vw, vh) * 0.77; // cerchio interno al 77% del viewport
+    const scaleX = circleSize / img.naturalWidth;
+    const scaleY = circleSize / img.naturalHeight;
+    _editorState.baseScale = Math.max(scaleX, scaleY);
+
+    _editorState.scale = 1;   // zoom relativo (1 = riempi il cerchio)
+    _editorState.x = 0;
+    _editorState.y = 0;
+
+    // Applica anche baseScale
+    img.style.width = img.naturalWidth + 'px';
+    img.style.height = img.naturalHeight + 'px';
+    applicaTrasformazioneEditorConBase();
+
+    placeholder.style.display = 'none';
+    img.style.display = 'block';
+  };
+
+  img.src = base64;
+}
+
+function applicaTrasformazioneEditorConBase() {
+  const img = document.getElementById('foto-editor-img');
+  if (!img) return;
+  const totalScale = _editorState.baseScale * _editorState.scale;
+  img.style.transform =
+    `translate(-50%, -50%) translate(${_editorState.x}px, ${_editorState.y}px) scale(${totalScale})`;
+}
+
+// Rimpiazza la vecchia applicaTrasformazioneEditor con questa (usa baseScale)
+function applicaTrasformazioneEditor() {
+  applicaTrasformazioneEditorConBase();
+}
+
+// Genera il base64 finale ritagliato (quadrato, solo la zona del cerchio)
+function generaFotoFinale(callback) {
+  const img = document.getElementById('foto-editor-img');
+  const viewport = document.getElementById('foto-editor-viewport');
+  if (!img || !_editorState.imgNaturalW) { callback(null); return; }
+
+  const vw = viewport.clientWidth;
+  const vh = viewport.clientHeight;
+  const circleSize = Math.min(vw, vh) * 0.77;
+
+  // Output: 400x400
+  const outputSize = 400;
+  const canvas = document.createElement('canvas');
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+  const ctx = canvas.getContext('2d');
+
+  // Calcola la trasformazione inversa: dal canvas output → coordinate immagine originale
+  const totalScale = _editorState.baseScale * _editorState.scale;
+  const ratio = outputSize / circleSize; // quanto ingrandire per l'output
+
+  // Il centro del cerchio è (vw/2, vh/2) nel viewport.
+  // L'immagine è centrata lì e poi traslata di (x, y) e scalata di totalScale.
+  // Punto nell'immagine originale che appare al centro del cerchio:
+  //   imgX = naturalW/2 - x / totalScale
+  //   imgY = naturalH/2 - y / totalScale
+  const centerImgX = _editorState.imgNaturalW / 2 - _editorState.x / totalScale;
+  const centerImgY = _editorState.imgNaturalH / 2 - _editorState.y / totalScale;
+
+  // La larghezza (in px immagine originale) che deve riempire il cerchio:
+  const cropSize = circleSize / totalScale; // px immagine originale
+
+  const srcX = centerImgX - cropSize / 2;
+  const srcY = centerImgY - cropSize / 2;
+
+  ctx.drawImage(
+    img,
+    srcX, srcY, cropSize, cropSize,
+    0, 0, outputSize, outputSize
+  );
+
+  const base64 = canvas.toDataURL('image/jpeg', 0.85);
+  callback(base64);
+}
+
+// ============================================
+// Modale Foto — override delle vecchie funzioni
+// ============================================
+
+function apriModaleFoto(username) {
+  const utente = dati.utenti.find(u => u.username === username);
+  if (!utente) {
+    alert('❌ Dipendente non trovato');
+    return;
+  }
+
+  _usernameModaleFoto = username;
+  _fotoModaleBase64 = utente.foto || null;
+
+  const nomeEl = document.getElementById('modal-foto-nome');
+  if (nomeEl) nomeEl.textContent = utente.nome + ' ' + utente.cognome;
+
+  document.getElementById('msg-foto').innerHTML = '';
+
+  // Configura UI
+  const imgEl = document.getElementById('foto-editor-img');
+  const placeholder = document.getElementById('foto-editor-placeholder');
+  const btnRimuovi = document.getElementById('foto-btn-rimuovi');
+  const btnSalva = document.getElementById('foto-btn-salva');
+
+  if (_fotoModaleBase64) {
+    imgEl.style.display = 'block';
+    placeholder.style.display = 'none';
+    caricaImmagineEditor(_fotoModaleBase64);
+    btnRimuovi.style.display = 'inline-block';
+  } else {
+    imgEl.style.display = 'none';
+    placeholder.style.display = 'flex';
+    _editorState.imgNaturalW = 0;
+    btnRimuovi.style.display = 'none';
+  }
+
+  btnSalva.disabled = !_fotoModaleBase64;
+
+  // Init eventi (solo la prima volta)
+  setTimeout(initFotoEditor, 100);
+
+  document.getElementById('modal-foto').classList.add('active');
+}
+
+async function gestisciFileFoto(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    alert('⚠️ Seleziona un file immagine');
+    return;
+  }
+
+  try {
+    const base64 = await ridimensionaFoto(file, 1200); // max 1200 px lato lungo
+    _fotoModaleBase64 = base64;
+
+    const imgEl = document.getElementById('foto-editor-img');
+    const placeholder = document.getElementById('foto-editor-placeholder');
+    const btnRimuovi = document.getElementById('foto-btn-rimuovi');
+    const btnSalva = document.getElementById('foto-btn-salva');
+
+    imgEl.style.display = 'block';
+    placeholder.style.display = 'none';
+    btnRimuovi.style.display = 'inline-block';
+    btnSalva.disabled = false;
+
+    caricaImmagineEditor(base64);
+
+  } catch (err) {
+    console.error('❌ Errore ridimensionamento foto:', err);
+    alert('❌ Errore nel caricamento della foto');
+  }
+}
+
+function rimuoviFotoModale() {
+  if (!_fotoModaleBase64) return;
+  if (!confirm('Rimuovere la foto di questo dipendente?')) return;
+
+  _fotoModaleBase64 = null;
+  _editorState.imgNaturalW = 0;
+
+  const imgEl = document.getElementById('foto-editor-img');
+  const placeholder = document.getElementById('foto-editor-placeholder');
+  const btnRimuovi = document.getElementById('foto-btn-rimuovi');
+  const btnSalva = document.getElementById('foto-btn-salva');
+
+  imgEl.style.display = 'none';
+  placeholder.style.display = 'flex';
+  btnRimuovi.style.display = 'none';
+  btnSalva.disabled = true;
+}
+
+async function salvaFotoModale() {
+  if (!_usernameModaleFoto) return;
+
+  const utente = dati.utenti.find(u => u.username === _usernameModaleFoto);
+  if (!utente) return;
+
+  const msg = document.getElementById('msg-foto');
+  const btnSalva = document.getElementById('foto-btn-salva');
+
+  // Se non c'è foto → rimuovi
+  if (!_fotoModaleBase64) {
+    try {
+      delete utente.foto;
+      await salvaDati();
+      msg.innerHTML = '<div class="success">✅ Foto rimossa!</div>';
+      setTimeout(() => {
+        chiudiModaleFoto();
+        caricaListaDipendenti();
+      }, 700);
+    } catch (err) {
+      msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+    }
+    return;
+  }
+
+  // Genera foto ritagliata dal canvas
+  btnSalva.disabled = true;
+  const testoOriginale = btnSalva.innerHTML;
+  btnSalva.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio...';
+
+  generaFotoFinale(async (base64Final) => {
+    if (!base64Final) {
+      msg.innerHTML = '<div class="error">❌ Errore durante il ritaglio</div>';
+      btnSalva.disabled = false;
+      btnSalva.innerHTML = testoOriginale;
+      return;
+    }
+
+    try {
+      utente.foto = base64Final;
+      await salvaDati();
+
+      msg.innerHTML = '<div class="success">✅ Foto aggiornata!</div>';
+
+      setTimeout(() => {
+        chiudiModaleFoto();
+        caricaListaDipendenti();
+      }, 700);
+
+    } catch (err) {
+      console.error('❌ Errore salvataggio foto:', err);
+      msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+      btnSalva.disabled = false;
+      btnSalva.innerHTML = testoOriginale;
+    }
+  });
+}
+
+function chiudiModaleFoto() {
+  document.getElementById('modal-foto').classList.remove('active');
+  _usernameModaleFoto = null;
+  _fotoModaleBase64 = null;
+  _editorState.imgNaturalW = 0;
+
+  const inputFile = document.getElementById('foto-input-file');
+  if (inputFile) inputFile.value = '';
+}
+
+console.log('✅ script.js — Foto editor (zoom/trascina) caricato');
