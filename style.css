@@ -3748,3 +3748,100 @@ body.dark-mode::before {
   }
   .foto-nuovo-pulsanti { width: 100%; }
 }
+
+/* ============================================ */
+/* FOTO EDITOR — zoom + trascina                */
+/* ============================================ */
+.foto-editor-container {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin: 0 auto;
+  user-select: none;
+  touch-action: none;
+}
+
+.foto-editor-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #f0f4f3;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.foto-editor-img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+  will-change: transform;
+  pointer-events: none;
+  max-width: none;
+  max-height: none;
+}
+
+.foto-editor-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c7a78;
+  font-size: 5em;
+  pointer-events: none;
+}
+
+.foto-editor-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.foto-editor-mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.foto-editor-hint {
+  font-size: 0.85em;
+  color: #888;
+  margin-top: 12px;
+  font-style: italic;
+}
+
+/* Dark mode */
+.dark-mode .foto-editor-viewport {
+  background: #0a1f3d;
+}
+.dark-mode .foto-editor-placeholder {
+  color: #4db6ac;
+}
+.dark-mode .foto-editor-hint {
+  color: #aaa;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .foto-editor-container {
+    width: 220px;
+    height: 220px;
+  }
+  .foto-editor-circle {
+    width: 170px;
+    height: 170px;
+  }
+}
