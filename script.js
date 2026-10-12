@@ -5948,6 +5948,7 @@ document.addEventListener('click', function(e) {
     { id: 'modal-dettaglio-commessa', chiudi: chiudiDettaglioCommessa },
     { id: 'modal-dettaglio-dipendente', chiudi: chiudiDettaglioDipendente },
     { id: 'modal-foto', chiudi: chiudiModaleFoto },
+    { id: 'modal-aggiungi-reg', chiudi: chiudiModaleAggiungiReg },
     { id: 'nm-modal-crea-commessa', chiudi: nmChiudiCreaCommessa },
     { id: 'nm-modal-popup', chiudi: nmChiudiPopup },
     { id: 'nm-modal-admin', chiudi: nmChiudiAdmin }
@@ -6561,3 +6562,127 @@ function mostraSchermataBenvenuto(utente) {
 }
 
 console.log('✅ script.js — Funzioni Foto & Benvenuto caricate');
+
+// ============================================
+// AGGIUNGI REGISTRAZIONE MANUALE (admin)
+// ============================================
+
+function apriModaleAggiungiRegistrazione() {
+  if (utenteCorrente?.ruolo !== 'admin') {
+    alert('Solo gli amministratori possono aggiungere registrazioni');
+    return;
+  }
+
+  // Popola select dipendente
+  const selDip = document.getElementById('addreg-dipendente');
+  selDip.innerHTML = '<option value="">-- Seleziona --</option>';
+  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
+    selDip.innerHTML += `<option value="${u.username}">${u.nome} ${u.cognome} (${u.username})</option>`;
+  });
+
+  // Popola select commessa
+  const selComm = document.getElementById('addreg-commessa');
+  selComm.innerHTML = '<option value="">-- Nessuna --</option>';
+  (dati.commesse || []).forEach(c => {
+    selComm.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+  });
+
+  // Reset form
+  document.getElementById('addreg-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('addreg-ora-inizio').value = '';
+  document.getElementById('addreg-ora-fine').value = '';
+  document.getElementById('addreg-descrizione').value = '';
+  document.getElementById('addreg-straordinario').checked = false;
+  document.getElementById('addreg-msg').innerHTML = '';
+
+  // Init smart time (se non già fatto)
+  ['addreg-ora-inizio', 'addreg-ora-fine'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.dataset.smartInit !== '1') initSmartTime(el);
+  });
+
+  document.getElementById('modal-aggiungi-reg').classList.add('active');
+}
+
+function chiudiModaleAggiungiReg() {
+  document.getElementById('modal-aggiungi-reg').classList.remove('active');
+}
+
+async function salvaRegistrazioneManuale() {
+  const username = document.getElementById('addreg-dipendente').value;
+  const data = document.getElementById('addreg-data').value;
+  const oraInizio = document.getElementById('addreg-ora-inizio').value;
+  const oraFine = document.getElementById('addreg-ora-fine').value;
+  const commessaId = parseInt(document.getElementById('addreg-commessa').value) || null;
+  const descrizione = document.getElementById('addreg-descrizione').value.trim();
+  const straordinario = document.getElementById('addreg-straordinario').checked;
+  const msg = document.getElementById('addreg-msg');
+
+  // Validazioni
+  if (!username) { msg.innerHTML = '<div class="error">❌ Seleziona un dipendente</div>'; return; }
+  if (!data) { msg.innerHTML = '<div class="error">❌ Inserisci la data</div>'; return; }
+  if (!oraInizio || !oraFine) { msg.innerHTML = '<div class="error">❌ Inserisci ora inizio e fine</div>'; return; }
+  if (oraInizio >= oraFine) { msg.innerHTML = '<div class="error">❌ L\'ora fine deve essere dopo l\'ora inizio</div>'; return; }
+  if (!descrizione) { msg.innerHTML = '<div class="error">❌ Inserisci una descrizione</div>'; return; }
+
+  // Calcola ore
+  const [h1, m1] = oraInizio.split(':').map(Number);
+  const [h2, m2] = oraFine.split(':').map(Number);
+  const oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+
+  if (oreLavorate <= 0 || oreLavorate > 24) {
+    msg.innerHTML = '<div class="error">❌ Ore non valide</div>';
+    return;
+  }
+
+  // Controllo sovrapposizione con altre registrazioni dello stesso utente
+  const sovrapposta = dati.registrazioni.some(r =>
+    r.utente_id === username &&
+    r.data === data &&
+    r.tipo === 'lavoro' &&
+    r.ora_inizio && r.ora_fine &&
+    !(oraFine <= r.ora_inizio || oraInizio >= r.ora_fine)
+  );
+
+  if (sovrapposta) {
+    const conferma = confirm('⚠️ Esiste già una registrazione in questa fascia oraria.\n\nVuoi aggiungerla comunque?');
+    if (!conferma) return;
+  }
+
+  try {
+    const nuova = {
+      id: prossimoId++,
+      utente_id: username,
+      commessa_id: commessaId,
+      data: data,
+      ora_inizio: oraInizio,
+      ora_fine: oraFine,
+      descrizione: descrizione + (straordinario ? ' (STRAORDINARIO)' : ''),
+      tipo: 'lavoro',
+      straordinario: straordinario,
+      ore: oreLavorate,
+      _manuale: true  // marcatore: creata da admin
+    };
+
+    dati.registrazioni.push(nuova);
+    await salvaDati();
+
+    msg.innerHTML = '<div class="success">✅ Registrazione creata!</div>';
+
+    setTimeout(() => {
+      chiudiModaleAggiungiReg();
+      // Ricarica la lista di modifica se stiamo guardando lo stesso utente/data
+      if (dipendenteCorrenteDettaglio === username) {
+        applicaFiltriDipendente();
+      }
+      caricaRegistrazioniModifica();
+      caricaCalendario();
+    }, 800);
+
+  } catch (err) {
+    console.error('❌ Errore salvataggio:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+}
+
+console.log('✅ script.js — Funzione Aggiungi Registrazione Manuale caricata');
