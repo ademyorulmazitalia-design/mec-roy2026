@@ -3758,7 +3758,10 @@ body.dark-mode::before {
   height: 260px;
   margin: 0 auto;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   touch-action: none;
+  overflow: hidden;
 }
 
 .foto-editor-viewport {
@@ -3781,6 +3784,9 @@ body.dark-mode::before {
   pointer-events: none;
   max-width: none;
   max-height: none;
+  min-width: 1px;
+  min-height: 1px;
+  display: block;
 }
 
 .foto-editor-placeholder {
