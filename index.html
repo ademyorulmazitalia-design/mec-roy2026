@@ -1033,10 +1033,10 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- MODALE FOTO DIPENDENTE                                        -->
+<!-- MODALE FOTO DIPENDENTE — con editor zoom/trascina             -->
 <!-- ============================================================ -->
 <div id="modal-foto" class="modal">
-  <div class="modal-content" style="max-width:420px;">
+  <div class="modal-content" style="max-width:460px;">
     <div class="modal-header">
       <h2><i class="fas fa-camera"></i> Foto Dipendente</h2>
       <span class="modal-close" onclick="chiudiModaleFoto()">&times;</span>
@@ -1044,15 +1044,25 @@
     <div class="modal-body" style="text-align:center;">
       <p id="modal-foto-nome" style="font-weight:700;color:#00695C;margin-bottom:15px;"></p>
 
-      <div class="foto-modale-anteprima">
-        <div id="foto-modale-preview" class="foto-avatar foto-avatar-xl">
-          <i class="fas fa-user"></i>
+      <!-- ⭐ Editor foto interattivo -->
+      <div id="foto-editor-container" class="foto-editor-container">
+        <div id="foto-editor-viewport" class="foto-editor-viewport">
+          <img id="foto-editor-img" class="foto-editor-img" alt="anteprima" draggable="false" />
+          <div id="foto-editor-placeholder" class="foto-editor-placeholder">
+            <i class="fas fa-user"></i>
+          </div>
         </div>
+        <div class="foto-editor-mask"></div>
+        <div class="foto-editor-circle"></div>
       </div>
+
+      <p id="foto-editor-hint" class="foto-editor-hint">
+        👆 Trascina per spostare · 🤏 Pinch per ingrandire
+      </p>
 
       <input type="file" id="foto-input-file" accept="image/*" style="display:none;" onchange="gestisciFileFoto(event)" />
 
-      <button type="button" class="btn-primary" onclick="document.getElementById('foto-input-file').click()" style="width:100%;margin-top:20px;">
+      <button type="button" class="btn-primary" onclick="document.getElementById('foto-input-file').click()" style="width:100%;margin-top:15px;">
         <i class="fas fa-camera"></i> Scegli / Scatta foto
       </button>
 
@@ -1060,7 +1070,7 @@
         <i class="fas fa-trash"></i> Rimuovi foto
       </button>
 
-      <button type="button" class="btn-success" onclick="salvaFotoModale()" style="width:100%;margin-top:10px;">
+      <button type="button" class="btn-success" id="foto-btn-salva" onclick="salvaFotoModale()" style="width:100%;margin-top:10px;">
         <i class="fas fa-save"></i> Salva
       </button>
 
