@@ -3550,3 +3550,201 @@ body.dark-mode::before {
     padding: 1px 6px;
   }
 }
+
+/* ============================================ */
+/* FOTO DIPENDENTE — Avatar                     */
+/* ============================================ */
+.foto-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #e0e8e6 0%, #c8d5d2 100%);
+  color: #6c7a78;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid #dfe6e4;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.9) inset;
+}
+
+.foto-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.foto-avatar-sm {
+  width: 40px;
+  height: 40px;
+  font-size: 1.1em;
+}
+
+.foto-avatar-lg {
+  width: 100px;
+  height: 100px;
+  font-size: 2.8em;
+}
+
+.foto-avatar-xl {
+  width: 160px;
+  height: 160px;
+  font-size: 4em;
+}
+
+.foto-avatar-xxl {
+  width: 200px;
+  height: 200px;
+  font-size: 5em;
+  border: 4px solid rgba(255,255,255,0.8);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+}
+
+/* ============================================ */
+/* FORM NUOVO DIPENDENTE — Campo foto           */
+/* ============================================ */
+.foto-nuovo-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 15px;
+  background: linear-gradient(180deg, #f7faf9 0%, #ffffff 100%);
+  border: 1px dashed #dfe6e4;
+  border-radius: 12px;
+  margin-top: 5px;
+}
+
+.foto-nuovo-pulsanti {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 180px;
+}
+
+/* ============================================ */
+/* MODALE FOTO                                  */
+/* ============================================ */
+.foto-modale-anteprima {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+/* ============================================ */
+/* LISTA DIPENDENTI — Colonna foto              */
+/* ============================================ */
+.lista-dip-foto-cell {
+  width: 60px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.btn-foto-dip {
+  background: linear-gradient(180deg, #ffd23c 0%, #ffc107 50%, #e0a800 100%);
+  color: #4d3d00;
+  border: 1px solid #c69500;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(255,193,7,0.4), 0 1px 0 rgba(255,255,255,0.5) inset;
+  margin-right: 5px;
+}
+
+.btn-foto-dip:hover {
+  background: linear-gradient(180deg, #ffdb60 0%, #ffc93c 50%, #ecb100 100%);
+  transform: translateY(-1px);
+}
+
+/* ============================================ */
+/* OVERLAY BENVENUTO                            */
+/* ============================================ */
+.welcome-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #01815f 0%, #036b34 50%, #003B33 100%);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.welcome-overlay.attivo {
+  display: flex;
+  opacity: 1;
+}
+
+.welcome-overlay.uscita {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.welcome-content {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 25px;
+  animation: welcomeZoom 0.6s ease-out both;
+}
+
+.welcome-nome {
+  color: white;
+  font-size: 2.2em;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  margin: 0;
+  animation: welcomeFadeUp 0.7s ease-out 0.15s both;
+}
+
+@keyframes welcomeZoom {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes welcomeFadeUp {
+  from { opacity: 0; transform: translateY(15px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================ */
+/* DARK MODE — Foto e benvenuto                 */
+/* ============================================ */
+.dark-mode .foto-avatar {
+  background: linear-gradient(180deg, #1e2a4a 0%, #0f3460 100%);
+  color: #4db6ac;
+  border-color: #2a2a5a;
+}
+
+.dark-mode .foto-nuovo-wrapper {
+  background: linear-gradient(180deg, #0a1f3d 0%, #0f3460 100%);
+  border-color: #2a2a5a;
+}
+
+/* ============================================ */
+/* Mobile — Foto                                 */
+/* ============================================ */
+@media (max-width: 768px) {
+  .foto-avatar-sm { width: 34px; height: 34px; font-size: 0.95em; }
+  .foto-avatar-lg { width: 80px; height: 80px; font-size: 2.2em; }
+  .foto-avatar-xl { width: 130px; height: 130px; font-size: 3.2em; }
+  .foto-avatar-xxl { width: 160px; height: 160px; font-size: 4em; }
+
+  .welcome-nome { font-size: 1.6em; }
+
+  .foto-nuovo-wrapper {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .foto-nuovo-pulsanti { width: 100%; }
+}
