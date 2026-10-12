@@ -104,8 +104,49 @@ async function caricaDaFirestore() {
 async function salvaSuFirestore(datiDaSalvare) {
   try {
     console.log('🔄 Salvataggio su Firestore...');
-    await db.collection('dati').doc('main').set(datiDaSalvare);
-    console.log('✅ Dati salvati su Firestore');
+    
+    // ⭐ 1. Leggi la versione ATTUALE dal server
+    const snap = await db.collection('dati').doc('main').get();
+    const remoto = snap.exists ? snap.data() : {};
+    
+    // ⭐ 2. Unisci gli array per ID (evita di perdere registrazioni fatte da altri)
+    const mergeArrayByKey = (locale, remoto, chiave) => {
+      const mappa = new Map();
+      (remoto || []).forEach(x => {
+        const k = x[chiave];
+        if (k !== undefined && k !== null) mappa.set(k, x);
+      });
+      (locale || []).forEach(x => {
+        const k = x[chiave];
+        if (k !== undefined && k !== null) mappa.set(k, x);
+      });
+      return Array.from(mappa.values());
+    };
+    
+    // ⭐ 3. Unisci le collezioni che crescono nel tempo
+    const datiUniti = {
+      ...datiDaSalvare,
+      utenti:        mergeArrayByKey(datiDaSalvare.utenti,        remoto.utenti,        'username'),
+      commesse:      mergeArrayByKey(datiDaSalvare.commesse,      remoto.commesse,      'id'),
+      aziende:       mergeArrayByKey(datiDaSalvare.aziende,       remoto.aziende,       'id'),
+      registrazioni: mergeArrayByKey(datiDaSalvare.registrazioni, remoto.registrazioni, 'id'),
+      richieste:     mergeArrayByKey(datiDaSalvare.richieste,     remoto.richieste,     'id'),
+      notifiche:     mergeArrayByKey(datiDaSalvare.notifiche,     remoto.notifiche,     'id')
+    };
+    
+    // ⭐ 4. Scrivi sul server con merge: true (non cancella campi non menzionati)
+    await db.collection('dati').doc('main').set(datiUniti, { merge: true });
+    
+    // ⭐ 5. Aggiorna anche la copia locale con i dati uniti
+    // (così l'utente vede subito le registrazioni degli altri)
+    dati.utenti        = datiUniti.utenti;
+    dati.commesse      = datiUniti.commesse;
+    dati.aziende       = datiUniti.aziende;
+    dati.registrazioni = datiUniti.registrazioni;
+    dati.richieste     = datiUniti.richieste;
+    dati.notifiche     = datiUniti.notifiche;
+    
+    console.log('✅ Dati salvati e uniti su Firestore');
     return true;
   } catch (error) {
     console.error('❌ Errore salvataggio Firestore:', error);
@@ -169,8 +210,13 @@ async function salvaDati() {
   } catch (e) {
     console.warn('⚠️ Salvataggio locale bloccato.');
   }
-  await salvaSuFirestore(dati);
-  setTimeout(() => { _stoSalvando = false; }, 800);
+  
+  const ok = await salvaSuFirestore(dati);
+  
+  // ⭐ Aspetta un po' di più se la scrittura è andata male
+  // così evitiamo che uno snapshot vecchio sovrascriva i dati
+  const attesa = ok ? 1500 : 3000;
+  setTimeout(() => { _stoSalvando = false; }, attesa);
 }
 
 // ============================================
@@ -481,6 +527,9 @@ function login() {
     caricaSelectDipendentiCalendario();
 
     attivaAscoltoRealtime();
+
+    // ⭐ Mostra schermata benvenuto per 2 secondi
+    mostraSchermataBenvenuto(utente);
 
   } else {
     const loginBox = document.querySelector('.login-box');
@@ -2136,20 +2185,30 @@ function aggiungiDipendente() {
     return;
   }
 
-  dati.utenti.push({
+  // ⭐ Crea nuovo utente (foto opzionale)
+  const nuovoUtente = {
     username: username,
     password: password,
     nome: nome,
     cognome: cognome,
     ruolo: ruolo
-  });
+  };
+
+  if (_fotoNuovoDipendenteBase64) {
+    nuovoUtente.foto = _fotoNuovoDipendenteBase64;
+  }
+
+  dati.utenti.push(nuovoUtente);
 
   salvaDati();
 
+  // Reset form
   document.getElementById('dip-nome').value = '';
   document.getElementById('dip-cognome').value = '';
   document.getElementById('dip-username').value = '';
   document.getElementById('dip-password').value = '';
+  rimuoviFotoNuovoDipendente();
+
   msg.innerHTML = '<div class="success">✅ Dipendente aggiunto con successo!</div>';
 
   caricaListaDipendenti();
@@ -2167,18 +2226,27 @@ function caricaListaDipendenti() {
   }
 
   let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += '<th style="width:60px;text-align:center;">Foto</th>';
   html += '<th>Username</th><th>Nome</th><th>Cognome</th><th>Password</th><th>Ruolo</th><th>Azioni</th>';
   html += '</tr></thead><tbody>';
 
   dati.utenti.forEach(u => {
     const isSelf = u.username === utenteCorrente.username;
     html += '<tr id="row-' + u.username + '" style="cursor:pointer;" onclick="apriDettaglioDipendente(\'' + u.username + '\')" title="Clicca per vedere il dettaglio">';
+
+    // ⭐ Colonna Foto
+    html += '<td class="lista-dip-foto-cell">' + htmlAvatar(u, 'sm') + '</td>';
+
     html += '<td><strong>' + u.username + '</strong></td>';
     html += '<td>' + u.nome + '</td>';
     html += '<td>' + u.cognome + '</td>';
     html += '<td><code class="password-cell">' + (u.password || '-') + '</code></td>';
     html += '<td><span class="badge ' + u.ruolo + '">' + u.ruolo + '</span></td>';
     html += '<td>';
+
+    // ⭐ Pulsante Foto: sempre presente (anche per se stessi)
+    html += '<button class="btn-foto-dip" onclick="event.stopPropagation(); apriModaleFoto(\'' + u.username + '\')" title="Foto"><i class="fas fa-camera"></i></button>';
+
     if (!isSelf) {
       html += '<button class="btn-warning" onclick="event.stopPropagation(); apriModificaDipendente(\'' + u.username + '\')" style="margin-right:5px;" title="Modifica"><i class="fas fa-edit"></i></button>';
       html += '<button class="btn-danger" onclick="event.stopPropagation(); eliminaDipendente(\'' + u.username + '\')" title="Elimina"><i class="fas fa-trash"></i></button>';
@@ -5788,6 +5856,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         attivaAscoltoRealtime();
+
+        // ⭐ Mostra schermata benvenuto anche quando la sessione è già attiva
+        mostraSchermataBenvenuto(utente);
+
         return;
       } else {
         cancellaSessione();
@@ -5875,6 +5947,7 @@ document.addEventListener('click', function(e) {
     { id: 'modal-backup', chiudi: chiudiModalBackup },
     { id: 'modal-dettaglio-commessa', chiudi: chiudiDettaglioCommessa },
     { id: 'modal-dettaglio-dipendente', chiudi: chiudiDettaglioDipendente },
+    { id: 'modal-foto', chiudi: chiudiModaleFoto },
     { id: 'nm-modal-crea-commessa', chiudi: nmChiudiCreaCommessa },
     { id: 'nm-modal-popup', chiudi: nmChiudiPopup },
     { id: 'nm-modal-admin', chiudi: nmChiudiAdmin }
@@ -6253,3 +6326,238 @@ window.addEventListener('popstate', function(event) {
   }
 
 }, false);
+
+// ============================================
+// FOTO DIPENDENTE — NUOVE FUNZIONI
+// ============================================
+
+// Ridimensiona un file immagine a max 400x400 px, JPEG qualità 0.8
+function ridimensionaFoto(file, maxSize = 400) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxSize) { height = Math.round(height * maxSize / width); width = maxSize; }
+        } else {
+          if (height > maxSize) { width = Math.round(width * maxSize / height); height = maxSize; }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // JPEG compresso base64
+        const base64 = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(base64);
+      };
+      img.onerror = () => reject(new Error('Immagine non valida'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Errore lettura file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Restituisce l'HTML per un avatar tondo (foto o omino)
+function htmlAvatar(utente, size = 'sm') {
+  const classe = 'foto-avatar foto-avatar-' + size;
+  if (utente && utente.foto) {
+    return `<div class="${classe}"><img src="${utente.foto}" alt="foto" /></div>`;
+  }
+  return `<div class="${classe}"><i class="fas fa-user"></i></div>`;
+}
+
+// ---------- NUOVO DIPENDENTE ----------
+
+let _fotoNuovoDipendenteBase64 = null; // temporaneo, prima del salvataggio
+
+async function gestisciFileNuovoDipendente(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    alert('⚠️ Seleziona un file immagine');
+    return;
+  }
+
+  try {
+    const base64 = await ridimensionaFoto(file);
+    _fotoNuovoDipendenteBase64 = base64;
+
+    const preview = document.getElementById('dip-foto-preview');
+    if (preview) {
+      preview.innerHTML = `<img src="${base64}" alt="foto" />`;
+    }
+
+    const btnRimuovi = document.getElementById('dip-foto-rimuovi');
+    if (btnRimuovi) btnRimuovi.style.display = 'inline-block';
+
+  } catch (err) {
+    console.error('❌ Errore ridimensionamento foto:', err);
+    alert('❌ Errore nel caricamento della foto');
+  }
+}
+
+function rimuoviFotoNuovoDipendente() {
+  _fotoNuovoDipendenteBase64 = null;
+
+  const preview = document.getElementById('dip-foto-preview');
+  if (preview) preview.innerHTML = '<i class="fas fa-user"></i>';
+
+  const btnRimuovi = document.getElementById('dip-foto-rimuovi');
+  if (btnRimuovi) btnRimuovi.style.display = 'none';
+
+  const inputFile = document.getElementById('dip-foto-file');
+  if (inputFile) inputFile.value = '';
+}
+
+// ---------- MODALE FOTO (dipendente esistente) ----------
+
+let _usernameModaleFoto = null;
+let _fotoModaleBase64 = null;
+
+function apriModaleFoto(username) {
+  const utente = dati.utenti.find(u => u.username === username);
+  if (!utente) {
+    alert('❌ Dipendente non trovato');
+    return;
+  }
+
+  _usernameModaleFoto = username;
+  _fotoModaleBase64 = utente.foto || null;
+
+  const nomeEl = document.getElementById('modal-foto-nome');
+  if (nomeEl) nomeEl.textContent = utente.nome + ' ' + utente.cognome;
+
+  aggiornaAnteprimaModaleFoto();
+  document.getElementById('msg-foto').innerHTML = '';
+  document.getElementById('modal-foto').classList.add('active');
+}
+
+function aggiornaAnteprimaModaleFoto() {
+  const preview = document.getElementById('foto-modale-preview');
+  if (!preview) return;
+
+  if (_fotoModaleBase64) {
+    preview.innerHTML = `<img src="${_fotoModaleBase64}" alt="foto" />`;
+  } else {
+    preview.innerHTML = '<i class="fas fa-user"></i>';
+  }
+
+  const btnRimuovi = document.getElementById('foto-btn-rimuovi');
+  if (btnRimuovi) {
+    btnRimuovi.style.display = _fotoModaleBase64 ? 'inline-block' : 'none';
+  }
+}
+
+async function gestisciFileFoto(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    alert('⚠️ Seleziona un file immagine');
+    return;
+  }
+
+  try {
+    const base64 = await ridimensionaFoto(file);
+    _fotoModaleBase64 = base64;
+    aggiornaAnteprimaModaleFoto();
+  } catch (err) {
+    console.error('❌ Errore ridimensionamento foto:', err);
+    alert('❌ Errore nel caricamento della foto');
+  }
+}
+
+function rimuoviFotoModale() {
+  if (!_fotoModaleBase64) return;
+  if (!confirm('Rimuovere la foto di questo dipendente?')) return;
+
+  _fotoModaleBase64 = null;
+  aggiornaAnteprimaModaleFoto();
+}
+
+async function salvaFotoModale() {
+  if (!_usernameModaleFoto) return;
+
+  const utente = dati.utenti.find(u => u.username === _usernameModaleFoto);
+  if (!utente) return;
+
+  const msg = document.getElementById('msg-foto');
+
+  try {
+    if (_fotoModaleBase64) {
+      utente.foto = _fotoModaleBase64;
+    } else {
+      delete utente.foto;
+    }
+
+    await salvaDati();
+
+    msg.innerHTML = '<div class="success">✅ Foto aggiornata!</div>';
+
+    setTimeout(() => {
+      chiudiModaleFoto();
+      caricaListaDipendenti();
+    }, 800);
+
+  } catch (err) {
+    console.error('❌ Errore salvataggio foto:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+}
+
+function chiudiModaleFoto() {
+  document.getElementById('modal-foto').classList.remove('active');
+  _usernameModaleFoto = null;
+  _fotoModaleBase64 = null;
+
+  const inputFile = document.getElementById('foto-input-file');
+  if (inputFile) inputFile.value = '';
+}
+
+// ============================================
+// SCHERMATA BENVENUTO (2 secondi)
+// ============================================
+
+function mostraSchermataBenvenuto(utente) {
+  if (!utente) return;
+
+  const overlay = document.getElementById('welcome-overlay');
+  if (!overlay) return;
+
+  const avatarEl = document.getElementById('welcome-avatar');
+  const nomeEl = document.getElementById('welcome-nome');
+
+  if (avatarEl) {
+    if (utente.foto) {
+      avatarEl.innerHTML = `<img src="${utente.foto}" alt="foto" />`;
+    } else {
+      avatarEl.innerHTML = '<i class="fas fa-user"></i>';
+    }
+  }
+
+  if (nomeEl) {
+    nomeEl.textContent = 'Benvenuto ' + (utente.nome || utente.username);
+  }
+
+  // Mostra overlay
+  overlay.classList.add('attivo');
+  overlay.classList.remove('uscita');
+
+  // Dopo 2 secondi, fade-out
+  setTimeout(() => {
+    overlay.classList.add('uscita');
+    setTimeout(() => {
+      overlay.classList.remove('attivo');
+      overlay.classList.remove('uscita');
+    }, 400); // durata transizione fade-out
+  }, 2000);
+}
+
+console.log('✅ script.js — Funzioni Foto & Benvenuto caricate');
