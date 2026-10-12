@@ -460,6 +460,27 @@
             </select>
           </div>
         </div>
+
+        <!-- ⭐ NUOVO: campo foto -->
+        <div class="form-group foto-nuovo-dipendente">
+          <label><i class="fas fa-camera"></i> Foto (opzionale)</label>
+          <div class="foto-nuovo-wrapper">
+            <div id="dip-foto-preview" class="foto-avatar foto-avatar-lg">
+              <i class="fas fa-user"></i>
+            </div>
+            <div class="foto-nuovo-pulsanti">
+              <input type="file" id="dip-foto-file" accept="image/*" style="display:none;" onchange="gestisciFileNuovoDipendente(event)" />
+              <button type="button" class="btn-info" onclick="document.getElementById('dip-foto-file').click()">
+                <i class="fas fa-camera"></i> Scegli / Scatta
+              </button>
+              <button type="button" class="btn-danger" id="dip-foto-rimuovi" onclick="rimuoviFotoNuovoDipendente()" style="display:none;">
+                <i class="fas fa-times"></i> Rimuovi
+              </button>
+            </div>
+          </div>
+          <small class="hint">Se non carichi una foto, verrà mostrato l'omino di default.</small>
+        </div>
+
         <button onclick="aggiungiDipendente()" class="btn-primary btn-lg">
           <i class="fas fa-plus"></i> Aggiungi Dipendente
         </button>
@@ -1001,6 +1022,55 @@
       </button>
       <div id="nm-msg-admin" style="margin-top:10px;"></div>
     </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODALE FOTO DIPENDENTE                                        -->
+<!-- ============================================================ -->
+<div id="modal-foto" class="modal">
+  <div class="modal-content" style="max-width:420px;">
+    <div class="modal-header">
+      <h2><i class="fas fa-camera"></i> Foto Dipendente</h2>
+      <span class="modal-close" onclick="chiudiModaleFoto()">&times;</span>
+    </div>
+    <div class="modal-body" style="text-align:center;">
+      <p id="modal-foto-nome" style="font-weight:700;color:#00695C;margin-bottom:15px;"></p>
+
+      <div class="foto-modale-anteprima">
+        <div id="foto-modale-preview" class="foto-avatar foto-avatar-xl">
+          <i class="fas fa-user"></i>
+        </div>
+      </div>
+
+      <input type="file" id="foto-input-file" accept="image/*" style="display:none;" onchange="gestisciFileFoto(event)" />
+
+      <button type="button" class="btn-primary" onclick="document.getElementById('foto-input-file').click()" style="width:100%;margin-top:20px;">
+        <i class="fas fa-camera"></i> Scegli / Scatta foto
+      </button>
+
+      <button type="button" class="btn-danger" id="foto-btn-rimuovi" onclick="rimuoviFotoModale()" style="width:100%;margin-top:10px;display:none;">
+        <i class="fas fa-trash"></i> Rimuovi foto
+      </button>
+
+      <button type="button" class="btn-success" onclick="salvaFotoModale()" style="width:100%;margin-top:10px;">
+        <i class="fas fa-save"></i> Salva
+      </button>
+
+      <div id="msg-foto" style="margin-top:10px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- OVERLAY BENVENUTO (2 secondi al login)                        -->
+<!-- ============================================================ -->
+<div id="welcome-overlay" class="welcome-overlay">
+  <div class="welcome-content">
+    <div id="welcome-avatar" class="foto-avatar foto-avatar-xxl">
+      <i class="fas fa-user"></i>
+    </div>
+    <h1 id="welcome-nome" class="welcome-nome">Benvenuto</h1>
   </div>
 </div>
 
