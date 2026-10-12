@@ -6646,6 +6646,9 @@ function initFotoEditor() {
   const viewport = document.getElementById('foto-editor-viewport');
   if (!viewport || viewport.dataset.editorInit === '1') return;
   viewport.dataset.editorInit = '1';
+    // iOS: previeni comportamenti di default sul touch
+  viewport.style.webkitUserSelect = 'none';
+  viewport.style.webkitTouchCallout = 'none';
 
   // --- MOUSE (PC) ---
   viewport.addEventListener('mousedown', (e) => {
@@ -6738,31 +6741,59 @@ function caricaImmagineEditor(base64) {
   const placeholder = document.getElementById('foto-editor-placeholder');
   if (!img) return;
 
-  img.onload = () => {
-    const viewport = document.getElementById('foto-editor-viewport');
-    const vw = viewport.clientWidth;
-    const vh = viewport.clientHeight;
+  // Reset
+  img.style.display = 'block';
+  img.style.opacity = '0';
 
-    _editorState.imgNaturalW = img.naturalWidth;
-    _editorState.imgNaturalH = img.naturalHeight;
+  const onLoadCompleto = () => {
+    const viewport = document.getElementById('foto-editor-viewport');
+    const vw = viewport.clientWidth || 260;
+    const vh = viewport.clientHeight || 260;
+
+    const natW = img.naturalWidth;
+    const natH = img.naturalHeight;
+
+    if (!natW || !natH) {
+      console.warn('⚠️ Immagine senza dimensioni naturali');
+      img.style.opacity = '1';
+      return;
+    }
+
+    _editorState.imgNaturalW = natW;
+    _editorState.imgNaturalH = natH;
 
     // Calcola baseScale per "riempi il cerchio"
-    const circleSize = Math.min(vw, vh) * 0.77; // cerchio interno al 77% del viewport
-    const scaleX = circleSize / img.naturalWidth;
-    const scaleY = circleSize / img.naturalHeight;
+    const circleSize = Math.min(vw, vh) * 0.77;
+    const scaleX = circleSize / natW;
+    const scaleY = circleSize / natH;
     _editorState.baseScale = Math.max(scaleX, scaleY);
 
-    _editorState.scale = 1;   // zoom relativo (1 = riempi il cerchio)
+    _editorState.scale = 1;
     _editorState.x = 0;
     _editorState.y = 0;
 
-    // Applica anche baseScale
-    img.style.width = img.naturalWidth + 'px';
-    img.style.height = img.naturalHeight + 'px';
+    // Imposta dimensioni in px esplicite
+    img.style.width = natW + 'px';
+    img.style.height = natH + 'px';
+
+    // Applica la trasformazione
     applicaTrasformazioneEditorConBase();
 
     placeholder.style.display = 'none';
     img.style.display = 'block';
+    img.style.opacity = '1';
+  };
+
+  // Se l'immagine è già caricata (cache), onload non parte
+  if (img.complete && img.naturalWidth > 0 && img.src === base64) {
+    onLoadCompleto();
+    return;
+  }
+
+  img.onload = onLoadCompleto;
+  img.onerror = () => {
+    console.error('❌ Errore caricamento immagine');
+    img.style.opacity = '0';
   };
 
   img.src = base64;
