@@ -1141,9 +1141,15 @@
 <script src="script.js"></script>
 
 <script>
+  // ⭐ REGISTRIAMO UN SOLO SERVICE WORKER: firebase-messaging-sw.js
+  // (gestisce sia le notifiche push SIA la PWA)
+  // Non registriamo più 'service-worker.js' perché crea conflitti e notifiche doppie.
+  
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('service-worker.js')
+      navigator.serviceWorker.register('./firebase-messaging-sw.js', {
+        scope: './firebase-cloud-messaging-push-scope'
+      })
         .then((registration) => {
           console.log('✅ Service Worker registrato:', registration.scope);
         })
