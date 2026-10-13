@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MEC-ROY srls - Gestione lavoro </title>
 
-  <!-- ===== PWA ===== -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#00695C" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -16,20 +15,16 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
 
-  <!-- ===== FIREBASE SDK ===== -->
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js"></script>
 
-  <!-- ===== JSZIP (per backup ZIP) ===== -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
-  <!-- ===== jsPDF + html2canvas (per generare PDF veri) ===== -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-  <!-- ===== LOGO BASE64 ===== -->
   <script src="logo.js"></script>
+  <script src="lingue.js"></script>
 </head>
 <body>
 
@@ -46,27 +41,49 @@
             <i class="fas fa-industry" style="font-size:60px;color:#00695C;"></i>
           </div>
           <h1 class="azienda-nome">MEC-ROY srls</h1>
-          <p>registro ore</p>
+          <p data-i18n="login_titolo">registro ore</p>
         </div>
       </div>
-      <input type="text" id="username" class="login-anim-1" placeholder="Username" />
-      <input type="password" id="password" class="login-anim-2" placeholder="Password" />
+      <!-- ⭐ Pulsante biometrico (visibile se impronta attiva) -->
+      <button id="btn-login-impronta" onclick="loginBiometrico()" class="btn-impronta-login login-anim-1" style="display:none;">
+        <i class="fas fa-fingerprint" style="font-size:1.6em;display:block;margin-bottom:5px;"></i>
+        <span data-i18n="bio_entra_impronta">Entra con impronta</span>
+      </button>
+
+      <!-- ⭐ Separatore "oppure usa password" (visibile solo se impronta attiva) -->
+      <div id="sep-impronta-password" class="numeri-mancanti-login-separator login-anim-2" style="display:none;">
+        <span data-i18n="bio_oppure_password">oppure usa password</span>
+      </div>
+
+      <input type="text" id="username" class="login-anim-1" data-i18n-placeholder="login_username" placeholder="Username" />
+      <input type="password" id="password" class="login-anim-2" data-i18n-placeholder="login_password" placeholder="Password" />
 
       <label class="ricordami-label login-anim-3">
         <input type="checkbox" id="ricordami" />
-        <span>Ricordami su questo dispositivo</span>
+        <span data-i18n="login_ricordami">Ricordami su questo dispositivo</span>
       </label>
 
-      <button onclick="login()" class="login-anim-4"><i class="fas fa-sign-in-alt"></i> Entra</button>
+      <!-- ⭐ Checkbox attiva impronta (visibile solo se dispositivo compatibile) -->
+      <label class="ricordami-label login-anim-3" id="label-attiva-impronta" style="display:none;">
+        <input type="checkbox" id="attiva-impronta" />
+        <span data-i18n="bio_attiva">👆 Attiva accesso con impronta</span>
+      </label>
 
+      <button onclick="login()" class="login-anim-4"><i class="fas fa-sign-in-alt"></i> <span data-i18n="login_entra">Entra</span></button>
+
+      <!-- ⭐ Pulsante "Usa password" (visibile dopo 3 fallimenti) -->
+      <button id="btn-usa-password" onclick="mostraFormPassword()" class="btn-usa-password login-anim-4" style="display:none;">
+        <i class="fas fa-keyboard"></i> <span data-i18n="bio_usa_password">Usa password</span>
+      </button>
       <div class="numeri-mancanti-login-separator">
-        <span>oppure</span>
+        <span data-i18n="login_oppure">oppure</span>
       </div>
       <button onclick="apriNumeriMancanti()" class="btn-numeri-mancanti login-anim-4">
-        <i class="fas fa-list-ol"></i> NUMERI MANCANTI
+        <i class="fas fa-list-ol"></i> <span data-i18n="login_numeri_mancanti">NUMERI MANCANTI</span>
       </button>
 
-      <div id="errore" style="color:red;display:none;margin-top:10px;text-align:center;">Credenziali errate</div>
+      <div id="errore" style="color:red;display:none;margin-top:10px;text-align:center;" data-i18n="login_errore">Credenziali errate</div>
+      <div id="errore-bio" style="color:#d32f2f;display:none;margin-top:10px;text-align:center;font-size:0.9em;"></div>
     </div>
   </div>
 
@@ -90,6 +107,20 @@
         <button onclick="toggleDarkMode()" class="btn-darkmode" id="btn-darkmode" title="Dark/Light Mode">
           <i class="fas fa-moon"></i>
         </button>
+
+        <!-- ⭐ Pulsante disattiva impronta (visibile solo se attiva) -->
+        <button onclick="disattivaBiometrico()" class="btn-password" id="btn-disattiva-impronta" title="Disattiva impronta" style="display:none;">
+          <i class="fas fa-fingerprint"></i>
+        </button>
+
+        <select id="select-lingua" class="select-lingua" onchange="cambiaLingua(this.value)" title="Lingua / Language">
+          <option value="it">🇮🇹 Italiano</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="ro">🇷🇴 Română</option>
+          <option value="sq">🇦🇱 Shqip</option>
+          <option value="tr">🇹🇷 Türkçe</option>
+          <option value="ar">🇸🇦 العربية</option>
+        </select>
         <div id="notifiche-container" style="display:none;position:relative;">
           <button onclick="mostraNotifiche()" class="btn-notifica" id="btn-notifica" title="Notifiche">
             <i class="fas fa-bell"></i>
@@ -98,110 +129,104 @@
         </div>
         <div id="azienda-container" style="display:none;margin-left:10px;">
           <select id="select-azienda" onchange="cambiaAzienda()">
-            <option value="0">-- Tutte --</option>
+            <option value="0" data-i18n="header_tutte">-- Tutte --</option>
           </select>
         </div>
       </div>
       <button onclick="logout()" class="btn-logout">
-        <i class="fas fa-sign-out-alt"></i> Logout
+        <i class="fas fa-sign-out-alt"></i> <span data-i18n="header_logout">Logout</span>
       </button>
     </header>
 
-       <!-- TABS CON MENU A TENDINA -->
     <nav class="tabs">
-      
-      <!-- Menu per DIPENDENTI (vista dipendente) -->
       <button class="tab" id="tab-registra" onclick="showTab('registra')">
-        <i class="fas fa-pen"></i> Registra Ore
+        <i class="fas fa-pen"></i> <span data-i18n="tab_registra">Registra Ore</span>
       </button>
       <button class="tab" id="tab-richiedi" onclick="showTab('richiedi')">
-        <i class="fas fa-paper-plane"></i> Richiedi
+        <i class="fas fa-paper-plane"></i> <span data-i18n="tab_richiedi">Richiedi</span>
       </button>
 
-      <!-- CARTELLA: GESTIONE (solo admin) -->
       <div class="dropdown" id="dropdown-gestione" style="display:none;">
         <button class="tab dropdown-btn" onclick="toggleDropdown('gestione', event)">
-          <i class="fas fa-folder"></i> GESTIONE <i class="fas fa-chevron-down dropdown-arrow"></i>
+          <i class="fas fa-folder"></i> <span data-i18n="tab_gestione">GESTIONE</span> <i class="fas fa-chevron-down dropdown-arrow"></i>
         </button>
         <div class="dropdown-menu" id="dropdown-menu-gestione">
           <button class="dropdown-item" onclick="showTab('dipendenti'); chiudiTuttiDropdown();">
-            <i class="fas fa-users"></i> Dipendenti
+            <i class="fas fa-users"></i> <span data-i18n="tab_dipendenti">Dipendenti</span>
           </button>
           <button class="dropdown-item" onclick="showTab('commesse'); chiudiTuttiDropdown();">
-            <i class="fas fa-folder-plus"></i> Commesse
+            <i class="fas fa-folder-plus"></i> <span data-i18n="tab_commesse">Commesse</span>
           </button>
         </div>
       </div>
 
-      <!-- CARTELLA: OPERATIVITÀ (solo admin) -->
       <div class="dropdown" id="dropdown-operativita" style="display:none;">
         <button class="tab dropdown-btn" onclick="toggleDropdown('operativita', event)">
-          <i class="fas fa-folder"></i> OPERATIVITÀ <i class="fas fa-chevron-down dropdown-arrow"></i>
+          <i class="fas fa-folder"></i> <span data-i18n="tab_operativita">OPERATIVITÀ</span> <i class="fas fa-chevron-down dropdown-arrow"></i>
         </button>
         <div class="dropdown-menu" id="dropdown-menu-operativita">
           <button class="dropdown-item" onclick="showTab('modifica'); chiudiTuttiDropdown();">
-            <i class="fas fa-edit"></i> Modifica Ore
+            <i class="fas fa-edit"></i> <span data-i18n="tab_modifica">Modifica Ore</span>
           </button>
           <button class="dropdown-item" onclick="showTab('richieste'); chiudiTuttiDropdown();">
-            <i class="fas fa-inbox"></i> Richieste
+            <i class="fas fa-inbox"></i> <span data-i18n="tab_richieste">Richieste</span>
             <span id="badge-richieste" class="badge-inline" style="display:none;">0</span>
           </button>
         </div>
       </div>
 
-      <!-- Tab singole -->
       <button class="tab" id="tab-calendario" onclick="showTab('calendario')">
-        <i class="fas fa-calendar-alt"></i> Calendario
+        <i class="fas fa-calendar-alt"></i> <span data-i18n="tab_calendario">Calendario</span>
       </button>
       <button class="tab" id="tab-numeri-mancanti" onclick="showTab('numeri-mancanti')">
-        <i class="fas fa-list-ol"></i> Numeri Mancanti
+        <i class="fas fa-list-ol"></i> <span data-i18n="tab_numeri_mancanti">Numeri Mancanti</span>
       </button>
-
     </nav>
-        <!-- ============================================================ -->
+
+    <!-- ============================================================ -->
     <!-- TAB 1: REGISTRA ORE -->
     <!-- ============================================================ -->
     <div id="panel-registra" class="panel">
-      <h2><i class="fas fa-plus-circle"></i> Registra Ore</h2>
-      <p class="subtitle">Seleziona la commessa e inserisci le ore lavorate</p>
+      <h2><i class="fas fa-plus-circle"></i> <span data-i18n="reg_titolo">Registra Ore</span></h2>
+      <p class="subtitle" data-i18n="reg_sub">Seleziona la commessa e inserisci le ore lavorate</p>
       
       <div id="info-registrazione" style="margin-bottom:15px;"></div>
       
       <div class="form-card">
         <div class="form-group">
-          <label><i class="fas fa-briefcase"></i> Commessa *</label>
+          <label><i class="fas fa-briefcase"></i> <span data-i18n="reg_commessa">Commessa *</span></label>
           <select id="commessa">
-            <option value="">-- Seleziona una commessa --</option>
+            <option value="" data-i18n="reg_commessa_ph">-- Seleziona una commessa --</option>
           </select>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-calendar-alt"></i> Data *</label>
+            <label><i class="fas fa-calendar-alt"></i> <span data-i18n="reg_data">Data *</span></label>
             <input type="date" id="data-reg" />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-clock"></i> Ora Inizio *</label>
+            <label><i class="fas fa-clock"></i> <span data-i18n="reg_ora_inizio">Ora Inizio *</span></label>
             <input type="text" id="ora-inizio" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
           </div>
           <div class="form-group">
-            <label><i class="fas fa-clock"></i> Ora Fine *</label>
+            <label><i class="fas fa-clock"></i> <span data-i18n="reg_ora_fine">Ora Fine *</span></label>
             <input type="text" id="ora-fine" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
           </div>
         </div>
         <div class="form-group">
-          <label><i class="fas fa-align-left"></i> Descrizione *</label>
-          <textarea id="descrizione" rows="3" placeholder="Descrivi il lavoro svolto... (obbligatorio)" required></textarea>
+          <label><i class="fas fa-align-left"></i> <span data-i18n="reg_desc">Descrizione *</span></label>
+          <textarea id="descrizione" rows="3" data-i18n-placeholder="reg_desc_ph" placeholder="Descrivi il lavoro svolto... (obbligatorio)" required></textarea>
         </div>
         <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-top:10px;">
           <input type="checkbox" id="straordinario" style="width:auto;height:20px;width:20px;cursor:pointer;" />
           <label for="straordinario" style="margin:0;font-weight:600;color:#d32f2f;cursor:pointer;">
-            <i class="fas fa-clock"></i> Straordinario
+            <i class="fas fa-clock"></i> <span data-i18n="reg_straord">Straordinario</span>
           </label>
         </div>
         <button onclick="salvaRegistrazione()" class="btn-primary btn-lg">
-          <i class="fas fa-save"></i> Salva Registrazione
+          <i class="fas fa-save"></i> <span data-i18n="reg_salva">Salva Registrazione</span>
         </button>
         <div id="msg-registra" style="margin-top:15px;"></div>
       </div>
@@ -211,18 +236,18 @@
     <!-- TAB 2: RICHIEDI -->
     <!-- ============================================================ -->
     <div id="panel-richiedi" class="panel">
-      <h2><i class="fas fa-paper-plane"></i> Fai una Richiesta</h2>
-      <p class="subtitle">Invia una richiesta di ferie, permesso, malattia o recupero ore</p>
+      <h2><i class="fas fa-paper-plane"></i> <span data-i18n="rich_titolo">Fai una Richiesta</span></h2>
+      <p class="subtitle" data-i18n="rich_sub">Invia una richiesta di ferie, permesso, malattia o recupero ore</p>
       
       <div class="form-card">
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-tag"></i> Tipo *</label>
+            <label><i class="fas fa-tag"></i> <span data-i18n="rich_tipo">Tipo *</span></label>
             <select id="tipo-richiesta">
-              <option value="ferie">🏖️ Ferie</option>
-              <option value="permesso">📋 Permesso</option>
-              <option value="malattia">🤒 Malattia</option>
-              <option value="recupero_ore">⏰ Recupero Ore Dimenticate</option>
+              <option value="ferie" data-i18n="rich_ferie">🏖️ Ferie</option>
+              <option value="permesso" data-i18n="rich_permesso">📋 Permesso</option>
+              <option value="malattia" data-i18n="rich_malattia">🤒 Malattia</option>
+              <option value="recupero_ore" data-i18n="rich_recupero">⏰ Recupero Ore Dimenticate</option>
             </select>
           </div>
         </div>
@@ -230,26 +255,26 @@
         <div id="campi-standard">
           <div class="form-row">
             <div class="form-group">
-              <label><i class="fas fa-calendar-alt"></i> Data Inizio *</label>
+              <label><i class="fas fa-calendar-alt"></i> <span data-i18n="rich_data_inizio">Data Inizio *</span></label>
               <input type="date" id="richiesta-data-inizio" />
             </div>
             <div class="form-group">
-              <label><i class="fas fa-calendar-alt"></i> Data Fine *</label>
+              <label><i class="fas fa-calendar-alt"></i> <span data-i18n="rich_data_fine">Data Fine *</span></label>
               <input type="date" id="richiesta-data-fine" />
             </div>
           </div>
           
           <div class="form-row" id="riga-orari-opzionali" style="display:none;">
             <div class="form-group">
-              <label><i class="fas fa-clock"></i> Ora Inizio (opzionale)</label>
+              <label><i class="fas fa-clock"></i> <span data-i18n="rich_ora_inizio_opz">Ora Inizio (opzionale)</span></label>
               <input type="text" id="richiesta-ora-inizio" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
             </div>
             <div class="form-group">
-              <label><i class="fas fa-clock"></i> Ora Fine (opzionale)</label>
+              <label><i class="fas fa-clock"></i> <span data-i18n="rich_ora_fine_opz">Ora Fine (opzionale)</span></label>
               <input type="text" id="richiesta-ora-fine" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
             </div>
           </div>
-          <small class="hint" id="hint-orari-opzionali" style="display:none;">
+          <small class="hint" id="hint-orari-opzionali" style="display:none;" data-i18n="rich_hint_orari">
             💡 Lascia vuoto per giornata intera. Compila per indicare solo alcune ore (es. permesso di 2 ore).
           </small>
         </div>
@@ -257,34 +282,34 @@
         <div id="gruppo-recupero" style="display:none;">
           <div class="form-row">
             <div class="form-group">
-              <label><i class="fas fa-calendar-alt"></i> Data da recuperare *</label>
+              <label><i class="fas fa-calendar-alt"></i> <span data-i18n="rich_data_rec">Data da recuperare *</span></label>
               <input type="date" id="recupero-data" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label><i class="fas fa-clock"></i> Ora Inizio *</label>
+              <label><i class="fas fa-clock"></i> <span data-i18n="rich_ora_inizio_rec">Ora Inizio *</span></label>
               <input type="text" id="recupero-ora-inizio" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
             </div>
             <div class="form-group">
-              <label><i class="fas fa-clock"></i> Ora Fine *</label>
+              <label><i class="fas fa-clock"></i> <span data-i18n="rich_ora_fine_rec">Ora Fine *</span></label>
               <input type="text" id="recupero-ora-fine" class="smart-time" inputmode="numeric" maxlength="5" placeholder="--:--" autocomplete="off" />
             </div>
           </div>
           <div class="form-group">
-            <label><i class="fas fa-briefcase"></i> Commessa</label>
+            <label><i class="fas fa-briefcase"></i> <span data-i18n="rich_commessa">Commessa</span></label>
             <select id="recupero-commessa">
               <option value="">-- Seleziona --</option>
             </select>
           </div>
           <div class="form-group">
-            <label><i class="fas fa-align-left"></i> Descrizione Lavoro *</label>
-            <textarea id="recupero-motivo" rows="2" placeholder="Descrivi il lavoro svolto in quelle ore..."></textarea>
+            <label><i class="fas fa-align-left"></i> <span data-i18n="rich_desc_lav">Descrizione Lavoro *</span></label>
+            <textarea id="recupero-motivo" rows="2" data-i18n-placeholder="rich_desc_lav_ph" placeholder="Descrivi il lavoro svolto in quelle ore..."></textarea>
           </div>
         </div>
 
         <div class="form-group" id="gruppo-certificato" style="display:none;">
-          <label><i class="fas fa-file-medical"></i> Numero Protocollo Certificato *</label>
+          <label><i class="fas fa-file-medical"></i> <span data-i18n="rich_protocollo">Numero Protocollo Certificato *</span></label>
           <div class="protocollo-input-wrapper" id="protocollo-wrapper">
             <input type="text" class="protocollo-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="0" />
             <input type="text" class="protocollo-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="1" />
@@ -296,21 +321,21 @@
             <input type="text" class="protocollo-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="7" />
             <input type="text" class="protocollo-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" data-index="8" />
           </div>
-          <small class="hint">Inserisci le 9 cifre del protocollo del certificato medico (obbligatorio per la malattia)</small>
+          <small class="hint" data-i18n="rich_protocollo_hint">Inserisci le 9 cifre del protocollo del certificato medico</small>
         </div>
 
         <div class="form-group">
-          <label><i class="fas fa-align-left"></i> Note</label>
-          <textarea id="richiesta-note" rows="3" placeholder="Inserisci eventuali note..."></textarea>
+          <label><i class="fas fa-align-left"></i> <span data-i18n="rich_note">Note</span></label>
+          <textarea id="richiesta-note" rows="3" data-i18n-placeholder="rich_note_ph" placeholder="Inserisci eventuali note..."></textarea>
         </div>
 
         <button onclick="inviaRichiesta()" class="btn-primary btn-lg">
-          <i class="fas fa-paper-plane"></i> Invia Richiesta
+          <i class="fas fa-paper-plane"></i> <span data-i18n="rich_invia">Invia Richiesta</span>
         </button>
         <div id="msg-richiesta" style="margin-top:15px;"></div>
       </div>
 
-      <h3 style="margin-top:30px;"><i class="fas fa-list"></i> Le Mie Richieste</h3>
+      <h3 style="margin-top:30px;"><i class="fas fa-list"></i> <span data-i18n="rich_mie">Le Mie Richieste</span></h3>
       <div id="lista-richieste-dipendente"></div>
     </div>
 
@@ -318,32 +343,31 @@
     <!-- TAB 3: MODIFICA ORE -->
     <!-- ============================================================ -->
     <div id="panel-modifica" class="panel">
-      <h2><i class="fas fa-edit"></i> Modifica Ore</h2>
-      <p class="subtitle">Correggi registrazioni errate dei dipendenti</p>
+      <h2><i class="fas fa-edit"></i> <span data-i18n="mod_titolo">Modifica Ore</span></h2>
+      <p class="subtitle" data-i18n="mod_sub">Correggi registrazioni errate dei dipendenti</p>
       
       <div class="form-card">
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-user"></i> Dipendente</label>
+            <label><i class="fas fa-user"></i> <span data-i18n="mod_dipendente">Dipendente</span></label>
             <select id="modifica-dipendente">
               <option value="">-- Seleziona --</option>
             </select>
           </div>
           <div class="form-group">
-            <label><i class="fas fa-calendar-alt"></i> Data</label>
+            <label><i class="fas fa-calendar-alt"></i> <span data-i18n="mod_data">Data</span></label>
             <input type="date" id="modifica-data" />
           </div>
           <button onclick="caricaRegistrazioniModifica()" class="btn-info">
-            <i class="fas fa-search"></i> Cerca
+            <i class="fas fa-search"></i> <span data-i18n="mod_cerca">Cerca</span>
           </button>
         </div>
         <div id="modifica-lista"></div>
       </div>
 
-      <!-- ⭐ NUOVO: pulsante per creare registrazione manuale -->
       <div style="margin-top:20px; padding-top:15px; border-top:1px solid #e3ebe9;">
         <button onclick="apriModaleAggiungiRegistrazione()" class="btn-success">
-          <i class="fas fa-plus-circle"></i> Aggiungi Registrazione Manuale
+          <i class="fas fa-plus-circle"></i> <span data-i18n="mod_aggiungi_manuale">Aggiungi Registrazione Manuale</span>
         </button>
       </div>
     </div>
@@ -352,17 +376,17 @@
     <!-- TAB 4: RICHIESTE (ADMIN) -->
     <!-- ============================================================ -->
     <div id="panel-richieste" class="panel">
-      <h2><i class="fas fa-inbox"></i> Richieste dei Dipendenti</h2>
-      <p class="subtitle">Gestisci le richieste di ferie, permessi, malattie e recupero ore</p>
+      <h2><i class="fas fa-inbox"></i> <span data-i18n="radm_titolo">Richieste dei Dipendenti</span></h2>
+      <p class="subtitle" data-i18n="radm_sub">Gestisci le richieste di ferie, permessi, malattie e recupero ore</p>
       
       <div style="margin-bottom:15px;">
        <button onclick="aggiornaRichiesteManuale()" class="btn-info">
-         <i class="fas fa-sync-alt"></i> Aggiorna Richieste
+         <i class="fas fa-sync-alt"></i> <span data-i18n="radm_aggiorna">Aggiorna Richieste</span>
        </button>
       </div>
 
       <div id="lista-richieste-admin">
-        <p class="text-muted">✅ Nessuna richiesta in sospeso</p>
+        <p class="text-muted" data-i18n="radm_nessuna">✅ Nessuna richiesta in sospeso</p>
       </div>
     </div>
 
@@ -370,57 +394,57 @@
     <!-- TAB 5: CALENDARIO -->
     <!-- ============================================================ -->
     <div id="panel-calendario" class="panel">
-      <h2><i class="fas fa-calendar-alt"></i> Calendario</h2>
-      <p class="subtitle">Visualizza il riepilogo mensile con ore e assenze</p>
+      <h2><i class="fas fa-calendar-alt"></i> <span data-i18n="cal_titolo">Calendario</span></h2>
+      <p class="subtitle" data-i18n="cal_sub">Visualizza il riepilogo mensile con ore e assenze</p>
       
       <div id="cal-vista-selector" class="cal-vista-selector" style="display:none;">
         <label class="vista-radio">
           <input type="radio" name="cal-vista" value="mensile" checked onchange="cambiaVistaCalendario()">
-          <span><i class="fas fa-table"></i> Mensile</span>
+          <span><i class="fas fa-table"></i> <span data-i18n="cal_vista_mensile">Mensile</span></span>
         </label>
         <label class="vista-radio">
           <input type="radio" name="cal-vista" value="dettagliato" onchange="cambiaVistaCalendario()">
-          <span><i class="fas fa-list"></i> Dettagliato</span>
+          <span><i class="fas fa-list"></i> <span data-i18n="cal_vista_dettagliato">Dettagliato</span></span>
         </label>
       </div>
       
       <div class="form-card">
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-calendar-alt"></i> Mese</label>
+            <label><i class="fas fa-calendar-alt"></i> <span data-i18n="cal_mese">Mese</span></label>
             <select id="cal-mese">
-              <option value="1">Gennaio</option>
-              <option value="2">Febbraio</option>
-              <option value="3">Marzo</option>
-              <option value="4">Aprile</option>
-              <option value="5">Maggio</option>
-              <option value="6">Giugno</option>
-              <option value="7">Luglio</option>
-              <option value="8">Agosto</option>
-              <option value="9">Settembre</option>
-              <option value="10">Ottobre</option>
-              <option value="11">Novembre</option>
-              <option value="12">Dicembre</option>
+              <option value="1" data-i18n="mese_1">Gennaio</option>
+              <option value="2" data-i18n="mese_2">Febbraio</option>
+              <option value="3" data-i18n="mese_3">Marzo</option>
+              <option value="4" data-i18n="mese_4">Aprile</option>
+              <option value="5" data-i18n="mese_5">Maggio</option>
+              <option value="6" data-i18n="mese_6">Giugno</option>
+              <option value="7" data-i18n="mese_7">Luglio</option>
+              <option value="8" data-i18n="mese_8">Agosto</option>
+              <option value="9" data-i18n="mese_9">Settembre</option>
+              <option value="10" data-i18n="mese_10">Ottobre</option>
+              <option value="11" data-i18n="mese_11">Novembre</option>
+              <option value="12" data-i18n="mese_12">Dicembre</option>
             </select>
           </div>
           <div class="form-group">
-            <label><i class="fas fa-calendar-alt"></i> Anno</label>
+            <label><i class="fas fa-calendar-alt"></i> <span data-i18n="cal_anno">Anno</span></label>
             <input type="number" id="cal-anno" />
           </div>
           <div class="form-group" id="cal-filtro-dipendente" style="display:none;">
-            <label><i class="fas fa-user"></i> Dipendente</label>
+            <label><i class="fas fa-user"></i> <span data-i18n="cal_dipendente">Dipendente</span></label>
             <select id="cal-dipendente">
-              <option value="">-- Tutti --</option>
+              <option value="" data-i18n="cal_tutti">-- Tutti --</option>
             </select>
           </div>
           <button onclick="caricaCalendario()" class="btn-info">
-            <i class="fas fa-search"></i> Visualizza
+            <i class="fas fa-search"></i> <span data-i18n="cal_visualizza">Visualizza</span>
           </button>
         </div>
       </div>
 
       <div id="calendario-output">
-        <p class="text-muted">Seleziona mese/anno e clicca "Visualizza"</p>
+        <p class="text-muted" data-i18n="cal_seleziona_hint">Seleziona mese/anno e clicca "Visualizza"</p>
       </div>
     </div>
 
@@ -428,49 +452,46 @@
     <!-- TAB 6: GESTIONE DIPENDENTI -->
     <!-- ============================================================ -->
     <div id="panel-dipendenti" class="panel">
-      <h2><i class="fas fa-users"></i> Gestione Dipendenti</h2>
-      <p class="subtitle">Aggiungi, modifica o elimina dipendenti</p>
+      <h2><i class="fas fa-users"></i> <span data-i18n="dip_titolo">Gestione Dipendenti</span></h2>
+      <p class="subtitle" data-i18n="dip_sub">Aggiungi, modifica o elimina dipendenti</p>
       
-      <!-- 1️⃣ LISTA DIPENDENTI IN ALTO -->
-      <h3><i class="fas fa-list"></i> Elenco Dipendenti</h3>
+      <h3><i class="fas fa-list"></i> <span data-i18n="dip_elenco">Elenco Dipendenti</span></h3>
       <div id="lista-dipendenti"></div>
 
-      <!-- 2️⃣ FORM AGGIUNGI DIPENDENTE SOTTO -->
-      <h3 style="margin-top:30px;"><i class="fas fa-plus-circle"></i> Aggiungi Nuovo Dipendente</h3>
+      <h3 style="margin-top:30px;"><i class="fas fa-plus-circle"></i> <span data-i18n="dip_aggiungi_nuovo">Aggiungi Nuovo Dipendente</span></h3>
       <div class="form-card">
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-user"></i> Nome *</label>
+            <label><i class="fas fa-user"></i> <span data-i18n="dip_nome">Nome *</span></label>
             <input type="text" id="dip-nome" placeholder="Nome" />
           </div>
           <div class="form-group">
-            <label><i class="fas fa-user"></i> Cognome *</label>
+            <label><i class="fas fa-user"></i> <span data-i18n="dip_cognome">Cognome *</span></label>
             <input type="text" id="dip-cognome" placeholder="Cognome" />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-user-tag"></i> Username *</label>
+            <label><i class="fas fa-user-tag"></i> <span data-i18n="dip_username">Username *</span></label>
             <input type="text" id="dip-username" placeholder="Username" />
           </div>
           <div class="form-group">
-            <label><i class="fas fa-lock"></i> Password *</label>
+            <label><i class="fas fa-lock"></i> <span data-i18n="dip_password">Password *</span></label>
             <input type="text" id="dip-password" placeholder="Password" />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label><i class="fas fa-user-shield"></i> Ruolo</label>
+            <label><i class="fas fa-user-shield"></i> <span data-i18n="dip_ruolo">Ruolo</span></label>
             <select id="dip-ruolo">
-              <option value="dipendente">Dipendente</option>
-              <option value="admin">Admin</option>
+              <option value="dipendente" data-i18n="dip_dipendente">Dipendente</option>
+              <option value="admin" data-i18n="dip_admin">Admin</option>
             </select>
           </div>
         </div>
 
-        <!-- ⭐ NUOVO: campo foto -->
         <div class="form-group foto-nuovo-dipendente">
-          <label><i class="fas fa-camera"></i> Foto (opzionale)</label>
+          <label><i class="fas fa-camera"></i> <span data-i18n="dip_foto">Foto (opzionale)</span></label>
           <div class="foto-nuovo-wrapper">
             <div id="dip-foto-preview" class="foto-avatar foto-avatar-lg">
               <i class="fas fa-user"></i>
@@ -478,38 +499,37 @@
             <div class="foto-nuovo-pulsanti">
               <input type="file" id="dip-foto-file" accept="image/*" style="display:none;" onchange="gestisciFileNuovoDipendente(event)" />
               <button type="button" class="btn-info" onclick="document.getElementById('dip-foto-file').click()">
-                <i class="fas fa-camera"></i> Scegli / Scatta
+                <i class="fas fa-camera"></i> <span data-i18n="dip_foto_scegli">Scegli / Scatta</span>
               </button>
               <button type="button" class="btn-danger" id="dip-foto-rimuovi" onclick="rimuoviFotoNuovoDipendente()" style="display:none;">
-                <i class="fas fa-times"></i> Rimuovi
+                <i class="fas fa-times"></i> <span data-i18n="dip_foto_rimuovi">Rimuovi</span>
               </button>
             </div>
           </div>
-          <small class="hint">Se non carichi una foto, verrà mostrato l'omino di default.</small>
+          <small class="hint" data-i18n="dip_foto_hint">Se non carichi una foto, verrà mostrato l'omino di default.</small>
         </div>
 
         <button onclick="aggiungiDipendente()" class="btn-primary btn-lg">
-          <i class="fas fa-plus"></i> Aggiungi Dipendente
+          <i class="fas fa-plus"></i> <span data-i18n="dip_aggiungi">Aggiungi Dipendente</span>
         </button>
         <div id="msg-dipendente" style="margin-top:15px;"></div>
       </div>
 
-      <!-- 3️⃣ PULSANTI AZIONI IN FONDO -->
       <div class="dipendenti-azioni-wrapper">
         <button onclick="esportaOreMese()" class="btn-info">
-          <i class="fas fa-file-excel"></i> Esporta Ore Mese (Excel)
+          <i class="fas fa-file-excel"></i> <span data-i18n="dip_esporta_excel">Esporta Ore Mese (Excel)</span>
         </button>
         
         <button onclick="esportaPDF()" class="btn-primary">
-          <i class="fas fa-file-pdf"></i> Esporta PDF
+          <i class="fas fa-file-pdf"></i> <span data-i18n="dip_esporta_pdf">Esporta PDF</span>
         </button>
         
         <button onclick="apriModalBackup()" class="btn-primary">
-          <i class="fas fa-download"></i> Scarica Backup
+          <i class="fas fa-download"></i> <span data-i18n="dip_backup">Scarica Backup</span>
         </button>
         
         <button onclick="apriModalAziende()" class="btn-info">
-          <i class="fas fa-building"></i> Gestione Aziende
+          <i class="fas fa-building"></i> <span data-i18n="dip_aziende">Gestione Aziende</span>
         </button>
       </div>
     </div>
@@ -520,68 +540,68 @@
     <div id="panel-commesse" class="panel">
       
       <div id="commesse-menu">
-        <h2><i class="fas fa-folder-plus"></i> Gestione Commesse</h2>
-        <p class="subtitle">Scegli cosa vuoi fare</p>
+        <h2><i class="fas fa-folder-plus"></i> <span data-i18n="com_titolo">Gestione Commesse</span></h2>
+        <p class="subtitle" data-i18n="com_sub">Scegli cosa vuoi fare</p>
         
         <div style="display:flex; gap:20px; margin-top:20px; flex-wrap:wrap;">
           <div onclick="mostraAggiungiCommessa()" style="flex:1; min-width:250px; background:#f8f9fa; border:2px solid #ddd; border-radius:10px; padding:30px; text-align:center; cursor:pointer; transition:0.3s;">
             <i class="fas fa-plus-circle" style="font-size:50px; color:#00695C;"></i>
-            <h3 style="margin-top:15px;">Aggiungi Commessa</h3>
-            <p style="color:#666; font-size:0.9em;">Crea nuove commesse e gestisci i nomi</p>
+            <h3 style="margin-top:15px;" data-i18n="com_aggiungi_box">Aggiungi Commessa</h3>
+            <p style="color:#666; font-size:0.9em;" data-i18n="com_aggiungi_box_sub">Crea nuove commesse e gestisci i nomi</p>
           </div>
           
           <div onclick="mostraAnalizzaCommessa()" style="flex:1; min-width:250px; background:#f8f9fa; border:2px solid #ddd; border-radius:10px; padding:30px; text-align:center; cursor:pointer; transition:0.3s;">
             <i class="fas fa-chart-line" style="font-size:50px; color:#00695C;"></i>
-            <h3 style="margin-top:15px;">Analizza Commessa</h3>
-            <p style="color:#666; font-size:0.9em;">Vedi i giorni, i dipendenti e le descrizioni</p>
+            <h3 style="margin-top:15px;" data-i18n="com_analizza_box">Analizza Commessa</h3>
+            <p style="color:#666; font-size:0.9em;" data-i18n="com_analizza_box_sub">Vedi i giorni, i dipendenti e le descrizioni</p>
           </div>
         </div>
       </div>
 
       <div id="commesse-aggiungi" style="display:none;">
-        <button onclick="tornaMenuCommesse()" class="btn-info" style="margin-bottom:15px;"><i class="fas fa-arrow-left"></i> Torna al menu</button>
+        <button onclick="tornaMenuCommesse()" class="btn-info" style="margin-bottom:15px;"><i class="fas fa-arrow-left"></i> <span data-i18n="com_torna">Torna al menu</span></button>
         
-        <h2><i class="fas fa-plus-circle"></i> Aggiungi Nuova Commessa</h2>
+        <h2><i class="fas fa-plus-circle"></i> <span data-i18n="com_aggiungi_titolo">Aggiungi Nuova Commessa</span></h2>
         <div class="form-card">
           <div class="form-row">
             <div class="form-group">
-              <label><i class="fas fa-tag"></i> Nome Commessa *</label>
-              <input type="text" id="commessa-nome" placeholder="es. Progetto Alpha" />
+              <label><i class="fas fa-tag"></i> <span data-i18n="com_nome">Nome Commessa *</span></label>
+              <input type="text" id="commessa-nome" data-i18n-placeholder="com_nome_ph" placeholder="es. Progetto Alpha" />
             </div>
             <div class="form-group">
-              <label><i class="fas fa-building"></i> Azienda *</label>
+              <label><i class="fas fa-building"></i> <span data-i18n="com_azienda">Azienda *</span></label>
               <select id="commessa-azienda">
-                <option value="0">-- Seleziona Azienda --</option>
+                <option value="0" data-i18n="com_azienda_ph">-- Seleziona Azienda --</option>
               </select>
             </div>
           </div>
           <button onclick="aggiungiCommessa()" class="btn-primary btn-lg">
-            <i class="fas fa-save"></i> Salva Commessa
+            <i class="fas fa-save"></i> <span data-i18n="com_salva">Salva Commessa</span>
           </button>
           <div id="msg-commessa" style="margin-top:15px;"></div>
         </div>
 
-        <h3 style="margin-top:30px;"><i class="fas fa-list"></i> Commesse Esistenti</h3>
+        <h3 style="margin-top:30px;"><i class="fas fa-list"></i> <span data-i18n="com_esistenti">Commesse Esistenti</span></h3>
         <div id="lista-commesse"></div>
       </div>
 
       <div id="commesse-analizza" style="display:none;">
-        <button onclick="tornaMenuCommesse()" class="btn-info" style="margin-bottom:15px;"><i class="fas fa-arrow-left"></i> Torna al menu</button>
+        <button onclick="tornaMenuCommesse()" class="btn-info" style="margin-bottom:15px;"><i class="fas fa-arrow-left"></i> <span data-i18n="com_torna">Torna al menu</span></button>
         
-        <h2><i class="fas fa-chart-line"></i> Analizza Commessa</h2>
-        <p class="subtitle">Seleziona una commessa per vedere il dettaglio completo</p>
+        <h2><i class="fas fa-chart-line"></i> <span data-i18n="com_analizza_titolo">Analizza Commessa</span></h2>
+        <p class="subtitle" data-i18n="com_analizza_sub">Seleziona una commessa per vedere il dettaglio completo</p>
         
         <div class="form-card">
           <div class="form-group">
-            <label><i class="fas fa-briefcase"></i> Scegli Commessa</label>
+            <label><i class="fas fa-briefcase"></i> <span data-i18n="com_scegli">Scegli Commessa</span></label>
             <select id="analizza-commessa-select" onchange="caricaAnalisiCommessa()">
-              <option value="">-- Seleziona --</option>
+              <option value="" data-i18n="com_scegli_ph">-- Seleziona --</option>
             </select>
           </div>
         </div>
 
         <div id="analisi-commessa-output" style="margin-top:20px;">
-          <p class="text-muted">Seleziona una commessa per vedere i dati.</p>
+          <p class="text-muted" data-i18n="com_seleziona_dati">Seleziona una commessa per vedere i dati.</p>
         </div>
       </div>
 
@@ -592,34 +612,31 @@
     <!-- ============================================================ -->
     <div id="panel-numeri-mancanti" class="panel">
 
-      <!-- SCHERMATA 1: LISTA COMMESSE -->
       <div id="nm-schermata-commesse">
-        <h2><i class="fas fa-list-ol"></i> Numeri Mancanti</h2>
-        <p class="subtitle">Seleziona una commessa o creane una nuova</p>
+        <h2><i class="fas fa-list-ol"></i> <span data-i18n="nm_titolo">Numeri Mancanti</span></h2>
+        <p class="subtitle" data-i18n="nm_sub">Seleziona una commessa o creane una nuova</p>
 
         <button onclick="nmApriCreaCommessa()" class="btn-primary btn-lg" style="margin-bottom:20px;">
-          <i class="fas fa-plus-circle"></i> Crea Nuova Commessa
+          <i class="fas fa-plus-circle"></i> <span data-i18n="nm_crea">Crea Nuova Commessa</span>
         </button>
 
         <div id="nm-lista-commesse"></div>
       </div>
 
-      <!-- SCHERMATA 2: LE 5 CARTELLE -->
       <div id="nm-schermata-cartelle" style="display:none;">
         <button onclick="nmTornaAlleCommesse()" class="btn-info" style="margin-bottom:15px;">
-          <i class="fas fa-arrow-left"></i> Indietro
+          <i class="fas fa-arrow-left"></i> <span data-i18n="nm_indietro">Indietro</span>
         </button>
 
         <h2><i class="fas fa-folder-open"></i> <span id="nm-commessa-corrente-titolo"></span></h2>
-        <p class="subtitle">Scegli la cartella su cui lavorare</p>
+        <p class="subtitle" data-i18n="nm_scegli_cartella">Scegli la cartella su cui lavorare</p>
 
-        <!-- ⭐ Pulsante Condividi/Stampa TUTTA la commessa -->
         <div class="nm-condividi-commessa-wrapper">
           <button onclick="nmCondividiTuttaCommessa()" class="btn-info btn-condividi-commessa">
-            <i class="fas fa-share-alt"></i> Condividi / Stampa Commessa
+            <i class="fas fa-share-alt"></i> <span data-i18n="nm_condividi_stampa">Condividi / Stampa Commessa</span>
           </button>
           <button onclick="nmHoStampatoTutto()" class="btn-stampato btn-condividi-commessa" style="margin-left:10px;">
-            <i class="fas fa-check-circle"></i> Ho stampato tutto
+            <i class="fas fa-check-circle"></i> <span data-i18n="nm_ho_stampato_tutto">Ho stampato tutto</span>
           </button>
         </div>
 
@@ -656,11 +673,11 @@
 <div id="modal-notifiche" class="modal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2><i class="fas fa-bell"></i> Notifiche</h2>
+      <h2><i class="fas fa-bell"></i> <span data-i18n="mod_notifiche">Notifiche</span></h2>
       <span class="modal-close" onclick="chiudiNotifiche()">&times;</span>
     </div>
     <div class="modal-body" id="notifiche-lista">
-      <p class="text-muted">Nessuna notifica</p>
+      <p class="text-muted" data-i18n="mod_nessuna_notifica">Nessuna notifica</p>
     </div>
   </div>
 </div>
@@ -669,20 +686,20 @@
 <div id="modal-password" class="modal">
   <div class="modal-content" style="max-width:400px;">
     <div class="modal-header">
-      <h2><i class="fas fa-key"></i> Cambia Password</h2>
+      <h2><i class="fas fa-key"></i> <span data-i18n="mod_pwd_titolo">Cambia Password</span></h2>
       <span class="modal-close" onclick="chiudiModificaPassword()">&times;</span>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label>Nuova Password *</label>
+        <label data-i18n="mod_pwd_nuova">Nuova Password *</label>
         <input type="text" id="nuova-password" placeholder="Inserisci nuova password" />
       </div>
       <div class="form-group">
-        <label>Conferma Password *</label>
+        <label data-i18n="mod_pwd_conferma">Conferma Password *</label>
         <input type="text" id="conferma-password" placeholder="Conferma nuova password" />
       </div>
       <button onclick="salvaNuovaPassword()" class="btn-primary" style="width:100%;">
-        <i class="fas fa-save"></i> Salva Password
+        <i class="fas fa-save"></i> <span data-i18n="mod_pwd_salva">Salva Password</span>
       </button>
       <div id="msg-password" style="margin-top:10px;"></div>
     </div>
@@ -693,20 +710,20 @@
 <div id="modal-aziende" class="modal">
   <div class="modal-content" style="max-width:500px;">
     <div class="modal-header">
-      <h2><i class="fas fa-building"></i> Gestione Aziende</h2>
+      <h2><i class="fas fa-building"></i> <span data-i18n="mod_az_titolo">Gestione Aziende</span></h2>
       <span class="modal-close" onclick="chiudiModalAziende()">&times;</span>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label>Nome Azienda *</label>
-        <input type="text" id="azienda-nome" placeholder="Inserisci nome azienda" />
+        <label data-i18n="mod_az_nome">Nome Azienda *</label>
+        <input type="text" id="azienda-nome" data-i18n-placeholder="mod_az_nome_ph" placeholder="Inserisci nome azienda" />
       </div>
       <button onclick="aggiungiAzienda()" class="btn-primary" style="width:100%;">
-        <i class="fas fa-plus"></i> Aggiungi Azienda
+        <i class="fas fa-plus"></i> <span data-i18n="mod_az_aggiungi">Aggiungi Azienda</span>
       </button>
       <div id="msg-azienda" style="margin-top:10px;"></div>
       
-      <h3 style="margin-top:20px;">Elenco Aziende</h3>
+      <h3 style="margin-top:20px;" data-i18n="mod_az_elenco">Elenco Aziende</h3>
       <div id="lista-aziende"></div>
     </div>
   </div>
@@ -716,42 +733,38 @@
 <div id="modal-backup" class="modal">
   <div class="modal-content" style="max-width:450px;">
     <div class="modal-header">
-      <h2><i class="fas fa-download"></i> Scarica Backup</h2>
+      <h2><i class="fas fa-download"></i> <span data-i18n="mod_bk_titolo">Scarica Backup</span></h2>
       <span class="modal-close" onclick="chiudiModalBackup()">&times;</span>
     </div>
     <div class="modal-body">
-      <p style="margin-bottom:15px;color:#666;">Cosa vuoi scaricare?</p>
+      <p style="margin-bottom:15px;color:#666;" data-i18n="mod_bk_cosa">Cosa vuoi scaricare?</p>
 
       <div style="display:flex;flex-direction:column;gap:10px;">
-
         <label class="backup-opzione">
           <input type="radio" name="backup-tipo" value="tutto" checked />
           <div>
-            <strong>📦 Tutto</strong>
-            <small>Ore mensili + Dipendenti + Commesse</small>
+            <strong>📦 <span data-i18n="mod_bk_tutto">Tutto</span></strong>
+            <small data-i18n="mod_bk_tutto_sub">Ore mensili + Dipendenti + Commesse</small>
           </div>
         </label>
-
         <label class="backup-opzione">
           <input type="radio" name="backup-tipo" value="ore" />
           <div>
-            <strong>⏰ Solo Ore Mensili</strong>
-            <small>Un file per ogni dipendente/mese</small>
+            <strong>⏰ <span data-i18n="mod_bk_ore">Solo Ore Mensili</span></strong>
+            <small data-i18n="mod_bk_ore_sub">Un file per ogni dipendente/mese</small>
           </div>
         </label>
-
         <label class="backup-opzione">
           <input type="radio" name="backup-tipo" value="commesse" />
           <div>
-            <strong>📁 Solo Commesse</strong>
-            <small>Un file per ogni commessa</small>
+            <strong>📁 <span data-i18n="mod_bk_comm">Solo Commesse</span></strong>
+            <small data-i18n="mod_bk_comm_sub">Un file per ogni commessa</small>
           </div>
         </label>
-
       </div>
 
       <button onclick="eseguiBackup()" class="btn-primary" style="width:100%;margin-top:20px;">
-        <i class="fas fa-download"></i> Scarica ZIP
+        <i class="fas fa-download"></i> <span data-i18n="mod_bk_scarica">Scarica ZIP</span>
       </button>
 
       <div id="msg-backup" style="margin-top:10px;"></div>
@@ -767,7 +780,7 @@
         <img src="images/logo.png" alt="MEC-ROY" class="modal-logo" 
              onerror="this.style.display='none';" />
         <div>
-          <h2 id="dettaglio-commessa-nome">Dettaglio Commessa</h2>
+          <h2 id="dettaglio-commessa-nome" data-i18n="mod_detc_titolo">Dettaglio Commessa</h2>
           <small id="dettaglio-commessa-data"></small>
         </div>
       </div>
@@ -825,7 +838,7 @@
         <img src="images/logo.png" alt="MEC-ROY" class="modal-logo" 
              onerror="this.style.display='none';" />
         <div>
-          <h2 id="dettaglio-dipendente-nome">Dettaglio Dipendente</h2>
+          <h2 id="dettaglio-dipendente-nome" data-i18n="mod_detd_titolo">Dettaglio Dipendente</h2>
           <small id="dettaglio-dipendente-ruolo"></small>
         </div>
       </div>
@@ -895,11 +908,11 @@
 <div id="modal-protocollo" class="modal">
   <div class="modal-content" style="max-width:500px;">
     <div class="modal-header">
-      <h2><i class="fas fa-file-medical"></i> Modifica Protocollo</h2>
+      <h2><i class="fas fa-file-medical"></i> <span data-i18n="mod_prot_titolo">Modifica Protocollo</span></h2>
       <span class="modal-close" onclick="chiudiModificaProtocollo()">&times;</span>
     </div>
     <div class="modal-body">
-      <p style="color:#666;margin-bottom:15px;font-size:0.9em;">
+      <p style="color:#666;margin-bottom:15px;font-size:0.9em;" data-i18n="mod_prot_sub">
         Inserisci le 9 cifre del protocollo del certificato medico
       </p>
 
@@ -916,16 +929,15 @@
       </div>
 
       <button onclick="salvaProtocolloModale()" class="btn-primary" style="width:100%;margin-top:20px;">
-        <i class="fas fa-save"></i> Salva Protocollo
+        <i class="fas fa-save"></i> <span data-i18n="mod_prot_salva">Salva Protocollo</span>
       </button>
 
       <div id="msg-protocollo" style="margin-top:10px;"></div>
     </div>
   </div>
 </div>
-<!-- ============================================================ -->
-<!-- MODALE CREA NUOVA COMMESSA (Numeri Mancanti) -->
-<!-- ============================================================ -->
+
+<!-- ===== MODALE CREA COMMESSA (Numeri Mancanti) ===== -->
 <div id="nm-modal-crea-commessa" class="modal">
   <div class="modal-content" style="max-width:500px;">
     <div class="modal-header">
@@ -955,9 +967,7 @@
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- MODALE POPUP NUMERI -->
-<!-- ============================================================ -->
+<!-- ===== MODALE POPUP NUMERI ===== -->
 <div id="nm-modal-popup" class="modal">
   <div class="modal-content nm-popup-content">
     <div class="modal-header">
@@ -966,7 +976,6 @@
     </div>
     <div class="modal-body nm-popup-body">
       
-      <!-- ⭐ INPUT SINGOLO (per tutte le cartelle tranne CAVO) -->
       <div class="nm-input-wrapper" id="nm-input-singolo">
         <input type="text" id="nm-input-numero" class="nm-input-numero" placeholder="Inserisci il numero..." autocomplete="off" />
         <button onclick="nmAggiungiNumero()" class="btn-primary">
@@ -974,7 +983,6 @@
         </button>
       </div>
 
-      <!-- ⭐ INPUT DOPPIO (solo per CAVO) -->
       <div class="nm-input-wrapper-cavo" id="nm-input-doppio" style="display:none;">
         <div class="nm-cavo-box">
           <span class="nm-cavo-trattino">-</span>
@@ -1007,9 +1015,7 @@
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- MODALE PASSWORD ADMIN per cancellare commessa -->
-<!-- ============================================================ -->
+<!-- ===== MODALE PASSWORD ADMIN ===== -->
 <div id="nm-modal-admin" class="modal">
   <div class="modal-content" style="max-width:400px;">
     <div class="modal-header">
@@ -1032,19 +1038,16 @@
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- MODALE FOTO DIPENDENTE — con editor zoom/trascina             -->
-<!-- ============================================================ -->
+<!-- ===== MODALE FOTO DIPENDENTE ===== -->
 <div id="modal-foto" class="modal">
   <div class="modal-content" style="max-width:460px;">
     <div class="modal-header">
-      <h2><i class="fas fa-camera"></i> Foto Dipendente</h2>
+      <h2><i class="fas fa-camera"></i> <span data-i18n="foto_titolo">Foto Dipendente</span></h2>
       <span class="modal-close" onclick="chiudiModaleFoto()">&times;</span>
     </div>
     <div class="modal-body" style="text-align:center;">
       <p id="modal-foto-nome" style="font-weight:700;color:#00695C;margin-bottom:15px;"></p>
 
-      <!-- ⭐ Editor foto interattivo -->
       <div id="foto-editor-container" class="foto-editor-container">
         <div id="foto-editor-viewport" class="foto-editor-viewport">
           <img id="foto-editor-img" class="foto-editor-img" alt="anteprima" draggable="false" />
@@ -1056,22 +1059,22 @@
         <div class="foto-editor-circle"></div>
       </div>
 
-      <p id="foto-editor-hint" class="foto-editor-hint">
+      <p id="foto-editor-hint" class="foto-editor-hint" data-i18n="foto_hint">
         👆 Trascina per spostare · 🤏 Pinch per ingrandire
       </p>
 
       <input type="file" id="foto-input-file" accept="image/*" style="display:none;" onchange="gestisciFileFoto(event)" />
 
       <button type="button" class="btn-primary" onclick="document.getElementById('foto-input-file').click()" style="width:100%;margin-top:15px;">
-        <i class="fas fa-camera"></i> Scegli / Scatta foto
+        <i class="fas fa-camera"></i> <span data-i18n="foto_scegli">Scegli / Scatta foto</span>
       </button>
 
       <button type="button" class="btn-danger" id="foto-btn-rimuovi" onclick="rimuoviFotoModale()" style="width:100%;margin-top:10px;display:none;">
-        <i class="fas fa-trash"></i> Rimuovi foto
+        <i class="fas fa-trash"></i> <span data-i18n="foto_rimuovi">Rimuovi foto</span>
       </button>
 
       <button type="button" class="btn-success" id="foto-btn-salva" onclick="salvaFotoModale()" style="width:100%;margin-top:10px;">
-        <i class="fas fa-save"></i> Salva
+        <i class="fas fa-save"></i> <span data-i18n="foto_salva">Salva</span>
       </button>
 
       <div id="msg-foto" style="margin-top:10px;"></div>
@@ -1079,21 +1082,17 @@
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- OVERLAY BENVENUTO (2 secondi al login)                        -->
-<!-- ============================================================ -->
+<!-- ===== OVERLAY BENVENUTO ===== -->
 <div id="welcome-overlay" class="welcome-overlay">
   <div class="welcome-content">
     <div id="welcome-avatar" class="foto-avatar foto-avatar-xxl">
       <i class="fas fa-user"></i>
     </div>
-    <h1 id="welcome-nome" class="welcome-nome">Benvenuto</h1>
+    <h1 id="welcome-nome" class="welcome-nome" data-i18n="benvenuto">Benvenuto</h1>
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- MODALE AGGIUNGI REGISTRAZIONE MANUALE (admin)                 -->
-<!-- ============================================================ -->
+<!-- ===== MODALE AGGIUNGI REGISTRAZIONE MANUALE ===== -->
 <div id="modal-aggiungi-reg" class="modal">
   <div class="modal-content" style="max-width:500px;">
     <div class="modal-header">
@@ -1147,7 +1146,6 @@
 
 <script src="script.js"></script>
 
-<!-- ===== SERVICE WORKER (PWA) ===== -->
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
