@@ -26,21 +26,18 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('📬 Notifica in background:', payload);
 
-  // ⚠️ IMPORTANTE: leggiamo da payload.data, NON da payload.notification
-  // perché la Cloud Function manda solo "data" per evitare il doppio.
-  // Se per sicurezza arriva anche "notification", lo usiamo come fallback.
-  const titolo = payload.data?.title
-              || payload.notification?.title
-              || 'MEC-ROY';
-  const corpo = payload.data?.body
-             || payload.notification?.body
-             || 'Ricordati di registrare le ore!';
-  const icona = payload.data?.icon
-             || payload.notification?.icon
-             || 'images/logo-192.png';
-  const url = payload.data?.url
-           || payload.notification?.click_action
-           || '/';
+  // ⛔ Se il payload ha "notification", il sistema la mostra già da solo
+  // → il Service Worker non deve rimostrarla (evita il doppio)
+  if (payload.notification) {
+    console.log('ℹ️ Notification presente, il sistema la mostra da solo');
+    return;
+  }
+
+  // ✅ Altrimenti (solo data), la mostriamo noi
+  const titolo = payload.data?.title || 'MEC-ROY';
+  const corpo = payload.data?.body || 'Ricordati di registrare le ore!';
+  const icona = payload.data?.icon || 'images/logo-192.png';
+  const url = payload.data?.url || '/';
 
   const opzioni = {
     body: corpo,
@@ -48,9 +45,9 @@ messaging.onBackgroundMessage((payload) => {
     badge: 'images/logo-192.png',
     vibrate: [200, 100, 200],
     tag: 'mecroy-ore',
-    renotify: true,          // 🔔 fa suonare di nuovo anche con stesso "tag"
-    requireInteraction: true, // 📌 resta finché non la tocchi
-    silent: false,           // 🔊 forza il suono
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
     data: { url: url }
   };
 
