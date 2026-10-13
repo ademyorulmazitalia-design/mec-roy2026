@@ -8714,7 +8714,7 @@ async function aggiornaUILoginBiometrico() {
   // ⭐ 1. Verifica supporto WebAuthn
   if (!bioSupportato()) {
     btnLoginImpronta.style.display = 'none';
-    sepImprontaPassword.style.display = 'none';
+    if (sepImprontaPassword) sepImprontaPassword.style.display = 'none';
     if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'none';
     if (btnDisattiva) btnDisattiva.style.display = 'none';
     return;
@@ -8730,7 +8730,7 @@ async function aggiornaUILoginBiometrico() {
 
   if (!disponibile) {
     btnLoginImpronta.style.display = 'none';
-    sepImprontaPassword.style.display = 'none';
+    if (sepImprontaPassword) sepImprontaPassword.style.display = 'none';
     if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'none';
     if (btnDisattiva) btnDisattiva.style.display = 'none';
     return;
@@ -8741,12 +8741,12 @@ async function aggiornaUILoginBiometrico() {
   if (bioUsername && bioAttivaSuQuestoDispositivo(bioUsername)) {
     // Sì → mostra pulsante "Entra con impronta"
     btnLoginImpronta.style.display = 'flex';
-    sepImprontaPassword.style.display = 'flex';
+    if (sepImprontaPassword) sepImprontaPassword.style.display = 'flex';
     if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'none';
   } else {
     // No → nascondi pulsante impronta, mostra checkbox attiva
     btnLoginImpronta.style.display = 'none';
-    sepImprontaPassword.style.display = 'none';
+    if (sepImprontaPassword) sepImprontaPassword.style.display = 'none';
     if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'flex';
   }
 
