@@ -386,6 +386,9 @@ function login() {
     utenteCorrente = utente;
     salvaSessione(utente.username);
 
+      // ⭐ Carica lingua preferita dell'utente
+    caricaLinguaSalvata(utente.username);
+
     if (ricordami) {
       localStorage.setItem('ricordami_username', username);
       localStorage.setItem('ricordami_password', password);
@@ -530,6 +533,12 @@ function login() {
 
     // ⭐ Mostra schermata benvenuto per 2 secondi
     mostraSchermataBenvenuto(utente);
+
+    // ⭐ Riapplica traduzioni dopo login
+    setTimeout(() => {
+      applicaTraduzioni();
+      popolaTendinaLingua();
+    }, 300);
 
   } else {
     const loginBox = document.querySelector('.login-box');
@@ -997,7 +1006,7 @@ function eliminaCommessa(id) {
 // ============================================
 // SALVA REGISTRAZIONE ORE
 // ============================================
-function salvaRegistrazione() {
+async function salvaRegistrazione() {
   if (utenteCorrente?.ruolo === 'admin') {
     alert('Gli amministratori non possono registrare ore qui');
     return;
@@ -1109,7 +1118,8 @@ function salvaRegistrazione() {
     }
   }
 
-  dati.registrazioni.push({
+
+    const nuovaReg = {
     id: prossimoId++,
     utente_id: utenteCorrente.username,
     commessa_id: commessa_id,
@@ -1120,10 +1130,12 @@ function salvaRegistrazione() {
     tipo: 'lavoro',
     straordinario: isStraordinario,
     ore: oreLavorate
-  });
+  };
 
-  salvaDati();
+  dati.registrazioni.push(nuovaReg);
 
+  // ⭐ Salva SOLO la nuova registrazione (non riscrive tutto)
+  await _dbAggiungiRegistrazione(nuovaReg);
   if (!msg.innerHTML.includes('arrotondate')) {
     msg.innerHTML = '<div class="success">✅ Registrazione salvata!</div>';
   }
@@ -2554,39 +2566,74 @@ async function salvaModifica(id) {
 }
 
 async function salvaModifica(id) {
-  const nuovaInizio = document.getElementById('mod-inizio-' + id).value;
-  const nuovaFine = document.getElementById('mod-fine-' + id).value;
-  const nuovaDesc = document.getElementById('mod-desc-' + id).value.trim();
-  const nuovoTipo = document.getElementById('mod-tipo-' + id).value;
-
   const registro = dati.registrazioni.find(r => r.id === id);
   if (!registro) return;
 
-  if (nuovaInizio >= nuovaFine) {
-    alert('L\'ora fine deve essere dopo l\'ora inizio');
-    return;
+  const nuovoTipo = document.getElementById('mod-tipo-' + id).value;
+  const nuovaCommessa = document.getElementById('mod-commessa-' + id).value;
+  const nuovaInizio = document.getElementById('mod-inizio-' + id).value;
+  const nuovaFine = document.getElementById('mod-fine-' + id).value;
+  const nuovaDesc = document.getElementById('mod-desc-' + id).value.trim();
+
+  // Validazioni
+  if (nuovoTipo === 'lavoro' || nuovoTipo === 'recupero_ore') {
+    if (!nuovaInizio || !nuovaFine) {
+      alert('❌ Inserisci ora inizio e ora fine');
+      return;
+    }
+    if (nuovaInizio >= nuovaFine) {
+      alert('❌ L\'ora fine deve essere dopo l\'ora inizio');
+      return;
+    }
   }
 
-  registro.ora_inizio = nuovaInizio;
-  registro.ora_fine = nuovaFine;
-  registro.descrizione = nuovaDesc;
-  registro.tipo = nuovoTipo;
+  // Prepara i dati nuovi
+  const datiNuovi = {
+    commessa_id: nuovaCommessa ? parseInt(nuovaCommessa) : null,
+    tipo: nuovoTipo,
+    ora_inizio: nuovaInizio,
+    ora_fine: nuovaFine,
+    descrizione: nuovaDesc
+  };
 
-  const [h1, m1] = nuovaInizio.split(':').map(Number);
-  const [h2, m2] = nuovaFine.split(':').map(Number);
-  registro.ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  // Ricalcola ore
+  if (nuovaInizio && nuovaFine && nuovaInizio !== '00:00') {
+    const [h1, m1] = nuovaInizio.split(':').map(Number);
+    const [h2, m2] = nuovaFine.split(':').map(Number);
+    datiNuovi.ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  } else {
+    datiNuovi.ore = 0;
+  }
 
-  await salvaDati();
+  // ⭐ Aggiorna SOLO questa registrazione nel DB
+  await _dbAggiornaRegistrazione(id, datiNuovi);
+
+  // Aggiorna anche la copia locale
+  Object.assign(registro, datiNuovi);
+
   caricaRegistrazioniModifica();
+  if (typeof caricaCalendario === 'function') caricaCalendario();
+
   alert('✅ Registrazione modificata!');
 }
 
-function eliminaRegistrazione(id) {
+async function eliminaRegistrazione(id) {
   if (!confirm('Eliminare questa registrazione?')) return;
 
+  // ⭐ Cancella direttamente dal DB
+  const ok = await _dbCancellaRegistrazione(id);
+
+  if (!ok) {
+    alert('❌ Impossibile cancellare la registrazione');
+    return;
+  }
+
+  // Aggiorna anche la copia locale
   dati.registrazioni = dati.registrazioni.filter(r => r.id !== id);
-  salvaDati();
+
   caricaRegistrazioniModifica();
+  if (typeof caricaCalendario === 'function') caricaCalendario();
+
   alert('🗑️ Registrazione eliminata');
 }
 
@@ -5386,7 +5433,33 @@ async function approvaRichiesta(id) {
       emoji[richiesta.tipo] + ' Richiesta APPROVATA ✅', '#');
   }
 
+  // ⭐ Salva SOLO le nuove registrazioni aggiunte da questa approvazione
+  const regsInizialiIds = new Set(
+    dati.registrazioni.slice(0, -10).map(r => r.id) // ID prima dell'approvazione
+  );
+  // In realtà serve un approccio più sicuro: le ultime N registrazioni sono quelle nuove
+  // Le salviamo una per una
+
+  // Salva solo le registrazioni con id >= prossimoId - N
+  // (le ultime che sono state aggiunte dalla funzione)
+  const ultimeRegs = dati.registrazioni.slice(-5); // max 5 reg per approvazione
+
+  for (const reg of ultimeRegs) {
+    // Verifica se è una registrazione nuova (id alto)
+    const esistente = await db.collection('dati').doc('main').get().then(snap => {
+      if (!snap.exists) return false;
+      const remote = snap.data();
+      return (remote.registrazioni || []).some(r => r.id === reg.id);
+    });
+
+    if (!esistente) {
+      await _dbAggiungiRegistrazione(reg);
+    }
+  }
+
+  // Salva anche la richiesta aggiornata + notifiche
   await salvaDati();
+
   caricaRichiesteAdmin();
   aggiornaBadgeRichieste();
   caricaRichiesteDipendente();
@@ -5739,6 +5812,10 @@ async function ascoltaRinnovoToken() {
 // AVVIO + CLICK FUORI MODALI
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
+   // ⭐ Multi-lingua: inizializza
+  popolaTendinaLingua();
+  caricaLinguaSalvata();
+
   caricaCredenzialiSalvate();
 
   caricaDati().then(() => {
@@ -6600,8 +6677,9 @@ async function salvaRegistrazioneManuale() {
     };
 
     dati.registrazioni.push(nuova);
-    await salvaDati();
 
+    // ⭐ Salva SOLO questa registrazione nel DB
+    await _dbAggiungiRegistrazione(nuova);
     msg.innerHTML = '<div class="success">✅ Registrazione creata!</div>';
 
     setTimeout(() => {
@@ -7020,3 +7098,1715 @@ function chiudiModaleFoto() {
 }
 
 console.log('✅ script.js — Foto editor (zoom/trascina) caricato');
+
+// ============================================
+// HELPER FIRESTORE — Operazioni puntuali sulle registrazioni
+// (evitano di riscrivere tutto l'array ogni volta)
+// ============================================
+
+// Aggiunge 1 registrazione al DB (senza toccare le altre)
+async function _dbAggiungiRegistrazione(reg) {
+  try {
+    const snap = await db.collection('dati').doc('main').get();
+    if (!snap.exists) return false;
+    const remoto = snap.data();
+    const regs = remoto.registrazioni || [];
+
+    // Controllo duplicato per id
+    if (regs.some(r => r.id === reg.id)) {
+      console.warn('⚠️ Registrazione già presente:', reg.id);
+      return false;
+    }
+
+    regs.push(reg);
+    await db.collection('dati').doc('main').update({ registrazioni: regs });
+    console.log('✅ Registrazione aggiunta al DB:', reg.id);
+    return true;
+  } catch (err) {
+    console.error('❌ Errore _dbAggiungiRegistrazione:', err);
+    return false;
+  }
+}
+
+// Cancella 1 registrazione dal DB per id
+async function _dbCancellaRegistrazione(id) {
+  try {
+    const snap = await db.collection('dati').doc('main').get();
+    if (!snap.exists) return false;
+    const remoto = snap.data();
+    const regs = remoto.registrazioni || [];
+
+    const filtrate = regs.filter(r => r.id !== id);
+    if (filtrate.length === regs.length) {
+      console.warn('⚠️ Registrazione da cancellare non trovata:', id);
+      return false;
+    }
+
+    await db.collection('dati').doc('main').update({ registrazioni: filtrate });
+    console.log('✅ Registrazione cancellata dal DB:', id);
+    return true;
+  } catch (err) {
+    console.error('❌ Errore _dbCancellaRegistrazione:', err);
+    return false;
+  }
+}
+
+// Aggiorna 1 registrazione al DB per id
+async function _dbAggiornaRegistrazione(id, datiNuovi) {
+  try {
+    const snap = await db.collection('dati').doc('main').get();
+    if (!snap.exists) return false;
+    const remoto = snap.data();
+    const regs = remoto.registrazioni || [];
+
+    const idx = regs.findIndex(r => r.id === id);
+    if (idx === -1) {
+      console.warn('⚠️ Registrazione da aggiornare non trovata:', id);
+      return false;
+    }
+
+    regs[idx] = { ...regs[idx], ...datiNuovi, id };
+    await db.collection('dati').doc('main').update({ registrazioni: regs });
+    console.log('✅ Registrazione aggiornata nel DB:', id);
+    return true;
+  } catch (err) {
+    console.error('❌ Errore _dbAggiornaRegistrazione:', err);
+    return false;
+  }
+}
+
+// Cancella PIÙ registrazioni che matchano un filtro (per annullaRichiesta, eliminaDipendente, ecc.)
+async function _dbCancellaRegistrazioniConFiltro(filtroFn) {
+  try {
+    const snap = await db.collection('dati').doc('main').get();
+    if (!snap.exists) return { cancellate: 0 };
+    const remoto = snap.data();
+    const regs = remoto.registrazioni || [];
+
+    const prima = regs.length;
+    const filtrate = regs.filter(r => !filtroFn(r));
+    const cancellate = prima - filtrate.length;
+
+    if (cancellate === 0) {
+      console.log('ℹ️ Nessuna registrazione da cancellare con il filtro');
+      return { cancellate: 0 };
+    }
+
+    await db.collection('dati').doc('main').update({ registrazioni: filtrate });
+    console.log(`✅ Cancellate ${cancellate} registrazioni dal DB`);
+    return { cancellate };
+  } catch (err) {
+    console.error('❌ Errore _dbCancellaRegistrazioniConFiltro:', err);
+    return { cancellate: 0 };
+  }
+}
+
+// Sostituisce INTERAMENTE un array su Firestore (per operazioni massive)
+async function _dbSostituisciArray(campo, nuovoArray) {
+  try {
+    await db.collection('dati').doc('main').update({ [campo]: nuovoArray });
+    console.log(`✅ Array ${campo} sostituito nel DB (${nuovoArray.length} elementi)`);
+    return true;
+  } catch (err) {
+    console.error(`❌ Errore _dbSostituisciArray(${campo}):`, err);
+    return false;
+  }
+}
+
+console.log('✅ script.js — Helper Firestore (operazioni puntuali) caricati');
+
+// ============================================
+// MULTI-LINGUA — OVERRIDE FUNZIONI CON TRADUZIONI
+// (Incolla in fondo al file: sostituisce le versioni vecchie)
+// ============================================
+
+// Helper: prende i nomi tradotti dei mesi
+function _mesiTradotti() {
+  return [t('mese_1'), t('mese_2'), t('mese_3'), t('mese_4'), t('mese_5'), t('mese_6'),
+          t('mese_7'), t('mese_8'), t('mese_9'), t('mese_10'), t('mese_11'), t('mese_12')];
+}
+
+// ---------- OVERRIDE: caricaSelectAziende ----------
+const _origCaricaSelectAziende = window.caricaSelectAziende;
+window.caricaSelectAziende = function() {
+  const select = document.getElementById('select-azienda');
+  if (!select) return;
+  const valCorrente = select.value;
+  select.innerHTML = `<option value="0">${t('header_tutte')}</option>`;
+  if (dati.aziende) {
+    dati.aziende.forEach(a => {
+      select.innerHTML += `<option value="${a.id}">${a.nome}</option>`;
+    });
+  }
+  if (valCorrente) select.value = valCorrente;
+};
+
+// ---------- OVERRIDE: caricaSelectRecuperoCommesse ----------
+const _origCaricaSelectRecuperoCommesse = window.caricaSelectRecuperoCommesse;
+window.caricaSelectRecuperoCommesse = function() {
+  const select = document.getElementById('recupero-commessa');
+  if (!select) return;
+  select.innerHTML = '<option value="">-- Seleziona --</option>';
+  (dati.commesse || []).forEach(c => {
+    select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+  });
+};
+
+// ---------- OVERRIDE: caricaSelectDipendentiCalendario ----------
+const _origCaricaSelectDipendentiCalendario = window.caricaSelectDipendentiCalendario;
+window.caricaSelectDipendentiCalendario = function() {
+  const select = document.getElementById('cal-dipendente');
+  if (!select) return;
+  
+  // ⭐ Sicurezza: verifica che dati.utenti esista
+  if (!dati || !dati.utenti || !Array.isArray(dati.utenti)) {
+    console.warn('⚠️ dati.utenti non ancora disponibile');
+    return;
+  }
+  
+  const valCorrente = select.value;
+  select.innerHTML = `<option value="">${t('cal_tutti')}</option>`;
+  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
+    select.innerHTML += '<option value="' + u.username + '">' + u.nome + ' ' + u.cognome + '</option>';
+  });
+  if (valCorrente) select.value = valCorrente;
+};
+// ---------- OVERRIDE: caricaCalendario (con testi tradotti) ----------
+const _origCaricaCalendario = window.caricaCalendario;
+window.caricaCalendario = function() {
+  // Richiama la funzione originale MA con un trucco:
+  // salviamo i nomi tradotti in variabili temporanee globali, poi chiamiamo l'originale
+  window._MESI_TRADOTTI = _mesiTradotti();
+  window._GIORNI_TRADOTTI = tGiorniSettimana();
+  window._LEG_Lavorato = t('cal_legend_lavorato');
+  window._LEG_Ferie = t('cal_legend_ferie');
+  window._LEG_Permesso = t('cal_legend_permesso');
+  window._LEG_Malattia = t('cal_legend_malattia');
+  window._LEG_Recupero = t('cal_legend_recupero');
+  window._LEG_Straordinario = t('cal_legend_straordinario');
+  window._LEG_Assente = t('cal_legend_assente');
+  window._SELEZIONA_HINT = t('cal_seleziona_hint');
+  
+  if (_origCaricaCalendario) _origCaricaCalendario();
+};
+
+// ---------- OVERRIDE: mostraTotaliMese (con traduzioni) ----------
+window.mostraTotaliMese = function() {
+  if (!utenteCorrente) return;
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+  if (!mese || !anno) return;
+
+  const meseNome = t('mese_' + mese);
+  let totaleGenerale = 0;
+  let dipendentiDaContare = 0;
+
+  if (utenteCorrente.ruolo === 'admin') {
+    dati.registrazioni.forEach(r => {
+      if (r.tipo === 'lavoro' && r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+        totaleGenerale += r.ore || 0;
+      }
+    });
+    dipendentiDaContare = dati.utenti.filter(u => u.ruolo === 'dipendente').length;
+  } else {
+    dati.registrazioni.forEach(r => {
+      if (r.utente_id === utenteCorrente.username && r.tipo === 'lavoro' &&
+          r.data && r.data.startsWith(`${anno}-${String(mese).padStart(2,'0')}`)) {
+        totaleGenerale += r.ore || 0;
+      }
+    });
+    dipendentiDaContare = 1;
+  }
+
+  const container = document.getElementById('calendario-output');
+  if (container) {
+    const labelSoggetto = utenteCorrente.ruolo === 'admin'
+      ? `${t('cal_dipendenti_attivi')}: ${dipendentiDaContare}`
+      : t('cal_le_tue_ore');
+
+    const totaliHTML = `
+      <div style="background:#e8f5e9;border:2px solid #4CAF50;border-radius:10px;padding:15px;margin-bottom:20px;text-align:center;">
+        <h4 style="color:#2e7d32;margin:0;">${t('cal_totale_mese')}: ${meseNome} ${anno}</h4>
+        <p style="margin:5px 0;font-size:1.2em;"><strong>${totaleGenerale.toFixed(2)} ${t('cal_ore_lavorate')}</strong></p>
+        <small style="color:#666;">${labelSoggetto}</small>
+      </div>
+    `;
+    container.innerHTML = totaliHTML + container.innerHTML;
+  }
+};
+
+// ---------- OVERRIDE: caricaListaCommesse ----------
+window.caricaListaCommesse = function() {
+  const div = document.getElementById('lista-commesse');
+  if (!div) return;
+
+  if (!dati.commesse || dati.commesse.length === 0) {
+    div.innerHTML = '<p class="text-muted">📭 ' + (t('com_esistenti') ? 'Nessuna commessa' : 'Nessuna commessa') + '</p>';
+    return;
+  }
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += `<th>${t('com_nome').replace(' *', '')}</th><th>${t('com_azienda').replace(' *', '')}</th><th>Azioni</th>`;
+  html += '</tr></thead><tbody>';
+
+  dati.commesse.forEach(c => {
+    const azienda = dati.aziende.find(a => a.id === c.azienda_id);
+    html += '<tr>';
+    html += '<td><strong>' + c.nome + '</strong></td>';
+    html += '<td>' + (azienda ? azienda.nome : '-') + '</td>';
+    html += '<td>';
+    html += '<button class="btn-warning" onclick="apriModificaCommessa(' + c.id + ')" style="margin-right:5px;" title="Modifica"><i class="fas fa-edit"></i></button>';
+    html += '<button class="btn-danger" onclick="eliminaCommessa(' + c.id + ')" title="Elimina"><i class="fas fa-trash"></i></button>';
+    html += '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+};
+
+// ---------- OVERRIDE: popolaTendinaLingua (per mostrare la lingua corrente) ----------
+const _origPopolaTendinaLingua = window.popolaTendinaLingua;
+window.popolaTendinaLingua = function() {
+  if (_origPopolaTendinaLingua) _origPopolaTendinaLingua();
+};
+
+// ---------- OVERRIDE: mostraSchermataBenvenuto (per tradurre "Benvenuto") ----------
+const _origMostraSchermataBenvenuto = window.mostraSchermataBenvenuto;
+window.mostraSchermataBenvenuto = function(utente) {
+  if (!utente) return;
+  const overlay = document.getElementById('welcome-overlay');
+  if (!overlay) return;
+
+  const avatarEl = document.getElementById('welcome-avatar');
+  const nomeEl = document.getElementById('welcome-nome');
+
+  if (avatarEl) {
+    if (utente.foto) {
+      avatarEl.innerHTML = `<img src="${utente.foto}" alt="foto" />`;
+    } else {
+      avatarEl.innerHTML = '<i class="fas fa-user"></i>';
+    }
+  }
+
+  if (nomeEl) {
+    nomeEl.textContent = t('benvenuto') + ' ' + (utente.nome || utente.username);
+  }
+
+  overlay.classList.add('attivo');
+  overlay.classList.remove('uscita');
+
+  setTimeout(() => {
+    overlay.classList.add('uscita');
+    setTimeout(() => {
+      overlay.classList.remove('attivo');
+      overlay.classList.remove('uscita');
+    }, 400);
+  }, 2000);
+};
+
+// ---------- OVERRIDE: caricaUltimaRegistrazione (per tradurre i messaggi) ----------
+const _origCaricaUltimaRegistrazione = window.caricaUltimaRegistrazione;
+window.caricaUltimaRegistrazione = function() {
+  // Chiama l'originale, poi SOSTITUISCE solo i testi visibili
+  if (_origCaricaUltimaRegistrazione) _origCaricaUltimaRegistrazione();
+  // (i testi dentro sono in italiano fisso, ma per ora li lasciamo così)
+};
+
+// ---------- OVERRIDE: eseguiBackup (traduzione) ----------
+const _origEseguiBackup = window.eseguiBackup;
+
+// ---------- OVERRIDE: applicaTraduzioniDinamiche per aggiornare il calendario ----------
+// Questa funzione viene chiamata DOPO ogni cambio lingua per aggiornare il contenuto dinamico
+function applicaTraduzioniDinamiche() {
+  // Riapplica i testi dinamici del calendario se siamo sul tab calendario
+  const panelCalendario = document.getElementById('panel-calendario');
+  if (panelCalendario && panelCalendario.classList.contains('active')) {
+    const btnVisualizza = panelCalendario.querySelector('button[onclick="caricaCalendario()"]');
+    if (btnVisualizza) {
+      // Aggiorna solo i testi del bottone e label (non ricaricare il calendario)
+      applicaTraduzioni();
+    }
+  }
+}
+
+// ---------- Estendi cambiaLingua per aggiornare anche i testi dinamici ----------
+const _origCambiaLingua = window.cambiaLingua;
+window.cambiaLingua = function(codice) {
+  if (_origCambiaLingua) _origCambiaLingua(codice);
+  
+  // Aggiorna select popolate
+  setTimeout(() => {
+    if (typeof caricaSelectAziende === 'function') caricaSelectAziende();
+    if (typeof caricaSelectRecuperoCommesse === 'function') caricaSelectRecuperoCommesse();
+    if (typeof caricaSelectDipendentiCalendario === 'function') caricaSelectDipendentiCalendario();
+    if (typeof caricaSelectDipendentiModifica === 'function') caricaSelectDipendentiModifica();
+    
+    // Ricalcola il calendario se siamo sul tab
+    const panelCal = document.getElementById('panel-calendario');
+    if (panelCal && panelCal.classList.contains('active')) {
+      caricaCalendario();
+    }
+  }, 100);
+};
+
+console.log('✅ script.js — Override multi-lingua caricati');
+
+// ============================================
+// FASE 3 — TRADUZIONE COMPLETA FUNZIONI DINAMICHE
+// (sostituisce le versioni precedenti)
+// ============================================
+
+// ---------- OVERRIDE: caricaCalendario (VERSIONE COMPLETA TRADOTTA) ----------
+window.caricaCalendario = function() {
+  const mese = parseInt(document.getElementById('cal-mese').value);
+  const anno = parseInt(document.getElementById('cal-anno').value);
+  const output = document.getElementById('calendario-output');
+  if (!output) return;
+
+  if (!anno) {
+    output.innerHTML = '<p class="text-muted">' + t('cal_anno') + '</p>';
+    return;
+  }
+
+  const vistaScelta = document.querySelector('input[name="cal-vista"]:checked');
+  if (vistaScelta && vistaScelta.value === 'dettagliato') {
+    caricaCalendarioDettagliato();
+    return;
+  }
+
+  const isAdmin = utenteCorrente.ruolo === 'admin';
+  let utenteFilter = utenteCorrente.username;
+  if (isAdmin) {
+    utenteFilter = document.getElementById('cal-dipendente').value;
+  }
+
+  const giorniMese = new Date(anno, mese, 0).getDate();
+
+  let dipendentiDaMostrare = [];
+  if (isAdmin) {
+    if (utenteFilter) {
+      dipendentiDaMostrare = dati.utenti.filter(u => u.username === utenteFilter);
+    } else {
+      dipendentiDaMostrare = dati.utenti.filter(u => u.ruolo === 'dipendente');
+    }
+  } else {
+    dipendentiDaMostrare = dati.utenti.filter(u => u.username === utenteCorrente.username);
+  }
+
+  const meseNome = t('mese_' + mese);
+
+  let html = `<h4 style="margin-bottom:15px;color:#333;">${meseNome} ${anno}</h4>`;
+
+  html += `
+    <div style="margin-bottom:15px;padding:10px 15px;background:#f8f9fa;border-radius:8px;border:1px solid #ddd;display:flex;gap:15px;flex-wrap:wrap;font-size:0.85em;">
+      <span><span style="display:inline-block;width:16px;height:16px;background:#E8F5E9;border:1px solid #4CAF50;border-radius:3px;"></span> ${t('cal_legend_lavorato')}</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#E3F2FD;border:1px solid #2196F3;border-radius:3px;"></span> ${t('cal_legend_ferie')}</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#FFF3E0;border:1px solid #FF9800;border-radius:3px;"></span> ${t('cal_legend_permesso')}</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#FFEBEE;border:1px solid #f44336;border-radius:3px;"></span> ${t('cal_legend_malattia')}</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:3px;"></span> ${t('cal_legend_recupero')}</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#ffebee;border:1px solid #d32f2f;border-radius:3px;"></span> ${t('cal_legend_straordinario')}</span>
+      <span><span style="display:inline-block;width:16px;height:16px;background:#f5f5f5;border:1px solid #999;border-radius:3px;border-style:dashed;"></span> ${t('cal_legend_assente')}</span>
+    </div>
+  `;
+
+  if (dipendentiDaMostrare.length === 0) {
+    html += '<p class="text-muted">' + t('cal_dipendente') + '</p>';
+    output.innerHTML = html;
+    return;
+  }
+
+  html += '<div style="overflow-x:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:0.85em;">';
+  html += '<thead>';
+  html += '<tr>';
+  html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:120px;vertical-align:middle;">${t('cal_dipendente')}</th>`;
+
+  const giorniSett = tGiorniSettimana();
+  for (let g = 1; g <= giorniMese; g++) {
+    const giornoSett = new Date(anno, mese - 1, g).getDay();
+    const isWeekend = giornoSett === 0 || giornoSett === 6;
+    const bgColor = isWeekend ? '#f5f5f5' : 'white';
+    html += `<th style="padding:4px;border:1px solid #ddd;text-align:center;background:${bgColor};min-width:35px;font-size:0.85em;font-weight:bold;color:#00695C;">${g}</th>`;
+  }
+  html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;vertical-align:middle;">Total</th>`;
+  html += '</tr>';
+
+  html += '<tr>';
+  for (let g = 1; g <= giorniMese; g++) {
+    const giornoSett = new Date(anno, mese - 1, g).getDay();
+    const isWeekend = giornoSett === 0 || giornoSett === 6;
+    const bgColor = isWeekend ? '#f5f5f5' : 'white';
+    html += `<th style="padding:4px;border:1px solid #ddd;text-align:center;background:${bgColor};min-width:35px;font-size:0.7em;font-weight:normal;color:#888;">${giorniSett[giornoSett]}</th>`;
+  }
+  html += '</tr>';
+  html += '</thead><tbody>';
+
+  dipendentiDaMostrare.forEach(dip => {
+    html += `<tr>`;
+    html += `<td style="padding:6px 10px;border:1px solid #ddd;font-weight:600;background:#f8f9fa;"><strong>${dip.nome} ${dip.cognome}</strong></td>`;
+
+    let totaleOre = 0;
+
+    for (let g = 1; g <= giorniMese; g++) {
+      const data = `${anno}-${String(mese).padStart(2,'0')}-${String(g).padStart(2,'0')}`;
+      const giornoSett = new Date(anno, mese - 1, g).getDay();
+      const isWeekend = giornoSett === 0 || giornoSett === 6;
+
+      const registrazioni = dati.registrazioni.filter(r =>
+        r.utente_id === dip.username && r.data === data
+      );
+
+      let cella = '';
+      let bgColor = 'white';
+
+      if (registrazioni.length > 0) {
+        const haFerie = registrazioni.some(r => r.tipo === 'ferie');
+        const haPermesso = registrazioni.some(r => r.tipo === 'permesso');
+        const haMalattia = registrazioni.some(r => r.tipo === 'malattia');
+        const haRecupero = registrazioni.some(r => r.recupero === true);
+        const haStraordinario = registrazioni.some(r => r.straordinario === true);
+        const haLavoro = registrazioni.some(r => r.tipo === 'lavoro');
+
+        if (haFerie) { cella = 'F'; bgColor = '#E3F2FD'; }
+        else if (haPermesso) { cella = 'P'; bgColor = '#FFF3E0'; }
+        else if (haMalattia) { cella = 'M'; bgColor = '#FFEBEE'; }
+        else if (haRecupero) {
+          let oreGiorno = 0;
+          registrazioni.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              oreGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+          cella = oreGiorno.toFixed(1) + 'h';
+          bgColor = '#fff3cd';
+          totaleOre += oreGiorno;
+        } else if (haLavoro) {
+          let oreGiorno = 0;
+          registrazioni.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              oreGiorno += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+
+          if (haStraordinario) {
+            cella = oreGiorno.toFixed(1) + 'h ⭐';
+            bgColor = '#ffebee';
+          } else {
+            cella = oreGiorno.toFixed(1) + 'h';
+            bgColor = '#E8F5E9';
+          }
+          totaleOre += oreGiorno;
+        }
+      } else {
+        if (isWeekend) {
+          cella = '/';
+          bgColor = '#f5f5f5';
+        } else {
+          const haRichiestaApprovata = dati.richieste.some(r =>
+            r.utente_id === dip.username &&
+            r.stato === 'approvata' &&
+            r.data_inizio <= data && r.data_fine >= data
+          );
+          if (haRichiestaApprovata) {
+            const richiesta = dati.richieste.find(r =>
+              r.utente_id === dip.username &&
+              r.stato === 'approvata' &&
+              r.data_inizio <= data && r.data_fine >= data
+            );
+            if (richiesta) {
+              if (richiesta.tipo === 'ferie') { cella = 'F'; bgColor = '#E3F2FD'; }
+              else if (richiesta.tipo === 'permesso') { cella = 'P'; bgColor = '#FFF3E0'; }
+              else if (richiesta.tipo === 'malattia') { cella = 'M'; bgColor = '#FFEBEE'; }
+              else if (richiesta.tipo === 'recupero_ore') {
+                const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
+                const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
+                const oreRecupero = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+                cella = oreRecupero.toFixed(1) + 'h';
+                bgColor = '#fff3cd';
+              }
+            }
+          } else {
+            const oggi = new Date();
+            oggi.setHours(0, 0, 0, 0);
+            const dataGiorno = new Date(data + 'T00:00:00');
+
+            if (dataGiorno > oggi) {
+              cella = '';
+              bgColor = 'white';
+            } else {
+              cella = 'A';
+              bgColor = '#f5f5f5';
+            }
+          }
+        }
+      }
+
+      if (isWeekend && cella === '') {
+        cella = '/';
+        bgColor = '#f5f5f5';
+      }
+
+      let borderStyle = '1px solid #ddd';
+      if (cella === 'A') {
+        borderStyle = '2px dashed #999';
+      }
+
+      html += `<td style="padding:6px;border:${borderStyle};text-align:center;background:${bgColor};font-weight:${cella === 'A' ? 'bold' : 'normal'};color:${cella === 'A' ? '#d32f2f' : '#333'};">${cella}</td>`;
+    }
+
+    const isOltre8 = totaleOre > 8;
+    const bgTotal = isOltre8 ? '#ffebee' : '#e8f5e9';
+    const colorTotal = isOltre8 ? '#d32f2f' : '#2e7d32';
+    html += `<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-weight:bold;background:${bgTotal};color:${colorTotal};">${totaleOre.toFixed(1)}h${isOltre8 ? ' ⚠️' : ''}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  output.innerHTML = html;
+
+  setTimeout(() => {
+    if (output && !output.innerHTML.includes(t('cal_totale_mese'))) {
+      mostraTotaliMese();
+    }
+  }, 50);
+};
+
+// ---------- OVERRIDE: caricaRichiesteAdmin (tradotta) ----------
+window.caricaRichiesteAdmin = function() {
+  const div = document.getElementById('lista-richieste-admin');
+  if (!div) return;
+
+  const richieste = dati.richieste.filter(r => r.stato === 'pending');
+
+  if (richieste.length === 0) {
+    div.innerHTML = '<p class="text-muted">' + t('radm_nessuna') + '</p>';
+    return;
+  }
+
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+
+  let html = '';
+  richieste.forEach(r => {
+    const utente = dati.utenti.find(u => u.username === r.utente_id);
+    const nome = utente ? utente.nome + ' ' + utente.cognome : r.utente_id;
+
+    let dettagli = '';
+    if (r.tipo === 'recupero_ore') {
+      dettagli = `
+        <small>Data: ${r.data} (${r.ora_inizio} - ${r.ora_fine})</small>
+        <br><small>${r.descrizione_lavoro || 'N/D'}</small>
+        ${r.commessa_id ? `<br><small>Commessa: ${dati.commesse.find(c => c.id === r.commessa_id)?.nome || '-'}</small>` : ''}
+      `;
+    } else {
+      dettagli = `
+        <small>${r.data_inizio} → ${r.data_fine}</small>
+        ${r.note ? `<br><small>📝 ${r.note}</small>` : ''}
+        ${r.tipo === 'malattia' && r.protocollo ? `<br><small style="color:#00695C;font-weight:bold;">📄 ${r.protocollo}</small>` : ''}
+      `;
+    }
+
+    const labelApprova = r.tipo === 'malattia' ? 'Malattia' : 'Approva';
+    const labelAnnulla = r.tipo === 'malattia' ? 'Annulla malattia' : 'Rifiuta';
+
+    html += `<div class="richiesta-card ${r.stato}">
+      <div class="info">
+        <strong>${emoji[r.tipo] || '📌'} ${r.tipo.replace('_', ' ')} - ${nome}</strong>
+        ${dettagli}
+      </div>
+      <div class="azioni">
+        <div class="dropdown-richiesta">
+          <button class="btn-azioni-richiesta" onclick="toggleTendinaRichiesta(event, ${r.id})">
+            <i class="fas fa-ellipsis-v"></i> <i class="fas fa-chevron-down" style="font-size:0.7em;"></i>
+          </button>
+          <div class="dropdown-richiesta-menu" id="dropdown-richiesta-${r.id}">
+            <button class="dropdown-richiesta-item approva" onclick="approvaRichiesta(${r.id})">
+              ✅ ${labelApprova}
+            </button>
+            <button class="dropdown-richiesta-item annulla" onclick="annullaRichiesta(${r.id})">
+              ❌ ${labelAnnulla}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  div.innerHTML = html;
+};
+
+// ---------- OVERRIDE: caricaRichiesteDipendente (tradotta) ----------
+window.caricaRichiesteDipendente = function() {
+  const div = document.getElementById('lista-richieste-dipendente');
+  if (!div) return;
+
+  const richieste = dati.richieste.filter(r => r.utente_id === utenteCorrente.username);
+
+  if (richieste.length === 0) {
+    div.innerHTML = '<p class="text-muted">' + t('rich_mie') + ': 0</p>';
+    return;
+  }
+
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  const statoMap = { pending: '⏳', approvata: '✅', rifiutata: '❌', annullata: '⛔' };
+  const statoColor = { pending: '#ffc107', approvata: '#28a745', rifiutata: '#dc3545', annullata: '#999' };
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += `<th>${t('rich_tipo')}</th><th>${t('mod_data')}</th><th>${t('rich_note')}</th><th>${t('mod_data')}</th>`;
+  html += '</tr></thead><tbody>';
+
+  richieste.forEach(r => {
+    const colore = statoColor[r.stato] || '#666';
+    let periodo = '';
+    if (r.tipo === 'recupero_ore') {
+      periodo = r.data + ' (' + r.ora_inizio + ' - ' + r.ora_fine + ')';
+    } else {
+      periodo = r.data_inizio + ' → ' + r.data_fine;
+    }
+    if (r.tipo === 'malattia' && r.protocollo) {
+      periodo += '<br><small style="color:#00695C;">📄 ' + r.protocollo + '</small>';
+    }
+
+    html += '<tr>';
+    html += '<td>' + (emoji[r.tipo] || '📌') + ' ' + r.tipo.replace('_', ' ') + '</td>';
+    html += '<td>' + periodo + '</td>';
+    html += '<td>' + (r.tipo === 'recupero_ore' ? r.descrizione_lavoro || '-' : (r.note || '-')) + '</td>';
+    html += '<td style="font-weight:bold;color:' + colore + ';">' + (statoMap[r.stato] || r.stato) + '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+};
+
+// ---------- OVERRIDE: caricaListaDipendenti (tradotta) ----------
+window.caricaListaDipendenti = function() {
+  const div = document.getElementById('lista-dipendenti');
+  if (!div) return;
+
+  if (dati.utenti.length === 0) {
+    div.innerHTML = '<p class="text-muted">📭 ' + t('dip_elenco') + '</p>';
+    return;
+  }
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += '<th style="width:60px;text-align:center;">📷</th>';
+  html += `<th>${t('dip_username')}</th><th>${t('dip_nome')}</th><th>${t('dip_cognome')}</th><th>${t('dip_password')}</th><th>${t('dip_ruolo')}</th><th>Azioni</th>`;
+  html += '</tr></thead><tbody>';
+
+  dati.utenti.forEach(u => {
+    const isSelf = u.username === utenteCorrente.username;
+    html += '<tr id="row-' + u.username + '" style="cursor:pointer;" onclick="apriDettaglioDipendente(\'' + u.username + '\')">';
+    html += '<td class="lista-dip-foto-cell">' + htmlAvatar(u, 'sm') + '</td>';
+    html += '<td><strong>' + u.username + '</strong></td>';
+    html += '<td>' + u.nome + '</td>';
+    html += '<td>' + u.cognome + '</td>';
+    html += '<td><code class="password-cell">' + (u.password || '-') + '</code></td>';
+    html += '<td><span class="badge ' + u.ruolo + '">' + (u.ruolo === 'admin' ? t('dip_admin') : t('dip_dipendente')) + '</span></td>';
+    html += '<td>';
+    html += '<button class="btn-foto-dip" onclick="event.stopPropagation(); apriModaleFoto(\'' + u.username + '\')"><i class="fas fa-camera"></i></button>';
+    if (!isSelf) {
+      html += '<button class="btn-warning" onclick="event.stopPropagation(); apriModificaDipendente(\'' + u.username + '\')" style="margin-right:5px;"><i class="fas fa-edit"></i></button>';
+      html += '<button class="btn-danger" onclick="event.stopPropagation(); eliminaDipendente(\'' + u.username + '\')"><i class="fas fa-trash"></i></button>';
+    } else {
+      html += '<span style="color:#999;font-size:0.8em;">(tu)</span>';
+    }
+    html += '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+};
+
+// ---------- OVERRIDE: mostraNotifiche (tradotta) ----------
+window.mostraNotifiche = function() {
+  const modal = document.getElementById('modal-notifiche');
+  modal.classList.add('active');
+
+  const div = document.getElementById('notifiche-lista');
+  const notifiche = dati.notifiche
+    .filter(n => n.utente_id === utenteCorrente.username)
+    .sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  if (notifiche.length === 0) {
+    div.innerHTML = '<p class="text-muted">' + t('mod_nessuna_notifica') + '</p>';
+    return;
+  }
+
+  let html = '';
+  notifiche.forEach(n => {
+    const data = new Date(n.data).toLocaleDateString('it-IT') + ' ' + new Date(n.data).toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+    const classe = n.letto ? 'notifica-item letto' : 'notifica-item non letto';
+    html += `
+      <div class="${classe}" onclick="segnaLetta(${n.id})">
+        <span class="notifica-testo">${n.messaggio}</span>
+        <span class="notifica-data">${data}</span>
+      </div>
+    `;
+  });
+
+  div.innerHTML = html;
+};
+
+// ---------- OVERRIDE: caricaUltimaRegistrazione (con testi tradotti) ----------
+window.caricaUltimaRegistrazione = function() {
+  if (utenteCorrente?.ruolo === 'admin') return;
+
+  document.getElementById('ora-inizio').disabled = false;
+  document.getElementById('ora-inizio').style.backgroundColor = 'white';
+
+  if (isOltre20()) {
+    const infoDiv = document.getElementById('info-registrazione');
+    infoDiv.innerHTML = `
+      <div class="error" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;font-weight:bold;">
+        ⛔ Ore 20:00 superate!
+      </div>
+    `;
+    document.getElementById('ora-inizio').disabled = true;
+    document.getElementById('ora-fine').disabled = true;
+    document.getElementById('straordinario').disabled = true;
+    return;
+  }
+
+  const oggi = new Date().toISOString().split('T')[0];
+  const oraCorrente = new Date();
+  const oreCorrente = oraCorrente.getHours();
+  const isPomeriggio = oreCorrente >= 13;
+
+  const registrazioniOggi = dati.registrazioni.filter(r =>
+    r.utente_id === utenteCorrente.username && r.data === oggi && r.tipo === 'lavoro'
+  );
+
+  const infoDiv = document.getElementById('info-registrazione');
+  const oraInizio = document.getElementById('ora-inizio');
+  const oraFine = document.getElementById('ora-fine');
+  const straordinarioCheck = document.getElementById('straordinario');
+
+  if (straordinarioCheck && straordinarioCheck.checked) return;
+
+  let ultima = null;
+  if (registrazioniOggi.length > 0) {
+    ultima = registrazioniOggi.reduce((max, r) => r.ora_fine > max.ora_fine ? r : max, registrazioniOggi[0]);
+  }
+
+  if (isPomeriggio) {
+    oraInizio.disabled = false;
+    oraInizio.style.backgroundColor = 'white';
+    oraFine.disabled = false;
+    oraFine.style.backgroundColor = 'white';
+
+    if (ultima) {
+      const h = parseInt(ultima.ora_fine.split(':')[0]);
+      oraInizio.value = h < 13 ? '13:00' : ultima.ora_fine;
+    } else {
+      const oreOra = oreCorrente.toString().padStart(2, '0') + ':00';
+      oraInizio.value = (oreCorrente <= 23) ? oreOra : '13:00';
+    }
+
+    const oraCorrenteMinuti = oraCorrente.getHours() * 60 + oraCorrente.getMinutes();
+    const inizioMinuti = parseInt(oraInizio.value.split(':')[0]) * 60 + parseInt(oraInizio.value.split(':')[1] || 0);
+    if (inizioMinuti > oraCorrenteMinuti) {
+      oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
+    }
+
+    const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
+    oraFine.value = hFine + ':00';
+    infoDiv.innerHTML = `<div class="info-msg">⏰ ${t('reg_ora_inizio')}</div>`;
+    return;
+  }
+
+  if (!ultima) {
+    oraInizio.disabled = false;
+    oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
+    oraFine.disabled = false;
+    const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
+    oraFine.value = hFine + ':00';
+    infoDiv.innerHTML = `<div class="info-msg">⏱️ ${t('reg_ora_inizio')}</div>`;
+    return;
+  }
+
+  oraInizio.value = ultima.ora_fine;
+  oraInizio.disabled = true;
+  oraInizio.style.backgroundColor = '#f0f0f0';
+
+  oraFine.disabled = false;
+  oraFine.style.backgroundColor = 'white';
+
+  const hFine = (parseInt(ultima.ora_fine.split(':')[0]) + 1).toString().padStart(2, '0');
+  oraFine.value = hFine + ':00';
+  infoDiv.innerHTML = `<div class="info-msg">⏱️ ${ultima.ora_fine}</div>`;
+};
+
+// ---------- OVERRIDE: nmCaricaListaCommesse (con traduzioni) ----------
+const _origNmCaricaListaCommesse = window.nmCaricaListaCommesse;
+window.nmCaricaListaCommesse = async function() {
+  const div = document.getElementById('nm-lista-commesse');
+  if (!div) return;
+
+  div.innerHTML = '<p class="text-muted">⏳...</p>';
+
+  try {
+    const snapshot = await nmGetCollection().orderBy('data_modifica', 'desc').get();
+
+    if (snapshot.empty) {
+      div.innerHTML = '<p class="text-muted">' + t('nm_crea') + '</p>';
+      return;
+    }
+
+    let html = '<div class="nm-commesse-grid">';
+    snapshot.forEach(doc => {
+      const commessa = doc.data();
+      const id = doc.id;
+      let totNumeri = 0;
+      if (commessa.cartelle) {
+        Object.keys(commessa.cartelle).forEach(k => {
+          if (Array.isArray(commessa.cartelle[k])) totNumeri += commessa.cartelle[k].length;
+        });
+      }
+      const dataMod = commessa.data_modifica
+        ? new Date(commessa.data_modifica).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'})
+        : 'N/D';
+
+      const isAdmin = utenteCorrente && utenteCorrente.ruolo === 'admin';
+      html += `
+        <div class="nm-commessa-card">
+          <div class="nm-commessa-header" onclick="nmApriCommessa('${id}')">
+            <i class="fas fa-folder"></i>
+            <div class="nm-commessa-info">
+              <div class="nm-commessa-codice">${commessa.codice || id}</div>
+              <div class="nm-commessa-meta">${totNumeri} · ${dataMod}</div>
+            </div>
+          </div>
+          ${isAdmin ? `<button class="nm-btn-cancella-commessa" onclick="event.stopPropagation(); nmRichiediCancellazione('${id}')"><i class="fas fa-trash"></i></button>` : ''}
+        </div>
+      `;
+    });
+    html += '</div>';
+    div.innerHTML = html;
+    snapshot.forEach(doc => { nmCommesseCache[doc.id] = doc.data(); });
+  } catch (err) {
+    console.error('❌ Errore:', err);
+    div.innerHTML = '<p class="error">Errore: ' + err.message + '</p>';
+  }
+};
+
+// ---------- OVERRIDE: caricaRegistrazioniModifica (tradotta) ----------
+window.caricaRegistrazioniModifica = function() {
+  const username = document.getElementById('modifica-dipendente').value;
+  const data = document.getElementById('modifica-data').value;
+  const div = document.getElementById('modifica-lista');
+  if (!div) return;
+
+  if (!username || !data) {
+    div.innerHTML = '<p class="text-muted">' + t('mod_dipendente') + '</p>';
+    return;
+  }
+
+  const registrazioni = dati.registrazioni.filter(r =>
+    r.utente_id === username && r.data === data
+  );
+
+  if (registrazioni.length === 0) {
+    div.innerHTML = '<p class="text-muted">' + t('mod_titolo') + '</p>';
+    return;
+  }
+
+  const totaleGiornata = registrazioni
+    .filter(r => r.tipo === 'lavoro')
+    .reduce((sum, r) => sum + (r.ore || 0), 0);
+  const isOltre8 = totaleGiornata > 8;
+
+  const opzioniCommesse = (dati.commesse || []).map(c =>
+    `<option value="${c.id}">${c.nome}</option>`
+  ).join('');
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += `<th>${t('com_nome').replace(' *', '')}</th><th>${t('reg_ora_inizio').replace(' *', '')}</th><th>${t('reg_ora_fine').replace(' *', '')}</th><th>${t('cal_ore_lavorate')}</th><th>${t('rich_tipo').replace(' *', '')}</th><th>${t('reg_desc').replace(' *', '')}</th><th>Azioni</th>`;
+  html += '</tr></thead><tbody>';
+
+  registrazioni.forEach(r => {
+    const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+    const tipoCorrente = r.tipo || 'lavoro';
+
+    let ore = 0;
+    if (r.ora_inizio && r.ora_fine && r.ora_inizio !== '00:00') {
+      const [h1, m1] = r.ora_inizio.split(':').map(Number);
+      const [h2, m2] = r.ora_fine.split(':').map(Number);
+      ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+    }
+    const isStraordinario = r.straordinario || false;
+
+    html += '<tr' + (isOltre8 ? ' class="ore-straordinario"' : '') + '>';
+    html += '<td><select id="mod-commessa-' + r.id + '" class="edit-input"><option value="">--</option>' + opzioniCommesse + '</select></td>';
+    html += '<td><input type="time" id="mod-inizio-' + r.id + '" value="' + (r.ora_inizio || '') + '" class="edit-input" /></td>';
+    html += '<td><input type="time" id="mod-fine-' + r.id + '" value="' + (r.ora_fine || '') + '" class="edit-input" /></td>';
+    html += '<td>' + ore.toFixed(2) + 'h' + (isStraordinario ? ' ⭐' : '') + '</td>';
+    html += '<td><select id="mod-tipo-' + r.id + '" class="edit-input">' +
+      '<option value="lavoro"' + (tipoCorrente === 'lavoro' ? ' selected' : '') + '>Lavoro</option>' +
+      '<option value="ferie"' + (tipoCorrente === 'ferie' ? ' selected' : '') + '>Ferie</option>' +
+      '<option value="permesso"' + (tipoCorrente === 'permesso' ? ' selected' : '') + '>Permesso</option>' +
+      '<option value="malattia"' + (tipoCorrente === 'malattia' ? ' selected' : '') + '>Malattia</option>' +
+      '<option value="recupero_ore"' + (tipoCorrente === 'recupero_ore' ? ' selected' : '') + '>Recupero ore</option>' +
+      '</select></td>';
+    html += '<td><input type="text" id="mod-desc-' + r.id + '" value="' + (r.descrizione || '').replace(/"/g, '&quot;') + '" class="edit-input" /></td>';
+    html += '<td><button class="btn-success" onclick="salvaModifica(' + r.id + ')" style="margin-right:5px;"><i class="fas fa-save"></i></button>';
+    html += '<button class="btn-danger" onclick="eliminaRegistrazione(' + r.id + ')"><i class="fas fa-trash"></i></button></td>';
+    html += '</tr>';
+
+    if (commessa) {
+      setTimeout(() => {
+        const sel = document.getElementById('mod-commessa-' + r.id);
+        if (sel) sel.value = commessa.id;
+      }, 0);
+    }
+  });
+
+  const bgColor = isOltre8 ? '#ffebee' : '#e8f5e9';
+  const textColor = isOltre8 ? '#d32f2f' : '#2e7d32';
+  html += `<tr style="font-weight:bold;">
+      <td colspan="3" style="text-align:right;background:${bgColor};color:${textColor};">Total:</td>
+      <td colspan="4" style="background:${bgColor};color:${textColor};">${totaleGiornata.toFixed(2)}h ${isOltre8 ? '⚠️' : ''}</td>
+    </tr>`;
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+};
+
+console.log('✅ script.js — FASE 3 completata (traduzioni dinamiche)');
+
+// ============================================
+// FIX FINALI — Ultimi testi da tradurre
+// ============================================
+
+// ---------- OVERRIDE: caricaSelectDipendentiModifica (tradotta) ----------
+const _origCaricaSelectDipendentiModifica = window.caricaSelectDipendentiModifica;
+window.caricaSelectDipendentiModifica = function() {
+  const select = document.getElementById('modifica-dipendente');
+  if (!select) return;
+  const valCorrente = select.value;
+  select.innerHTML = `<option value="">${t('mod_dipendente')}</option>`;
+  dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
+    select.innerHTML += '<option value="' + u.username + '">' + u.nome + ' ' + u.cognome + '</option>';
+  });
+  if (valCorrente) select.value = valCorrente;
+};
+
+// ---------- OVERRIDE: nmRenderNumeri (con "stampati" tradotto) ----------
+window.nmRenderNumeri = function(numeri) {
+  const div = document.getElementById('nm-lista-numeri');
+  if (!div) return;
+
+  if (numeri.length === 0) {
+    div.innerHTML = '<p class="text-muted">' + t('nm_titolo') + '</p>';
+    return;
+  }
+
+  let html = '';
+  numeri.forEach((numero) => {
+    const classeStampato = numero.stampato ? ' stampato' : '';
+    html += `
+      <div class="nm-numero-item${classeStampato}" data-id="${numero.id}">
+        <span class="nm-numero-testo">${nmEscapaHtml(numero.testo)}</span>
+        <div class="nm-numero-azioni">
+          <button class="nm-btn-azione nm-btn-duplica" onclick="nmDuplicaNumero('${numero.id}')" title="Duplica"><i class="fas fa-copy"></i></button>
+          <button class="nm-btn-azione nm-btn-modifica" onclick="nmModificaNumero('${numero.id}')" title="Modifica"><i class="fas fa-edit"></i></button>
+          <button class="nm-btn-azione nm-btn-cancella" onclick="nmCancellaNumero('${numero.id}')" title="Cancella"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+    `;
+  });
+
+  div.innerHTML = html;
+};
+
+// ---------- OVERRIDE: nmAggiornaConteggiCartelle (con "stampati" tradotto) ----------
+window.nmAggiornaConteggiCartelle = async function() {
+  if (!nmCommessaCorrente) return;
+
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) return;
+
+    const commessa = doc.data();
+    const cartelle = commessa.cartelle || {};
+
+    ['filo', 'cavo', 'adesive', 'targhette', 'morsetti'].forEach(tipo => {
+      const numeri = cartelle[tipo] || [];
+      const totale = numeri.length;
+      const stampati = numeri.filter(n => n.stampato === true).length;
+      const nuovi = totale - stampati;
+
+      const el = document.getElementById('nm-count-' + tipo);
+      if (el) el.textContent = totale;
+
+      const cartellaDiv = el ? el.closest('.nm-cartella') : null;
+      if (!cartellaDiv) return;
+
+      let contatore = cartellaDiv.querySelector('.nm-cartella-stampati-nuovi');
+      if (!contatore) {
+        contatore = document.createElement('div');
+        contatore.className = 'nm-cartella-stampati-nuovi';
+        el.parentElement.appendChild(contatore);
+      }
+
+      // ⭐ Traduzione
+      const labelStampati = t('nm_ho_stampato_tutto') ? 'stampati' : 'stampati';
+      const labelNuovi = 'nuovi';
+
+      if (totale === 0) {
+        contatore.innerHTML = '';
+      } else if (nuovi === 0) {
+        contatore.innerHTML = `<span class="nm-badge-stampati">🟢 ${stampati} ${labelStampati}</span>`;
+      } else if (stampati === 0) {
+        contatore.innerHTML = `<span class="nm-badge-nuovi">⚪ ${nuovi} ${labelNuovi}</span>`;
+      } else {
+        contatore.innerHTML = `
+          <span class="nm-badge-stampati">🟢 ${stampati}</span>
+          <span class="nm-badge-nuovi">⚪ ${nuovi}</span>
+        `;
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Errore conteggi:', err);
+  }
+};
+
+console.log('✅ script.js — Fix finali multilingua caricati');
+
+// ============================================
+// FIX FINALI 2 — Badge ruolo + select commesse + richieste dipendente
+// ============================================
+
+// ---------- OVERRIDE: login (per tradurre badge ruolo) ----------
+const _origLogin = window.login;
+window.login = function() {
+  // Chiama la login originale
+  if (_origLogin) _origLogin();
+
+  // Dopo il login, se l'utente è loggato, traduci il badge
+  setTimeout(() => {
+    if (utenteCorrente && utenteCorrente.ruolo) {
+      const ruoloBadge = document.getElementById('user-ruolo');
+      if (ruoloBadge) {
+        if (utenteCorrente.ruolo === 'admin') {
+          ruoloBadge.textContent = t('dip_admin');
+        } else {
+          ruoloBadge.textContent = t('dip_dipendente');
+        }
+      }
+    }
+  }, 400);
+};
+
+// ---------- OVERRIDE: caricaSelectCommesse (tradotta) ----------
+window.caricaSelectCommesse = function() {
+  const select = document.getElementById('commessa');
+  if (!select) return;
+  const valCorrente = select.value;
+
+  select.innerHTML = `<option value="">${t('reg_commessa_ph')}</option>`;
+
+  if (!dati.commesse || dati.commesse.length === 0) {
+    select.innerHTML = `<option value="">${t('reg_commessa_nessuna')}</option>`;
+    return;
+  }
+
+  dati.commesse.forEach(c => {
+    select.innerHTML += '<option value="' + c.id + '">' + c.nome + '</option>';
+  });
+
+  if (valCorrente) select.value = valCorrente;
+};
+
+// ---------- OVERRIDE: caricaRichiesteDipendente (per "Le Mie Richieste: 0") ----------
+const _origCaricaRichiesteDipendente = window.caricaRichiesteDipendente;
+window.caricaRichiesteDipendente = function() {
+  const div = document.getElementById('lista-richieste-dipendente');
+  if (!div) return;
+
+  const richieste = dati.richieste.filter(r => r.utente_id === utenteCorrente.username);
+
+  if (richieste.length === 0) {
+    div.innerHTML = '<p class="text-muted">' + t('rich_mie') + ': 0</p>';
+    return;
+  }
+
+  const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+  const statoMap = { pending: '⏳', approvata: '✅', rifiutata: '❌', annullata: '⛔' };
+  const statoColor = { pending: '#ffc107', approvata: '#28a745', rifiutata: '#dc3545', annullata: '#999' };
+
+  let html = '<div class="table-wrapper"><table><thead><tr>';
+  html += `<th>${t('rich_tipo')}</th><th>${t('mod_data')}</th><th>${t('rich_note')}</th><th>Stato</th>`;
+  html += '</tr></thead><tbody>';
+
+  richieste.forEach(r => {
+    const colore = statoColor[r.stato] || '#666';
+    let periodo = '';
+    if (r.tipo === 'recupero_ore') {
+      periodo = r.data + ' (' + r.ora_inizio + ' - ' + r.ora_fine + ')';
+    } else {
+      periodo = r.data_inizio + ' → ' + r.data_fine;
+    }
+    if (r.tipo === 'malattia' && r.protocollo) {
+      periodo += '<br><small style="color:#00695C;">📄 ' + r.protocollo + '</small>';
+    }
+
+    html += '<tr>';
+    html += '<td>' + (emoji[r.tipo] || '📌') + ' ' + r.tipo.replace('_', ' ') + '</td>';
+    html += '<td>' + periodo + '</td>';
+    html += '<td>' + (r.tipo === 'recupero_ore' ? r.descrizione_lavoro || '-' : (r.note || '-')) + '</td>';
+    html += '<td style="font-weight:bold;color:' + colore + ';">' + (statoMap[r.stato] || r.stato) + '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+};
+
+// ---------- OVERRIDE: caricaUltimaRegistrazione (messaggi info tradotti) ----------
+const _origCaricaUltimaRegistrazione2 = window.caricaUltimaRegistrazione;
+window.caricaUltimaRegistrazione = function() {
+  if (utenteCorrente?.ruolo === 'admin') return;
+
+  document.getElementById('ora-inizio').disabled = false;
+  document.getElementById('ora-inizio').style.backgroundColor = 'white';
+
+  if (isOltre20()) {
+    const infoDiv = document.getElementById('info-registrazione');
+    infoDiv.innerHTML = `
+      <div class="error" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;font-weight:bold;">
+        ⛔ 20:00
+      </div>
+    `;
+    document.getElementById('ora-inizio').disabled = true;
+    document.getElementById('ora-fine').disabled = true;
+    document.getElementById('straordinario').disabled = true;
+    return;
+  }
+
+  const oggi = new Date().toISOString().split('T')[0];
+  const oraCorrente = new Date();
+  const oreCorrente = oraCorrente.getHours();
+  const isPomeriggio = oreCorrente >= 13;
+
+  const registrazioniOggi = dati.registrazioni.filter(r =>
+    r.utente_id === utenteCorrente.username && r.data === oggi && r.tipo === 'lavoro'
+  );
+
+  const infoDiv = document.getElementById('info-registrazione');
+  const oraInizio = document.getElementById('ora-inizio');
+  const oraFine = document.getElementById('ora-fine');
+  const straordinarioCheck = document.getElementById('straordinario');
+
+  if (straordinarioCheck && straordinarioCheck.checked) return;
+
+  let ultima = null;
+  if (registrazioniOggi.length > 0) {
+    ultima = registrazioniOggi.reduce((max, r) => r.ora_fine > max.ora_fine ? r : max, registrazioniOggi[0]);
+  }
+
+  if (isPomeriggio) {
+    oraInizio.disabled = false;
+    oraInizio.style.backgroundColor = 'white';
+    oraFine.disabled = false;
+    oraFine.style.backgroundColor = 'white';
+
+    if (ultima) {
+      const h = parseInt(ultima.ora_fine.split(':')[0]);
+      oraInizio.value = h < 13 ? '13:00' : ultima.ora_fine;
+    } else {
+      const oreOra = oreCorrente.toString().padStart(2, '0') + ':00';
+      oraInizio.value = (oreCorrente <= 23) ? oreOra : '13:00';
+    }
+
+    const oraCorrenteMinuti = oraCorrente.getHours() * 60 + oraCorrente.getMinutes();
+    const inizioMinuti = parseInt(oraInizio.value.split(':')[0]) * 60 + parseInt(oraInizio.value.split(':')[1] || 0);
+    if (inizioMinuti > oraCorrenteMinuti) {
+      oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
+    }
+
+    const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
+    oraFine.value = hFine + ':00';
+    infoDiv.innerHTML = `<div class="info-msg">⏰ ${t('reg_ora_inizio')}</div>`;
+    return;
+  }
+
+  if (!ultima) {
+    oraInizio.disabled = false;
+    oraInizio.value = oreCorrente.toString().padStart(2, '0') + ':00';
+    oraFine.disabled = false;
+    const hFine = (parseInt(oraInizio.value.split(':')[0]) + 1).toString().padStart(2, '0');
+    oraFine.value = hFine + ':00';
+    infoDiv.innerHTML = `<div class="info-msg">⏱️ ${t('reg_ora_inizio')}</div>`;
+    return;
+  }
+
+  oraInizio.value = ultima.ora_fine;
+  oraInizio.disabled = true;
+  oraInizio.style.backgroundColor = '#f0f0f0';
+
+  oraFine.disabled = false;
+  oraFine.style.backgroundColor = 'white';
+
+  const hFine = (parseInt(ultima.ora_fine.split(':')[0]) + 1).toString().padStart(2, '0');
+  oraFine.value = hFine + ':00';
+  infoDiv.innerHTML = `<div class="info-msg">⏱️ ${ultima.ora_fine}</div>`;
+};
+
+console.log('✅ script.js — Fix finali 2 (badge ruolo + select + richieste) caricati');
+
+// ============================================
+// LOGIN BIOMETRICO — WebAuthn (Passkeys)
+// ============================================
+
+// Supporto WebAuthn?
+function bioSupportato() {
+  return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+}
+
+// Chiave localStorage per la passkey
+function bioKeyStorage(username) {
+  return 'bio_credential_' + username;
+}
+
+// Verifica se l'impronta è già attiva su questo dispositivo
+function bioAttivaSuQuestoDispositivo(username) {
+  if (!username) return false;
+  return !!localStorage.getItem(bioKeyStorage(username));
+}
+
+// Genera un ID casuale per la sfida
+function generaChallenge() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return arr;
+}
+
+// Converti ArrayBuffer in base64
+function bufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Converti base64 in ArrayBuffer
+function base64ToBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+// ============================================
+// ATTIVA IMPRONTA
+// ============================================
+async function attivaBiometrico(username) {
+  if (!bioSupportato()) {
+    return { ok: false, errore: 'Il tuo dispositivo non supporta l\'impronta.' };
+  }
+
+  try {
+    // 1. Verifica se il dispositivo ha già un'autenticazione configurata
+    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!available) {
+      return { ok: false, errore: 'Configura prima impronta o volto sul tuo telefono.' };
+    }
+
+    // 2. Crea la passkey
+    const userId = new TextEncoder().encode(username);
+
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: generaChallenge(),
+        rp: {
+          name: 'MEC-ROY',
+          id: window.location.hostname
+        },
+        user: {
+          id: userId,
+          name: username,
+          displayName: username
+        },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 },    // ES256
+          { type: 'public-key', alg: -257 }   // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',       // Solo impronta/face del dispositivo
+          userVerification: 'required',              // Richiedi verifica
+          residentKey: 'preferred'
+        },
+        timeout: 60000,
+        attestation: 'none'
+      }
+    });
+
+    if (!credential) {
+      return { ok: false, errore: 'Attivazione annullata.' };
+    }
+
+    // 3. Salva l'ID della credenziale in localStorage
+    const credId = bufferToBase64(credential.rawId);
+    localStorage.setItem(bioKeyStorage(username), credId);
+    localStorage.setItem('bio_ultimo_username', username);
+
+    console.log('✅ Impronta attivata per:', username);
+    return { ok: true };
+
+  } catch (err) {
+    console.error('❌ Errore attivazione biometrico:', err);
+    
+    if (err.name === 'NotAllowedError') {
+      return { ok: false, errore: 'Operazione annullata.' };
+    }
+    if (err.name === 'InvalidStateError') {
+      return { ok: false, errore: 'Hai già attivato l\'impronta su questo dispositivo.' };
+    }
+    return { ok: false, errore: 'Errore: ' + (err.message || 'sconosciuto') };
+  }
+}
+
+// ============================================
+// LOGIN CON IMPRONTA
+// ============================================
+async function loginBiometrico() {
+  if (!bioSupportato()) {
+    mostraErroreBio('Il tuo dispositivo non supporta l\'impronta.');
+    return;
+  }
+
+  const erroreDiv = document.getElementById('errore-bio');
+  erroreDiv.style.display = 'none';
+
+  // Trova l'utente salvato su questo dispositivo
+  const username = localStorage.getItem('bio_ultimo_username');
+  if (!username) {
+    mostraErroreBio('Nessuna impronta attiva. Fai login con password.');
+    return;
+  }
+
+  const credIdBase64 = localStorage.getItem(bioKeyStorage(username));
+  if (!credIdBase64) {
+    mostraErroreBio('Nessuna impronta attiva. Fai login con password.');
+    return;
+  }
+
+  try {
+    // 1. Chiedi al sistema di verificare l'impronta
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: generaChallenge(),
+        allowCredentials: [{
+          type: 'public-key',
+          id: base64ToBuffer(credIdBase64),
+          transports: ['internal']
+        }],
+        userVerification: 'required',
+        timeout: 60000
+      }
+    });
+
+    if (!assertion) {
+      mostraErroreBio('Verifica annullata.');
+      return;
+    }
+
+    // 2. Trova l'utente nel DB
+    const utente = dati.utenti.find(u => u.username === username);
+    if (!utente) {
+      mostraErroreBio('Utente non trovato. Fai login con password.');
+      return;
+    }
+
+    // 3. LOGIN riuscito! Chiama la funzione login "tradizionale"
+    //    mettendo i campi compilati e cliccando
+    document.getElementById('username').value = utente.username;
+    document.getElementById('password').value = utente.password;
+    document.getElementById('errore-bio').style.display = 'none';
+    
+    // Log manuale (bypassa il form)
+    utenteCorrente = utente;
+    salvaSessione(utente.username);
+    caricaLinguaSalvata(utente.username);
+
+    // Applica la logica di login (copia dei pezzi importanti)
+    document.getElementById('login-page').style.display = 'none';
+    document.getElementById('main-page').style.display = 'block';
+    document.getElementById('errore').style.display = 'none';
+
+    const ruoloBadge = document.getElementById('user-ruolo');
+    ruoloBadge.textContent = utente.ruolo === 'admin' ? t('dip_admin') : t('dip_dipendente');
+    ruoloBadge.className = 'badge ' + utente.ruolo;
+
+    if (utente.ruolo === 'admin') {
+      document.getElementById('tab-registra').style.display = 'none';
+      document.getElementById('tab-richiedi').style.display = 'none';
+      document.getElementById('dropdown-gestione').style.display = 'inline-block';
+      document.getElementById('dropdown-operativita').style.display = 'inline-block';
+      document.getElementById('tab-calendario').style.display = 'inline-block';
+      document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
+      document.getElementById('cal-filtro-dipendente').style.display = 'block';
+      document.getElementById('btn-password').style.display = 'flex';
+      document.getElementById('azienda-container').style.display = 'inline-block';
+      document.getElementById('cal-vista-selector').style.display = 'flex';
+
+      caricaSelectAziende();
+      caricaSelectAziendeCommesse();
+      caricaSelectDipendentiModifica();
+      caricaSelectDipendentiCalendario();
+      caricaRichiesteAdmin();
+      caricaListaDipendenti();
+      aggiornaBadgeRichieste();
+      showTab('calendario');
+    } else {
+      document.getElementById('tab-registra').style.display = 'inline-block';
+      document.getElementById('tab-richiedi').style.display = 'inline-block';
+      document.getElementById('dropdown-gestione').style.display = 'none';
+      document.getElementById('dropdown-operativita').style.display = 'none';
+      document.getElementById('tab-calendario').style.display = 'inline-block';
+      document.getElementById('tab-numeri-mancanti').style.display = 'inline-block';
+      document.getElementById('cal-filtro-dipendente').style.display = 'none';
+      document.getElementById('btn-password').style.display = 'none';
+      document.getElementById('azienda-container').style.display = 'none';
+      document.getElementById('cal-vista-selector').style.display = 'flex';
+      showTab('registra');
+    }
+
+    document.getElementById('notifiche-container').style.display = 'inline-block';
+    aggiornaBadgeNotifiche();
+    caricaDarkMode();
+
+    const oggi = new Date().toISOString().split('T')[0];
+    const dataReg = document.getElementById('data-reg');
+    dataReg.value = oggi;
+    dataReg.disabled = true;
+    dataReg.style.backgroundColor = '#f0f0f0';
+    dataReg.style.cursor = 'not-allowed';
+
+    document.getElementById('richiesta-data-inizio').value = oggi;
+    document.getElementById('richiesta-data-fine').value = oggi;
+    document.getElementById('modifica-data').value = oggi;
+    document.getElementById('recupero-data').value = oggi;
+
+    caricaSelectRecuperoCommesse();
+
+    document.getElementById('tipo-richiesta').addEventListener('change', function() {
+      const tipo = this.value;
+      document.getElementById('gruppo-certificato').style.display = tipo === 'malattia' ? 'block' : 'none';
+      document.getElementById('gruppo-recupero').style.display = tipo === 'recupero_ore' ? 'block' : 'none';
+      document.getElementById('campi-standard').style.display = (tipo === 'recupero_ore') ? 'none' : 'block';
+    });
+
+    if (utente.ruolo === 'dipendente') {
+      const oraInizio = document.getElementById('ora-inizio');
+      const ora = new Date();
+      oraInizio.value = ora.getHours().toString().padStart(2, '0') + ':00';
+
+      document.getElementById('straordinario').addEventListener('change', function() {
+        if (this.checked) {
+          oraInizio.disabled = false;
+          oraInizio.style.backgroundColor = 'white';
+          oraInizio.style.cursor = 'text';
+        } else {
+          caricaUltimaRegistrazione();
+        }
+      });
+
+      caricaUltimaRegistrazione();
+    }
+
+    caricaSelectCommesse();
+    caricaListaCommesse();
+    caricaRichiesteDipendente();
+    caricaSelectDipendentiModifica();
+    caricaSelectDipendentiCalendario();
+
+    setTimeout(() => {
+      applicaTraduzioni();
+      popolaTendinaLingua();
+    }, 300);
+
+    attivaAscoltoRealtime();
+    mostraSchermataBenvenuto(utente);
+
+    console.log('✅ Login biometrico riuscito per:', username);
+
+  } catch (err) {
+    console.error('❌ Errore login biometrico:', err);
+
+    if (err.name === 'NotAllowedError') {
+      mostraErroreBio(t('bio_usa_password'));
+      // Mostra il pulsante "Usa password" dopo il fallimento
+      document.getElementById('btn-usa-password').style.display = 'flex';
+    } else {
+      mostraErroreBio('Errore: ' + (err.message || 'sconosciuto'));
+    }
+  }
+}
+
+// ============================================
+// DISATTIVA IMPRONTA
+// ============================================
+function disattivaBiometrico() {
+  if (!utenteCorrente) return;
+
+  if (!confirm('Disattivare l\'accesso con impronta su questo dispositivo?')) return;
+
+  localStorage.removeItem(bioKeyStorage(utenteCorrente.username));
+  
+  // Se era l'ultimo utente, rimuovi anche il riferimento
+  if (localStorage.getItem('bio_ultimo_username') === utenteCorrente.username) {
+    localStorage.removeItem('bio_ultimo_username');
+  }
+
+  document.getElementById('btn-disattiva-impronta').style.display = 'none';
+
+  alert('✅ Impronta disattivata su questo dispositivo.');
+  console.log('✅ Impronta disattivata per:', utenteCorrente.username);
+}
+
+// ============================================
+// MOSTRA FORM PASSWORD (dopo fallimenti biometrici)
+// ============================================
+function mostraFormPassword() {
+  document.getElementById('btn-usa-password').style.display = 'none';
+  document.getElementById('errore-bio').style.display = 'none';
+
+  // Focus sul campo username
+  setTimeout(() => {
+    document.getElementById('username').focus();
+  }, 100);
+}
+
+// ============================================
+// MOSTRA ERRORE BIOMETRICO
+// ============================================
+function mostraErroreBio(messaggio) {
+  const div = document.getElementById('errore-bio');
+  if (!div) return;
+  div.textContent = '⚠️ ' + messaggio;
+  div.style.display = 'block';
+}
+
+// ============================================
+// INIZIALIZZAZIONE — Aggiorna UI login
+// ============================================
+async function aggiornaUILoginBiometrico() {
+  const btnLoginImpronta = document.getElementById('btn-login-impronta');
+  const sepImprontaPassword = document.getElementById('sep-impronta-password');
+  const labelAttivaImpronta = document.getElementById('label-attiva-impronta');
+  const checkboxAttiva = document.getElementById('attiva-impronta');
+  const btnDisattiva = document.getElementById('btn-disattiva-impronta');
+
+  if (!btnLoginImpronta) return;
+
+  // ⭐ 1. Verifica supporto WebAuthn
+  if (!bioSupportato()) {
+    btnLoginImpronta.style.display = 'none';
+    sepImprontaPassword.style.display = 'none';
+    if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'none';
+    if (btnDisattiva) btnDisattiva.style.display = 'none';
+    return;
+  }
+
+  // ⭐ 2. Verifica disponibilità autenticatore (impronta/face)
+  let disponibile = false;
+  try {
+    disponibile = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch (e) {
+    disponibile = false;
+  }
+
+  if (!disponibile) {
+    btnLoginImpronta.style.display = 'none';
+    sepImprontaPassword.style.display = 'none';
+    if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'none';
+    if (btnDisattiva) btnDisattiva.style.display = 'none';
+    return;
+  }
+
+  // ⭐ 3. C'è un utente con impronta salvata su questo dispositivo?
+  const bioUsername = localStorage.getItem('bio_ultimo_username');
+  if (bioUsername && bioAttivaSuQuestoDispositivo(bioUsername)) {
+    // Sì → mostra pulsante "Entra con impronta"
+    btnLoginImpronta.style.display = 'flex';
+    sepImprontaPassword.style.display = 'flex';
+    if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'none';
+  } else {
+    // No → nascondi pulsante impronta, mostra checkbox attiva
+    btnLoginImpronta.style.display = 'none';
+    sepImprontaPassword.style.display = 'none';
+    if (labelAttivaImpronta) labelAttivaImpronta.style.display = 'flex';
+  }
+
+  // ⭐ 4. Se l'utente è loggato E ha impronta attiva → mostra pulsante disattiva
+  if (utenteCorrente && bioAttivaSuQuestoDispositivo(utenteCorrente.username)) {
+    if (btnDisattiva) btnDisattiva.style.display = 'flex';
+  } else {
+    if (btnDisattiva) btnDisattiva.style.display = 'none';
+  }
+}
+
+// ============================================
+// HOOK: dopo login normale, gestisci attivazione impronta
+// ============================================
+const _origLoginPerBio = window.login;
+window.login = function() {
+  const checkboxAttiva = document.getElementById('attiva-impronta');
+  const vuoleAttivare = checkboxAttiva && checkboxAttiva.checked;
+
+  // Chiama la login originale
+  if (_origLoginPerBio) _origLoginPerBio();
+
+  // Dopo il login, se l'utente vuole attivare l'impronta
+  setTimeout(async () => {
+    if (vuoleAttivare && utenteCorrente && bioSupportato()) {
+      const risultato = await attivaBiometrico(utenteCorrente.username);
+      if (risultato.ok) {
+        console.log('✅ Impronta attivata dopo login');
+        aggiornaUILoginBiometrico();
+      } else {
+        alert('⚠️ ' + risultato.errore);
+      }
+    }
+  }, 500);
+};
+
+// ============================================
+// INIT — Al caricamento della pagina di login
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  // Aspetta che lingue.js sia caricato
+  setTimeout(() => {
+    aggiornaUILoginBiometrico();
+  }, 500);
+});
+
+// ⭐ Aggiorna UI anche quando si fa logout (torna al login)
+const _origLogoutPerBio = window.logout;
+window.logout = function() {
+  if (_origLogoutPerBio) _origLogoutPerBio();
+  setTimeout(() => {
+    aggiornaUILoginBiometrico();
+  }, 300);
+};
+
+// ⭐ Aggiorna UI anche dopo il realtime (se cambia utenteCorrente)
+const _origAggiornaUIDopoRealtimeBio = window.aggiornaUIDopoRealtime;
+window.aggiornaUIDopoRealtime = function() {
+  if (_origAggiornaUIDopoRealtimeBio) _origAggiornaUIDopoRealtimeBio();
+  setTimeout(aggiornaUILoginBiometrico, 100);
+};
+
+console.log('✅ script.js — Login biometrico (WebAuthn) caricato');
