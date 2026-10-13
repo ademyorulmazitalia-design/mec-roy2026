@@ -44,17 +44,6 @@
           <p data-i18n="login_titolo">registro ore</p>
         </div>
       </div>
-      <!-- ⭐ Pulsante biometrico (visibile se impronta attiva) -->
-      <button id="btn-login-impronta" onclick="loginBiometrico()" class="btn-impronta-login login-anim-1" style="display:none;">
-        <i class="fas fa-fingerprint" style="font-size:1.6em;display:block;margin-bottom:5px;"></i>
-        <span data-i18n="bio_entra_impronta">Entra con impronta</span>
-      </button>
-
-      <!-- ⭐ Separatore "oppure usa password" (visibile solo se impronta attiva) -->
-      <div id="sep-impronta-password" class="numeri-mancanti-login-separator login-anim-2" style="display:none;">
-        <span data-i18n="bio_oppure_password">oppure usa password</span>
-      </div>
-
       <input type="text" id="username" class="login-anim-1" data-i18n-placeholder="login_username" placeholder="Username" />
       <input type="password" id="password" class="login-anim-2" data-i18n-placeholder="login_password" placeholder="Password" />
 
@@ -70,6 +59,11 @@
       </label>
 
       <button onclick="login()" class="login-anim-4"><i class="fas fa-sign-in-alt"></i> <span data-i18n="login_entra">Entra</span></button>
+
+      <!-- ⭐ Pulsante biometrico (visibile se impronta attiva) — SOTTO Entra -->
+      <button id="btn-login-impronta" onclick="loginBiometrico()" class="btn-impronta-login btn-impronta-login-small login-anim-4" style="display:none;">
+        <i class="fas fa-fingerprint"></i> <span data-i18n="bio_entra_impronta">Entra con impronta</span>
+      </button>
 
       <!-- ⭐ Pulsante "Usa password" (visibile dopo 3 fallimenti) -->
       <button id="btn-usa-password" onclick="mostraFormPassword()" class="btn-usa-password login-anim-4" style="display:none;">
