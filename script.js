@@ -8884,7 +8884,7 @@ async function nmScaricaCSVPhoenix() {
 }
 
 // ============================================
-// COPIA TUTTI I NUMERI PER PHOENIX CONTACT — VERSIONE TAB
+// COPIA TUTTI I NUMERI PER PHOENIX CONTACT — VERSIONE HTML TABELLA
 // ============================================
 async function nmCopiaPerPhoenix() {
   if (!nmCommessaCorrente || !nmCartellaCorrente) {
@@ -8907,26 +8907,43 @@ async function nmCopiaPerPhoenix() {
       return;
     }
 
-    // ⭐ Prendi i numeri e separali con TAB (per Phoenix Contact)
+    // ⭐ Prendi solo il testo dei numeri
     const testi = numeri.map(n => {
       let t = n.testo || '';
       return t;
     });
 
-    // ⭐ Usa TAB invece di newline
-    const testoDaCopiare = testi.join('\t');
+    // ⭐ OPZIONE A — Copia in formato HTML tabella + plain text
+    const testoPlain = testi.join('\n');
+    const htmlTabella = '<table>' + testi.map(t => `<tr><td>${t}</td></tr>`).join('') + '</table>';
 
-    // ⭐ Copia negli appunti
     try {
-      await navigator.clipboard.writeText(testoDaCopiare);
-      console.log(`✅ Copiati ${numeri.length} numeri (con TAB) della cartella ${nmCartellaCorrente}`);
+      // Prova il formato multi-formato (HTML + plain)
+      if (typeof ClipboardItem !== 'undefined') {
+        const blobHtml = new Blob([htmlTabella], { type: 'text/html' });
+        const blobPlain = new Blob([testoPlain], { type: 'text/plain' });
+
+        const item = new ClipboardItem({
+          'text/html': blobHtml,
+          'text/plain': blobPlain
+        });
+        await navigator.clipboard.write([item]);
+        console.log(`✅ Copiati ${numeri.length} numeri (formato tabella HTML)`);
+      } else {
+        // Fallback per browser senza ClipboardItem
+        await navigator.clipboard.writeText(testoPlain);
+        console.log(`✅ Copiati ${numeri.length} numeri (formato plain)`);
+      }
       
       const nomeCartella = NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente;
       alert(`✅ Copiati ${numeri.length} numeri della cartella ${nomeCartella}.\n\nOra apri Phoenix Contact, clicca sulla prima cella della griglia e incolla con Ctrl+V.`);
+      
     } catch (err) {
-      // Fallback per browser vecchi
+      // Fallback finale con textarea (browser vecchi)
+      console.warn('⚠️ Errore clipboard, uso textarea:', err);
+      
       const textarea = document.createElement('textarea');
-      textarea.value = testoDaCopiare;
+      textarea.value = testoPlain;
       textarea.style.position = 'fixed';
       textarea.style.opacity = '0';
       document.body.appendChild(textarea);
@@ -8935,7 +8952,7 @@ async function nmCopiaPerPhoenix() {
       document.body.removeChild(textarea);
       
       const nomeCartella = NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente;
-      alert(`✅ Copiati ${numeri.length} numeri della cartella ${nomeCartella}.\n\nOra apri Phoenix Contact, clicca sulla prima cella della griglia e incolla con Ctrl+V.`);
+      alert(`✅ Copiati ${numeri.length} numeri della cartella ${nomeCartella}.\n\nOra apri Phoenix Contact e incolla con Ctrl+V.`);
     }
 
   } catch (err) {
@@ -8943,4 +8960,3 @@ async function nmCopiaPerPhoenix() {
     alert('❌ Errore: ' + err.message);
   }
 }
-console.log('✅ script.js — Funzioni Phoenix (CSV + Copia) caricate');
