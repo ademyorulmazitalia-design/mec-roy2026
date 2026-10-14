@@ -8884,8 +8884,7 @@ async function nmScaricaCSVPhoenix() {
 }
 
 // ============================================
-// 2) COPIA TABELLA (formato per Phoenix Contact)
-//    Mette i numeri negli appunti separati da TAB e NEWLINE
+// COPIA TUTTI I NUMERI PER PHOENIX CONTACT — VERSIONE TAB
 // ============================================
 async function nmCopiaPerPhoenix() {
   if (!nmCommessaCorrente || !nmCartellaCorrente) {
@@ -8908,18 +8907,22 @@ async function nmCopiaPerPhoenix() {
       return;
     }
 
-    // ⭐ Copia con newline (uno per riga)
-    const testi = numeri.map(n => n.testo || '');
-    const testoDaCopiare = testi.join('\r\n'); // CRLF = standard Windows
+    // ⭐ Prendi i numeri e separali con TAB (per Phoenix Contact)
+    const testi = numeri.map(n => {
+      let t = n.testo || '';
+      return t;
+    });
 
+    // ⭐ Usa TAB invece di newline
+    const testoDaCopiare = testi.join('\t');
+
+    // ⭐ Copia negli appunti
     try {
       await navigator.clipboard.writeText(testoDaCopiare);
-      console.log(`✅ Copiati ${numeri.length} numeri`);
-      alert(
-        `✅ Copiati ${numeri.length} numeri.\n\n` +
-        `📋 Ora vai in Phoenix Contact e premi Ctrl+V.\n\n` +
-        `(Se non funziona, usa il pulsante "Scarica CSV").`
-      );
+      console.log(`✅ Copiati ${numeri.length} numeri (con TAB) della cartella ${nmCartellaCorrente}`);
+      
+      const nomeCartella = NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente;
+      alert(`✅ Copiati ${numeri.length} numeri della cartella ${nomeCartella}.\n\nOra apri Phoenix Contact, clicca sulla prima cella della griglia e incolla con Ctrl+V.`);
     } catch (err) {
       // Fallback per browser vecchi
       const textarea = document.createElement('textarea');
@@ -8930,7 +8933,9 @@ async function nmCopiaPerPhoenix() {
       textarea.select();
       document.execCommand('copy');
       document.body.removeChild(textarea);
-      alert(`✅ Copiati ${numeri.length} numeri. Ora incolla in Phoenix con Ctrl+V.`);
+      
+      const nomeCartella = NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente;
+      alert(`✅ Copiati ${numeri.length} numeri della cartella ${nomeCartella}.\n\nOra apri Phoenix Contact, clicca sulla prima cella della griglia e incolla con Ctrl+V.`);
     }
 
   } catch (err) {
@@ -8938,5 +8943,4 @@ async function nmCopiaPerPhoenix() {
     alert('❌ Errore: ' + err.message);
   }
 }
-
 console.log('✅ script.js — Funzioni Phoenix (CSV + Copia) caricate');
