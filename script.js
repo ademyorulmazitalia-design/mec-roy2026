@@ -8810,3 +8810,133 @@ window.aggiornaUIDopoRealtime = function() {
 };
 
 console.log('✅ script.js — Login biometrico (WebAuthn) caricato');
+
+// ============================================
+// 1) SCARICA CSV per Phoenix Contact
+//    (apribile con Excel Online / Google Sheets)
+//    FIX: aggiunto apostrofo per evitare #NOME? in Excel
+// ============================================
+async function nmScaricaCSVPhoenix() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) {
+    alert('❌ Nessuna cartella aperta');
+    return;
+  }
+
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) {
+      alert('❌ Commessa non trovata');
+      return;
+    }
+
+    const commessa = doc.data();
+    const numeri = (commessa.cartelle && commessa.cartelle[nmCartellaCorrente]) || [];
+
+    if (numeri.length === 0) {
+      alert('⚠️ Nessun numero in questa cartella');
+      return;
+    }
+
+    // ⭐ Prepara il contenuto CSV: 1 numero per riga
+    //    Con apostrofo iniziale per evitare #NOME? in Excel
+    let csv = '';
+    numeri.forEach((n) => {
+      let testo = (n.testo || '').replace(/;/g, ',');
+      // ⭐ Fix per Excel: aggiungi apostrofo per forzare "testo" invece di "formula"
+      testo = "'" + testo;
+      csv += testo + '\n';
+    });
+
+    // ⭐ Aggiungi BOM UTF-8 (per far leggere bene caratteri speciali)
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+
+    // ⭐ Nome file: COMMESSA_CARTELLA.csv
+    const nomeCommessa = (commessa.codice || nmCommessaCorrente).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const nomeCartella = (NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente).replace(/\s+/g, '_');
+    const nomeFile = `${nomeCommessa}_${nomeCartella}.csv`;
+
+    // ⭐ Scarica il file
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeFile;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log(`✅ CSV scaricato: ${nomeFile} (${numeri.length} numeri)`);
+
+    // ⭐ Messaggio informativo
+    setTimeout(() => {
+      alert(
+        `✅ File scaricato: ${nomeFile}\n\n` +
+        `📂 Trovi il file nella cartella "Download" del PC.\n\n` +
+        `🖱️ Fai doppio click sul file per aprirlo.\n\n` +
+        `📋 Poi copia i numeri e incollali in Phoenix Contact.`
+      );
+    }, 500);
+
+  } catch (err) {
+    console.error('❌ Errore:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
+// ============================================
+// 2) COPIA TABELLA (formato per Phoenix Contact)
+//    Mette i numeri negli appunti separati da TAB e NEWLINE
+// ============================================
+async function nmCopiaPerPhoenix() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) {
+    alert('❌ Nessuna cartella aperta');
+    return;
+  }
+
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) {
+      alert('❌ Commessa non trovata');
+      return;
+    }
+
+    const commessa = doc.data();
+    const numeri = (commessa.cartelle && commessa.cartelle[nmCartellaCorrente]) || [];
+
+    if (numeri.length === 0) {
+      alert('⚠️ Nessun numero in questa cartella');
+      return;
+    }
+
+    // ⭐ Copia con newline (uno per riga)
+    const testi = numeri.map(n => n.testo || '');
+    const testoDaCopiare = testi.join('\r\n'); // CRLF = standard Windows
+
+    try {
+      await navigator.clipboard.writeText(testoDaCopiare);
+      console.log(`✅ Copiati ${numeri.length} numeri`);
+      alert(
+        `✅ Copiati ${numeri.length} numeri.\n\n` +
+        `📋 Ora vai in Phoenix Contact e premi Ctrl+V.\n\n` +
+        `(Se non funziona, usa il pulsante "Scarica CSV").`
+      );
+    } catch (err) {
+      // Fallback per browser vecchi
+      const textarea = document.createElement('textarea');
+      textarea.value = testoDaCopiare;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      alert(`✅ Copiati ${numeri.length} numeri. Ora incolla in Phoenix con Ctrl+V.`);
+    }
+
+  } catch (err) {
+    console.error('❌ Errore:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+}
+
+console.log('✅ script.js — Funzioni Phoenix (CSV + Copia) caricate');
