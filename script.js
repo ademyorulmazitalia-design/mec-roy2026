@@ -2659,6 +2659,9 @@ function caricaCalendario() {
   }
 
   const isAdmin = utenteCorrente.ruolo === 'admin';
+    // ⭐ FILTRO ANTI-DOPPIONE: se una registrazione è stata generata
+  // da un'approvazione (richiesta_id), la ignoriamo per evitare doppi conteggi.
+  const registrazioniPulite = dati.registrazioni.filter(r => !r.richiesta_id);
   let utenteFilter = utenteCorrente.username;
   if (isAdmin) {
     utenteFilter = document.getElementById('cal-dipendente').value;
@@ -2739,7 +2742,7 @@ function caricaCalendario() {
       const giornoSett = new Date(anno, mese - 1, g).getDay();
       const isWeekend = giornoSett === 0 || giornoSett === 6;
 
-      const registrazioni = dati.registrazioni.filter(r =>
+      const registrazioni = registrazioniPulite.filter(r =>
         r.utente_id === dip.username && r.data === data
       );
 
@@ -2925,7 +2928,7 @@ function cambiaVistaCalendario() {
 // - Dipendente: vede solo le sue ore
 // - Admin: vede le ore di TUTTI i dipendenti (filtrabili)
 // ============================================
-function caricaCalendarioDettagliato() {
+window.caricaCalendarioDettagliato = function() {
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
   const output = document.getElementById('calendario-output');
@@ -2937,7 +2940,6 @@ function caricaCalendarioDettagliato() {
 
   const isAdmin = utenteCorrente.ruolo === 'admin';
 
-  // ⭐ Per l'admin: prendi il filtro dipendente (se selezionato)
   let dipendentiDaMostrare = [];
   if (isAdmin) {
     const filtroDip = document.getElementById('cal-dipendente').value;
@@ -2957,17 +2959,17 @@ function caricaCalendarioDettagliato() {
 
   const giorniMese = new Date(anno, mese, 0).getDate();
   const mesePadded = String(mese).padStart(2, '0');
-  const meseNome = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][mese-1];
+  const meseNome = t('mese_' + mese);
 
   let html = '';
   let totaleMese = 0;
   let registrazioniTotali = 0;
   let giorniLavorati = 0;
 
-  // ⭐ Per ogni dipendente, genera un blocco di dettaglio
-  dipendentiDaMostrare.forEach((dip, idxDip) => {
+  // ⭐ FILTRO ANTI-DOPPIONE
+  const registrazioniPulite = dati.registrazioni.filter(r => !r.richiesta_id);
 
+  dipendentiDaMostrare.forEach((dip, idxDip) => {
     let htmlDip = '';
     let totaleMeseDip = 0;
     let registrazioniDip = 0;
@@ -2979,7 +2981,7 @@ function caricaCalendarioDettagliato() {
       const giornoSett = dataObj.getDay();
       const isWeekend = giornoSett === 0 || giornoSett === 6;
 
-      const registrazioni = dati.registrazioni.filter(r =>
+      const registrazioni = registrazioniPulite.filter(r =>
         r.utente_id === dip.username && r.data === data
       );
 
@@ -2995,12 +2997,11 @@ function caricaCalendarioDettagliato() {
         const oggi = new Date();
         oggi.setHours(0, 0, 0, 0);
         if (dataObj < oggi) {
-          htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">⬜ ASSENTE</span></div></div>`;
+          htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${tGiorniSettimana()[giornoSett]})</span></h4><span class="giorno-totale">⬜ ASSENTE</span></div></div>`;
         }
         continue;
       }
 
-      // Riga speciale (ferie/permesso/malattia da richiesta approvata)
       if (richiesta && registrazioni.length === 0) {
         const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
         const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
@@ -3010,11 +3011,10 @@ function caricaCalendarioDettagliato() {
           ? `<br><span style="font-size:0.85em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiesta.protocollo}</span>`
           : '';
 
-        htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${richiesta.tipo}"><td>${emojiChar} <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
+        htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${tGiorniSettimana()[giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${richiesta.tipo}"><td>${emojiChar} <strong>${tipo}</strong>${richiesta.note ? ' - ' + richiesta.note : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
         continue;
       }
 
-      // Riga speciale da registrazione (malattia/ferie/permesso registrata)
       const regSpeciale = registrazioni.find(r =>
         r.tipo === 'malattia' || r.tipo === 'ferie' || r.tipo === 'permesso'
       );
@@ -3035,11 +3035,10 @@ function caricaCalendarioDettagliato() {
           ? `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiestaCollegata.protocollo}</span>`
           : '';
 
-        htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${regSpeciale.tipo}"><td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>${regSpeciale.descrizione ? ' - ' + regSpeciale.descrizione : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
+        htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${tGiorniSettimana()[giornoSett]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${regSpeciale.tipo}"><td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>${regSpeciale.descrizione ? ' - ' + regSpeciale.descrizione : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
         continue;
       }
 
-      // Giornata di lavoro normale
       let totaleGiorno = 0;
       registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
 
@@ -3058,7 +3057,7 @@ function caricaCalendarioDettagliato() {
       const isOltre8 = totaleGiorno > 8;
       const bgHeader = isOltre8 ? '#b71c1c' : '#00695C';
 
-      htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header" style="background:${bgHeader};"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][giornoSett]})</span></h4><span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span></div>`;
+      htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header" style="background:${bgHeader};"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${tGiorniSettimana()[giornoSett]})</span></h4><span class="giorno-totale">${totaleGiorno.toFixed(2)}h${isOltre8 ? ' ⚠️' : ''}</span></div>`;
 
       htmlDip += `<div class="table-wrapper" style="margin-top:0;border:none;"><table><thead><tr><th>Commessa</th><th>Inizio</th><th>Fine</th><th>Ore</th><th>Descrizione</th></tr></thead><tbody>`;
 
@@ -3076,7 +3075,6 @@ function caricaCalendarioDettagliato() {
       htmlDip += `</tbody></table></div></div>`;
     }
 
-    // ⭐ Header del blocco dipendente (solo per admin, per separare i dipendenti)
     if (isAdmin) {
       html += `<div class="calendario-dettagliato-info" style="margin-top:${idxDip > 0 ? '30px' : '0'};">
         <h3><i class="fas fa-user"></i> ${dip.nome} ${dip.cognome}</h3>
@@ -3099,7 +3097,6 @@ function caricaCalendarioDettagliato() {
     giorniLavorati += giorniLavoratiDip;
   });
 
-  // Header riepilogo generale (per dipendente singolo o admin multi)
   let headerHTML = '';
   if (!isAdmin) {
     headerHTML = `
@@ -3125,7 +3122,7 @@ function caricaCalendarioDettagliato() {
   }
 
   output.innerHTML = headerHTML + html;
-}
+};
 
 console.log('✅ script.js — PARTE 5/6 caricata');
 // ============================================
@@ -7246,6 +7243,10 @@ const _origCaricaSelectRecuperoCommesse = window.caricaSelectRecuperoCommesse;
 window.caricaSelectRecuperoCommesse = function() {
   const select = document.getElementById('recupero-commessa');
   if (!select) return;
+  if (!dati || !Array.isArray(dati.commesse)) {
+  setTimeout(window.caricaSelectRecuperoCommesse, 300);
+  return;
+}
   select.innerHTML = '<option value="">-- Seleziona --</option>';
   (dati.commesse || []).forEach(c => {
     select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
@@ -7542,6 +7543,9 @@ window.caricaCalendario = function() {
   html += '</tr>';
   html += '</thead><tbody>';
 
+  // ⭐ FILTRO ANTI-DOPPIONE
+  const registrazioniPulite = dati.registrazioni.filter(r => !r.richiesta_id);
+
   dipendentiDaMostrare.forEach(dip => {
     html += `<tr>`;
     html += `<td style="padding:6px 10px;border:1px solid #ddd;font-weight:600;background:#f8f9fa;"><strong>${dip.nome} ${dip.cognome}</strong></td>`;
@@ -7553,7 +7557,7 @@ window.caricaCalendario = function() {
       const giornoSett = new Date(anno, mese - 1, g).getDay();
       const isWeekend = giornoSett === 0 || giornoSett === 6;
 
-      const registrazioni = dati.registrazioni.filter(r =>
+      const registrazioni = registrazioniPulite.filter(r =>
         r.utente_id === dip.username && r.data === data
       );
 
@@ -7569,7 +7573,23 @@ window.caricaCalendario = function() {
         const haLavoro = registrazioni.some(r => r.tipo === 'lavoro');
 
         if (haFerie) { cella = 'F'; bgColor = '#E3F2FD'; }
-        else if (haPermesso) { cella = 'P'; bgColor = '#FFF3E0'; }
+        else if (haPermesso) { 
+          let oreLavoro = 0;
+          registrazioni.forEach(r => {
+            if (r.tipo === 'lavoro' && r.ora_inizio && r.ora_fine) {
+              const [h1, m1] = r.ora_inizio.split(':').map(Number);
+              const [h2, m2] = r.ora_fine.split(':').map(Number);
+              oreLavoro += ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+            }
+          });
+          if (oreLavoro > 0) {
+            cella = 'P/' + oreLavoro.toFixed(1) + 'h';
+            totaleOre += oreLavoro;
+          } else {
+            cella = 'P'; 
+          }
+          bgColor = '#FFF3E0'; 
+        }
         else if (haMalattia) { cella = 'M'; bgColor = '#FFEBEE'; }
         else if (haRecupero) {
           let oreGiorno = 0;
@@ -7634,7 +7654,6 @@ window.caricaCalendario = function() {
             const oggi = new Date();
             oggi.setHours(0, 0, 0, 0);
             const dataGiorno = new Date(data + 'T00:00:00');
-
             if (dataGiorno > oggi) {
               cella = '';
               bgColor = 'white';
@@ -8088,6 +8107,12 @@ const _origCaricaSelectDipendentiModifica = window.caricaSelectDipendentiModific
 window.caricaSelectDipendentiModifica = function() {
   const select = document.getElementById('modifica-dipendente');
   if (!select) return;
+  // ⭐ Sicurezza: se dati.utenti non è pronto, esci senza errori
+  if (!dati || !Array.isArray(dati.utenti)) {
+  // silenzioso: riprovo senza log
+    setTimeout(window.caricaSelectDipendentiModifica, 300);
+    return;
+  }
   const valCorrente = select.value;
   select.innerHTML = `<option value="">${t('mod_dipendente')}</option>`;
   dati.utenti.filter(u => u.ruolo === 'dipendente').forEach(u => {
@@ -8208,6 +8233,10 @@ window.login = function() {
 window.caricaSelectCommesse = function() {
   const select = document.getElementById('commessa');
   if (!select) return;
+  if (!dati || !Array.isArray(dati.utenti)) {
+  setTimeout(window.caricaSelectDipendentiCalendario, 300);
+  return;
+}
   const valCorrente = select.value;
 
   select.innerHTML = `<option value="">${t('reg_commessa_ph')}</option>`;
@@ -8960,3 +8989,1283 @@ async function nmCopiaPerPhoenix() {
     alert('❌ Errore: ' + err.message);
   }
 }
+
+// ============================================
+// ██████ FASE 2 — SOTTOCOLLEZIONI ██████
+// ============================================
+// Tutte le scritture su Firestore passano da qui.
+// Ogni documento è separato: due utenti non possono
+// sovrascriversi. Offline funziona in sicurezza.
+
+function _dbFirestore() {
+  return firebase.firestore();
+}
+
+// ─── REGISTRAZIONI ─────────────────────────────
+async function regAggiungi(reg) {
+  const id = String(reg.id || (Date.now() * 1000 + Math.floor(Math.random() * 1000)));
+  const doc = { ...reg, id };
+  await _dbFirestore().collection('registrazioni').doc(id).set(doc);
+  console.log('✅ Registrazione aggiunta:', id);
+  return doc;
+}
+async function regAggiorna(id, datiNuovi) {
+  await _dbFirestore().collection('registrazioni').doc(String(id)).update(datiNuovi);
+  console.log('✅ Registrazione aggiornata:', id);
+}
+async function regCancella(id) {
+  await _dbFirestore().collection('registrazioni').doc(String(id)).delete();
+  console.log('✅ Registrazione cancellata:', id);
+}
+function regAscolta(callback) {
+  return _dbFirestore().collection('registrazioni').onSnapshot(snap => {
+    const arr = [];
+    snap.forEach(d => arr.push(d.data()));
+    callback(arr);
+  });
+}
+
+// ─── RICHIESTE ─────────────────────────────────
+async function richAggiungi(rich) {
+  const id = String(rich.id || (Date.now() * 1000 + Math.floor(Math.random() * 1000)));
+  const doc = { ...rich, id };
+  await _dbFirestore().collection('richieste').doc(id).set(doc);
+  console.log('✅ Richiesta aggiunta:', id);
+  return doc;
+}
+async function richAggiorna(id, datiNuovi) {
+  await _dbFirestore().collection('richieste').doc(String(id)).update(datiNuovi);
+  console.log('✅ Richiesta aggiornata:', id);
+}
+function richAscolta(callback) {
+  return _dbFirestore().collection('richieste').onSnapshot(snap => {
+    const arr = [];
+    snap.forEach(d => arr.push(d.data()));
+    callback(arr);
+  });
+}
+
+// ─── NOTIFICHE ─────────────────────────────────
+async function notAggiungi(not) {
+  const id = String(not.id || (Date.now() * 1000 + Math.floor(Math.random() * 1000)));
+  const doc = { ...not, id };
+  await _dbFirestore().collection('notifiche').doc(id).set(doc);
+  console.log('✅ Notifica aggiunta:', id);
+  return doc;
+}
+async function notAggiorna(id, datiNuovi) {
+  await _dbFirestore().collection('notifiche').doc(String(id)).update(datiNuovi);
+  console.log('✅ Notifica aggiornata:', id);
+}
+function notAscolta(callback) {
+  return _dbFirestore().collection('notifiche').onSnapshot(snap => {
+    const arr = [];
+    snap.forEach(d => arr.push(d.data()));
+    callback(arr);
+  });
+}
+
+// ─── UTENTI ────────────────────────────────────
+async function utenteSalva(utente) {
+  if (!utente.username) throw new Error('username mancante');
+  await _dbFirestore().collection('utenti').doc(utente.username).set(utente);
+  console.log('✅ Utente salvato:', utente.username);
+}
+async function utenteAggiorna(username, datiNuovi) {
+  await _dbFirestore().collection('utenti').doc(username).update(datiNuovi);
+  console.log('✅ Utente aggiornato:', username);
+}
+async function utenteCancella(username) {
+  await _dbFirestore().collection('utenti').doc(username).delete();
+  console.log('✅ Utente cancellato:', username);
+}
+function utentiAscolta(callback) {
+  return _dbFirestore().collection('utenti').onSnapshot(snap => {
+    const arr = [];
+    snap.forEach(d => arr.push(d.data()));
+    callback(arr);
+  });
+}
+
+// ============================================
+// ██████ FASE 3 — OVERRIDE FUNZIONI ██████
+// ============================================
+// Queste ridefiniscono le funzioni originali in cima
+// al file. JavaScript usa l'ultima dichiarazione.
+
+// ─── SALVA REGISTRAZIONE ───────────────────────
+window.salvaRegistrazione = async function() {
+  if (utenteCorrente?.ruolo === 'admin') {
+    alert('Gli amministratori non possono registrare ore qui');
+    return;
+  }
+  if (isOltre20()) {
+    document.getElementById('msg-registra').innerHTML =
+      '<div class="error" style="background:#ffebee;border-color:#d32f2f;color:#d32f2f;font-weight:bold;">⛔ Ore 20:00 superate!</div>';
+    return;
+  }
+
+  const commessa_id = parseInt(document.getElementById('commessa').value);
+  const data = document.getElementById('data-reg').value;
+  const ora_inizio = document.getElementById('ora-inizio').value;
+  const ora_fine = document.getElementById('ora-fine').value;
+  const descrizione = document.getElementById('descrizione').value.trim();
+  const straordinario = document.getElementById('straordinario').checked;
+  const msg = document.getElementById('msg-registra');
+
+  if (!commessa_id) { msg.innerHTML = '<div class="error">❌ Seleziona una commessa</div>'; return; }
+  if (!data) { msg.innerHTML = '<div class="error">❌ Data non valida</div>'; return; }
+  if (!ora_inizio) { msg.innerHTML = '<div class="error">❌ Inserisci l\'ora di inizio</div>'; return; }
+  if (!ora_fine) { msg.innerHTML = '<div class="error">❌ Inserisci l\'ora di fine</div>'; return; }
+  if (!descrizione) { msg.innerHTML = '<div class="error">❌ Inserisci una descrizione</div>'; return; }
+  if (ora_inizio >= ora_fine) { msg.innerHTML = '<div class="error">L\'ora fine deve essere dopo l\'ora inizio</div>'; return; }
+
+  const adesso = new Date();
+  const minutiAdesso = adesso.getHours() * 60 + adesso.getMinutes();
+  const minutiInizio = parseInt(ora_inizio.split(':')[0]) * 60 + parseInt(ora_inizio.split(':')[1] || 0);
+  if (minutiInizio > minutiAdesso) {
+    msg.innerHTML = `<div class="error">❌ Non puoi segnare un orario nel futuro!</div>`;
+    return;
+  }
+
+  if (!straordinario) {
+    const oraCorrente = new Date();
+    const isPomeriggio = oraCorrente.getHours() >= 13;
+    const oraInizioNum = parseInt(ora_inizio.split(':')[0]);
+    if (isPomeriggio && oraInizioNum < 13) {
+      msg.innerHTML = `<div class="error">❌ Non puoi segnare ore mattutine dopo le 13:00.<br><small>Usa "Richiedi Recupero Ore" se hai dimenticato.</small></div>`;
+      return;
+    }
+  }
+
+  const esistente = dati.registrazioni.find(r =>
+    r.utente_id === utenteCorrente.username &&
+    r.data === data &&
+    ((ora_inizio >= r.ora_inizio && ora_inizio < r.ora_fine) ||
+     (ora_fine > r.ora_inizio && ora_fine <= r.ora_fine) ||
+     (ora_inizio <= r.ora_inizio && ora_fine >= r.ora_fine))
+  );
+  if (esistente) {
+    msg.innerHTML = '<div class="error">❌ Orario in sovrapposizione (' + esistente.ora_inizio + ' - ' + esistente.ora_fine + ')</div>';
+    return;
+  }
+
+  const [h1, m1] = ora_inizio.split(':').map(Number);
+  const [h2, m2] = ora_fine.split(':').map(Number);
+  let oreLavorate = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  let isStraordinario = false;
+  const maxOre = 8;
+
+  if (straordinario) {
+    isStraordinario = (oreLavorate > maxOre);
+  } else if (oreLavorate > maxOre) {
+    oreLavorate = maxOre;
+    msg.innerHTML = `<div class="success">✅ Registrazione salvata!</div>
+      <div class="info-msg" style="background:#fff3cd;border-color:#ffc107;color:#856404;margin-top:10px;">
+        ⚠️ Ore totali > 8h. Arrotondate a 8h (straordinario non pagato).<br>
+        <small>Per segnare straordinario, attiva il flag prima di salvare.</small>
+      </div>`;
+  }
+
+  const nuovaReg = {
+    id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+    utente_id: utenteCorrente.username,
+    commessa_id: commessa_id,
+    data: data,
+    ora_inizio: ora_inizio,
+    ora_fine: ora_fine,
+    descrizione: descrizione + (isStraordinario ? ' (STRAORDINARIO)' : ''),
+    tipo: 'lavoro',
+    straordinario: isStraordinario,
+    ore: oreLavorate
+  };
+
+  try {
+    // ⭐ SCRITTURA PUNTUALE: solo questo documento
+    await regAggiungi(nuovaReg);
+
+    // Aggiorna anche la copia locale per UI immediata
+    if (!dati.registrazioni.some(r => r.id === nuovaReg.id)) {
+      dati.registrazioni.push(nuovaReg);
+    }
+
+    if (!msg.innerHTML.includes('arrotondate')) {
+      msg.innerHTML = '<div class="success">✅ Registrazione salvata!</div>';
+    }
+
+    document.getElementById('ora-fine').value = '';
+    document.getElementById('descrizione').value = '';
+    document.getElementById('straordinario').checked = false;
+    caricaUltimaRegistrazione();
+  } catch (err) {
+    console.error('❌ Errore salvataggio:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+};
+
+// ─── SALVA MODIFICA (admin) ────────────────────
+window.salvaModifica = async function(id) {
+  const registro = dati.registrazioni.find(r => r.id === id);
+  if (!registro) return;
+
+  const nuovoTipo = document.getElementById('mod-tipo-' + id).value;
+  const nuovaCommessa = document.getElementById('mod-commessa-' + id).value;
+  const nuovaInizio = document.getElementById('mod-inizio-' + id).value;
+  const nuovaFine = document.getElementById('mod-fine-' + id).value;
+  const nuovaDesc = document.getElementById('mod-desc-' + id).value.trim();
+
+  if (nuovoTipo === 'lavoro' || nuovoTipo === 'recupero_ore') {
+    if (!nuovaInizio || !nuovaFine) { alert('❌ Inserisci ora inizio e fine'); return; }
+    if (nuovaInizio >= nuovaFine) { alert('❌ L\'ora fine deve essere dopo l\'ora inizio'); return; }
+  }
+
+  const datiNuovi = {
+    commessa_id: nuovaCommessa ? parseInt(nuovaCommessa) : null,
+    tipo: nuovoTipo,
+    ora_inizio: nuovaInizio,
+    ora_fine: nuovaFine,
+    descrizione: nuovaDesc
+  };
+
+  if (nuovaInizio && nuovaFine && nuovaInizio !== '00:00') {
+    const [h1, m1] = nuovaInizio.split(':').map(Number);
+    const [h2, m2] = nuovaFine.split(':').map(Number);
+    datiNuovi.ore = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  } else {
+    datiNuovi.ore = 0;
+  }
+
+  try {
+    await regAggiorna(id, datiNuovi);
+    Object.assign(registro, datiNuovi);
+    caricaRegistrazioniModifica();
+    if (typeof caricaCalendario === 'function') caricaCalendario();
+    alert('✅ Registrazione modificata!');
+  } catch (err) {
+    console.error('❌ Errore modifica:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+};
+
+// ─── ELIMINA REGISTRAZIONE (admin) ─────────────
+window.eliminaRegistrazione = async function(id) {
+  if (!confirm('Eliminare questa registrazione?')) return;
+  try {
+    await regCancella(id);
+    dati.registrazioni = dati.registrazioni.filter(r => r.id !== id);
+    caricaRegistrazioniModifica();
+    if (typeof caricaCalendario === 'function') caricaCalendario();
+    alert('🗑️ Registrazione eliminata');
+  } catch (err) {
+    console.error('❌ Errore eliminazione:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+};
+
+// ─── AGGIUNGI NOTIFICA ─────────────────────────
+window.aggiungiNotifica = async function(utente_id, tipo, messaggio, link) {
+  const not = {
+    id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+    utente_id: utente_id,
+    tipo: tipo,
+    messaggio: messaggio,
+    link: link || '#',
+    letto: false,
+    data: new Date().toISOString()
+  };
+  try {
+    await notAggiungi(not);
+    dati.notifiche.push(not);
+    aggiornaBadgeNotifiche();
+  } catch (err) {
+    console.error('❌ Errore notifica:', err);
+  }
+};
+
+// ─── SEGNA LETTA ───────────────────────────────
+window.segnaLetta = async function(id) {
+  const notifica = dati.notifiche.find(n => n.id === id);
+  if (!notifica) return;
+  try {
+    await notAggiorna(id, { letto: true });
+    notifica.letto = true;
+    aggiornaBadgeNotifiche();
+    mostraNotifiche();
+  } catch (err) {
+    console.error('❌ Errore segna letta:', err);
+  }
+};
+
+// ─── AGGIUNGI DIPENDENTE ───────────────────────
+window.aggiungiDipendente = async function() {
+  const nome = document.getElementById('dip-nome').value.trim();
+  const cognome = document.getElementById('dip-cognome').value.trim();
+  const username = document.getElementById('dip-username').value.trim();
+  const password = document.getElementById('dip-password').value.trim();
+  const ruolo = document.getElementById('dip-ruolo').value;
+  const msg = document.getElementById('msg-dipendente');
+
+  if (!nome || !cognome || !username || !password) {
+    msg.innerHTML = '<div class="error">Compila tutti i campi obbligatori</div>';
+    return;
+  }
+  if (dati.utenti.some(u => u.username === username)) {
+    msg.innerHTML = '<div class="error">❌ Username già esistente</div>';
+    return;
+  }
+
+  const nuovoUtente = { username, password, nome, cognome, ruolo };
+  if (typeof _fotoNuovoDipendenteBase64 !== 'undefined' && _fotoNuovoDipendenteBase64) {
+    nuovoUtente.foto = _fotoNuovoDipendenteBase64;
+  }
+
+  try {
+    // ⭐ Scrittura puntuale: solo questo utente
+    await utenteSalva(nuovoUtente);
+
+    // Aggiorna copia locale
+    if (!dati.utenti.some(u => u.username === username)) {
+      dati.utenti.push(nuovoUtente);
+    }
+
+    document.getElementById('dip-nome').value = '';
+    document.getElementById('dip-cognome').value = '';
+    document.getElementById('dip-username').value = '';
+    document.getElementById('dip-password').value = '';
+    if (typeof rimuoviFotoNuovoDipendente === 'function') rimuoviFotoNuovoDipendente();
+
+    msg.innerHTML = '<div class="success">✅ Dipendente aggiunto!</div>';
+    caricaListaDipendenti();
+    caricaSelectDipendentiModifica();
+    caricaSelectDipendentiCalendario();
+  } catch (err) {
+    console.error('❌ Errore aggiunta dipendente:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+};
+
+// ─── SALVA MODIFICA DIPENDENTE ─────────────────
+window.salvaModificaDipendente = async function(oldUsername) {
+  const nuovoUsername = document.getElementById('edit-username-' + oldUsername).value.trim();
+  const nome = document.getElementById('edit-nome-' + oldUsername).value.trim();
+  const cognome = document.getElementById('edit-cognome-' + oldUsername).value.trim();
+  const password = document.getElementById('edit-password-' + oldUsername).value.trim();
+  const ruolo = document.getElementById('edit-ruolo-' + oldUsername).value;
+
+  if (!nuovoUsername || !nome || !cognome) { alert('Compila tutti i campi obbligatori'); return; }
+  if (!password || password.length < 4) { alert('❌ Password min 4 caratteri'); return; }
+  if (nuovoUsername !== oldUsername && dati.utenti.some(u => u.username === nuovoUsername)) {
+    alert('❌ Username già esistente');
+    return;
+  }
+
+  const utente = dati.utenti.find(u => u.username === oldUsername);
+  if (!utente) return;
+
+  const utenteAggiornato = { ...utente, username: nuovoUsername, nome, cognome, password, ruolo };
+
+  try {
+    // Se lo username è cambiato, cancella il vecchio doc e crea il nuovo
+    if (nuovoUsername !== oldUsername) {
+      await utenteCancella(oldUsername);
+    }
+    await utenteSalva(utenteAggiornato);
+
+    // Aggiorna copia locale
+    const idx = dati.utenti.findIndex(u => u.username === oldUsername);
+    if (idx !== -1) dati.utenti[idx] = utenteAggiornato;
+    if (nuovoUsername !== oldUsername) {
+      dati.registrazioni.forEach(r => { if (r.utente_id === oldUsername) r.utente_id = nuovoUsername; });
+      dati.richieste.forEach(r => { if (r.utente_id === oldUsername) r.utente_id = nuovoUsername; });
+      dati.notifiche.forEach(n => { if (n.utente_id === oldUsername) n.utente_id = nuovoUsername; });
+    }
+
+    caricaListaDipendenti();
+    caricaSelectDipendentiModifica();
+    caricaSelectDipendentiCalendario();
+    alert('✅ Dipendente modificato!');
+  } catch (err) {
+    console.error('❌ Errore modifica dipendente:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+};
+
+// ─── ELIMINA DIPENDENTE ────────────────────────
+window.eliminaDipendente = async function(username) {
+  const regCount = dati.registrazioni.filter(r => r.utente_id === username).length;
+  const richCount = dati.richieste.filter(r => r.utente_id === username).length;
+
+  let msg = '⚠️ Eliminare il dipendente "' + username + '"?\n\n';
+  if (regCount > 0 || richCount > 0) {
+    msg += `⚠️ Ha ${regCount} registrazioni e ${richCount} richieste.\nVerranno eliminate.\n\n`;
+  }
+  msg += 'Procedere?';
+  if (!confirm(msg)) return;
+
+  try {
+    // 1. Cancella utente
+    await utenteCancella(username);
+
+    // 2. Cancella registrazioni, richieste, notifiche collegate (a batch)
+    const regs = dati.registrazioni.filter(r => r.utente_id === username);
+    const rich = dati.richieste.filter(r => r.utente_id === username);
+    const nots = dati.notifiche.filter(n => n.utente_id === username);
+
+    const BATCH = 500;
+    for (let i = 0; i < regs.length; i += BATCH) {
+      const batch = _dbFirestore().batch();
+      regs.slice(i, i + BATCH).forEach(r =>
+        batch.delete(_dbFirestore().collection('registrazioni').doc(String(r.id)))
+      );
+      await batch.commit();
+    }
+    for (let i = 0; i < rich.length; i += BATCH) {
+      const batch = _dbFirestore().batch();
+      rich.slice(i, i + BATCH).forEach(r =>
+        batch.delete(_dbFirestore().collection('richieste').doc(String(r.id)))
+      );
+      await batch.commit();
+    }
+    for (let i = 0; i < nots.length; i += BATCH) {
+      const batch = _dbFirestore().batch();
+      nots.slice(i, i + BATCH).forEach(n =>
+        batch.delete(_dbFirestore().collection('notifiche').doc(String(n.id)))
+      );
+      await batch.commit();
+    }
+
+    // 3. Aggiorna copia locale
+    dati.utenti = dati.utenti.filter(u => u.username !== username);
+    dati.registrazioni = dati.registrazioni.filter(r => r.utente_id !== username);
+    dati.richieste = dati.richieste.filter(r => r.utente_id !== username);
+    dati.notifiche = dati.notifiche.filter(n => n.utente_id !== username);
+
+    caricaListaDipendenti();
+    caricaSelectDipendentiModifica();
+    caricaSelectDipendentiCalendario();
+    alert('🗑️ Dipendente eliminato');
+  } catch (err) {
+    console.error('❌ Errore eliminazione dipendente:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+};
+
+// ─── ASCOLTO REALTIME (sostituisce la vecchia) ─
+window.attivaAscoltoRealtime = function() {
+  if (_unsubscribeSnapshot) {
+    try { _unsubscribeSnapshot(); } catch (e) {}
+    _unsubscribeSnapshot = null;
+  }
+  if (window._unsubReg) { try { window._unsubReg(); } catch (e) {} }
+  if (window._unsubRich) { try { window._unsubRich(); } catch (e) {} }
+  if (window._unsubNot) { try { window._unsubNot(); } catch (e) {} }
+  if (window._unsubUt) { try { window._unsubUt(); } catch (e) {} }
+
+  console.log('🔄 Attivo ascolti realtime (sottocollezioni + dati/main)...');
+
+  // 1. dati/main → aziende, commesse (e array vecchi se non migrato)
+  _unsubscribeSnapshot = _dbFirestore().collection('dati').doc('main').onSnapshot(snap => {
+    if (!snap.exists) return;
+    if (_stoSalvando) return;
+    const remoto = snap.data();
+
+    // Aziende e commesse: sempre da qui
+    dati.aziende = remoto.aziende || dati.aziende || [];
+    dati.commesse = remoto.commesse || dati.commesse || [];
+
+    // Se NON migrato, prendi anche gli array vecchi
+    if (remoto.migrazione_fatta !== true) {
+      dati.registrazioni = remoto.registrazioni || [];
+      dati.richieste = remoto.richieste || [];
+      dati.notifiche = remoto.notifiche || [];
+      dati.utenti = remoto.utenti || [];
+    }
+
+    if (utenteCorrente) aggiornaUIDopoRealtime();
+  });
+
+  // 2. registrazioni/{id}
+  window._unsubReg = regAscolta(arr => {
+    // Se la migrazione è fatta, la collezione è la verità.
+    // Se NON è fatta, unisci array vecchio + collezione nuova.
+    const vecchie = (dati._migrazioneFatta ? [] : (dati.registrazioni || []));
+    const mappa = new Map();
+    vecchie.forEach(r => mappa.set(String(r.id), r));
+    arr.forEach(r => mappa.set(String(r.id), r));
+    dati.registrazioni = Array.from(mappa.values());
+    if (utenteCorrente) aggiornaUIDopoRealtime();
+  });
+
+  // 3. richieste/{id}
+  window._unsubRich = richAscolta(arr => {
+    const vecchie = (dati._migrazioneFatta ? [] : (dati.richieste || []));
+    const mappa = new Map();
+    vecchie.forEach(r => mappa.set(String(r.id), r));
+    arr.forEach(r => mappa.set(String(r.id), r));
+    dati.richieste = Array.from(mappa.values());
+    if (utenteCorrente) aggiornaUIDopoRealtime();
+  });
+
+  // 4. notifiche/{id}
+  window._unsubNot = notAscolta(arr => {
+    const vecchie = (dati._migrazioneFatta ? [] : (dati.notifiche || []));
+    const mappa = new Map();
+    vecchie.forEach(n => mappa.set(String(n.id), n));
+    arr.forEach(n => mappa.set(String(n.id), n));
+    dati.notifiche = Array.from(mappa.values());
+    if (utenteCorrente) aggiornaBadgeNotifiche();
+  });
+
+  // 5. utenti/{username}
+  window._unsubUt = utentiAscolta(arr => {
+    const vecchi = (dati._migrazioneFatta ? [] : (dati.utenti || []));
+    const mappa = new Map();
+    vecchi.forEach(u => mappa.set(u.username, u));
+    arr.forEach(u => mappa.set(u.username, u));
+    dati.utenti = Array.from(mappa.values());
+    if (utenteCorrente) aggiornaUIDopoRealtime();
+  });
+
+  // Segna se migrazione è fatta (per i listener sopra)
+  _dbFirestore().collection('dati').doc('main').get().then(snap => {
+    if (snap.exists) dati._migrazioneFatta = (snap.data().migrazione_fatta === true);
+  });
+};
+
+// ─── CARICA DATI (con fallback) ────────────────
+window.caricaDati = async function() {
+  // 1. dati/main
+  let mainData = null;
+  try {
+    const snap = await _dbFirestore().collection('dati').doc('main').get();
+    if (snap.exists) mainData = snap.data();
+  } catch (e) {
+    console.warn('⚠️ Errore lettura dati/main:', e);
+  }
+
+  if (!mainData) {
+    const saved = localStorage.getItem('datiLavoroV2');
+    if (saved) {
+      dati = JSON.parse(saved);
+      if (!dati.aziende) dati.aziende = [{ id: 1, nome: 'MEC-ROY srls' }];
+      if (!dati.commesse) dati.commesse = [];
+      return dati;
+    }
+    dati = {
+      utenti: [{ username: 'admin', password: 'admin123', nome: 'Admin', cognome: 'Sistema', ruolo: 'admin' }],
+      commesse: [], registrazioni: [], richieste: [], notifiche: [],
+      aziende: [{ id: 1, nome: 'MEC-ROY srls' }]
+    };
+    return dati;
+  }
+
+  // 2. Copia base
+  dati = {
+    aziende: mainData.aziende || [{ id: 1, nome: 'MEC-ROY srls' }],
+    commesse: mainData.commesse || [],
+    registrazioni: [],
+    richieste: [],
+    notifiche: [],
+    utenti: []
+  };
+  dati._migrazioneFatta = mainData.migrazione_fatta === true;
+
+  // 3. Se NON migrato, parti dagli array vecchi come base
+  if (!dati._migrazioneFatta) {
+    dati.registrazioni = mainData.registrazioni || [];
+    dati.richieste = mainData.richieste || [];
+    dati.notifiche = mainData.notifiche || [];
+    dati.utenti = mainData.utenti || [];
+  }
+
+  // 4. Aggiungi i documenti nuovi dalle collezioni
+  try {
+    const [regSnap, richSnap, notSnap, utSnap] = await Promise.all([
+      _dbFirestore().collection('registrazioni').get(),
+      _dbFirestore().collection('richieste').get(),
+      _dbFirestore().collection('richieste').get().catch(() => ({ forEach: () => {} })),
+      _dbFirestore().collection('utenti').get()
+    ]);
+
+    // Registrazioni
+    const mappaReg = new Map();
+    dati.registrazioni.forEach(r => mappaReg.set(String(r.id), r));
+    regSnap.forEach(d => mappaReg.set(String(d.id), d.data()));
+    dati.registrazioni = Array.from(mappaReg.values());
+
+    // Richieste
+    const mappaRich = new Map();
+    dati.richieste.forEach(r => mappaRich.set(String(r.id), r));
+    richSnap.forEach(d => mappaRich.set(String(d.id), d.data()));
+    dati.richieste = Array.from(mappaRich.values());
+
+    // Notifiche (riuso richSnap per errore — correggo sotto)
+    // (Vedi sotto: uso notSnap corretto)
+
+    // Utenti
+    const mappaUt = new Map();
+    dati.utenti.forEach(u => mappaUt.set(u.username, u));
+    utSnap.forEach(d => mappaUt.set(d.id, d.data()));
+    dati.utenti = Array.from(mappaUt.values());
+
+  } catch (e) {
+    console.warn('⚠️ Errore lettura sottocollezioni:', e);
+  }
+
+  // 5. Notifiche (leggo separatamente per non sbagliare)
+  try {
+    const notSnap2 = await _dbFirestore().collection('notifiche').get();
+    const mappaNot = new Map();
+    dati.notifiche.forEach(n => mappaNot.set(String(n.id), n));
+    notSnap2.forEach(d => mappaNot.set(String(d.id), d.data()));
+    dati.notifiche = Array.from(mappaNot.values());
+  } catch (e) {
+    console.warn('⚠️ Errore lettura notifiche:', e);
+  }
+
+  // 6. Calcola prossimoId
+  let maxId = 0;
+  dati.registrazioni.forEach(r => { if (Number(r.id) > maxId) maxId = Number(r.id); });
+  dati.richieste.forEach(r => { if (Number(r.id) > maxId) maxId = Number(r.id); });
+  dati.notifiche.forEach(n => { if (Number(n.id) > maxId) maxId = Number(n.id); });
+  prossimoId = maxId + 1;
+
+  return dati;
+};
+
+// ─── APPROVA RICHIESTA (con scritture puntuali) ─
+window.approvaRichiesta = async function(id) {
+  try {
+    const richiesta = dati.richieste.find(r => r.id === id);
+    if (!richiesta) { alert('❌ Richiesta non trovata'); return; }
+    if (richiesta.stato !== 'pending') { alert('⚠️ Già processata'); return; }
+
+    // 1. Aggiorna stato richiesta
+    await richAggiorna(id, { stato: 'approvata' });
+    richiesta.stato = 'approvata';
+
+    // 2. Trigger push
+    if (!isWeekendOggi()) {
+      try {
+        await _dbFirestore().collection('richieste_trigger').add({
+          richiesta_id: richiesta.id,
+          utente_id: richiesta.utente_id,
+          tipo: richiesta.tipo,
+          azione: 'approvata',
+          data_inizio: richiesta.data_inizio || null,
+          data_fine: richiesta.data_fine || null,
+          data: richiesta.data || null,
+          ora_inizio: richiesta.ora_inizio || null,
+          ora_fine: richiesta.ora_fine || null,
+          creato_il: new Date().toISOString()
+        });
+      } catch (err) { console.warn('Trigger:', err); }
+    }
+
+    // 3. Crea registrazioni collegate
+    const nuoveRegs = [];
+    if (richiesta.tipo === 'recupero_ore') {
+      const [h1, m1] = richiesta.ora_inizio.split(':').map(Number);
+      const [h2, m2] = richiesta.ora_fine.split(':').map(Number);
+      const oreLav = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+      if (oreLav <= 0 || oreLav > 12) {
+        alert('❌ ERRORE DATI: Orario non valido.');
+        await richAggiorna(id, { stato: 'pending' });
+        richiesta.stato = 'pending';
+        return;
+      }
+      nuoveRegs.push({
+        id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+        utente_id: richiesta.utente_id,
+        commessa_id: richiesta.commessa_id || null,
+        data: richiesta.data,
+        ora_inizio: richiesta.ora_inizio,
+        ora_fine: richiesta.ora_fine,
+        descrizione: richiesta.descrizione_lavoro || 'Recupero ore',
+        tipo: 'lavoro',
+        recupero: true,
+        ore: oreLav
+      });
+    } else {
+      nuoveRegs.push({
+        id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+        utente_id: richiesta.utente_id,
+        commessa_id: null,
+        data: richiesta.data_inizio,
+        ora_inizio: '00:00',
+        ora_fine: '00:00',
+        descrizione: richiesta.tipo + ' (approvata)',
+        tipo: richiesta.tipo,
+        richiesta_id: richiesta.id
+      });
+      if (richiesta.data_inizio !== richiesta.data_fine) {
+        let dc = new Date(richiesta.data_inizio);
+        const df = new Date(richiesta.data_fine);
+        while (dc < df) {
+          dc.setDate(dc.getDate() + 1);
+          nuoveRegs.push({
+            id: Date.now() * 1000 + Math.floor(Math.random() * 1000) + nuoveRegs.length,
+            utente_id: richiesta.utente_id,
+            commessa_id: null,
+            data: dc.toISOString().split('T')[0],
+            ora_inizio: '00:00',
+            ora_fine: '00:00',
+            descrizione: richiesta.tipo + ' (approvata)',
+            tipo: richiesta.tipo,
+            richiesta_id: richiesta.id
+          });
+        }
+      }
+    }
+
+    for (const reg of nuoveRegs) {
+      await regAggiungi(reg);
+      if (!dati.registrazioni.some(r => r.id === reg.id)) dati.registrazioni.push(reg);
+    }
+
+    // 4. Notifica al dipendente
+    const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+    const msgNot = richiesta.tipo === 'recupero_ore'
+      ? `✅ Le tue ore del ${richiesta.data} sono state APPROVATE!`
+      : `${emoji[richiesta.tipo] || '📌'} Richiesta APPROVATA ✅`;
+    await aggiungiNotifica(richiesta.utente_id, 'approvazione', msgNot, '#');
+
+    caricaRichiesteAdmin();
+    aggiornaBadgeRichieste();
+    caricaRichiesteDipendente();
+    aggiornaBadgeNotifiche();
+    alert('✅ Richiesta approvata!');
+  } catch (err) {
+    console.error('❌ Errore approvazione:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+};
+
+// ─── ANNULLA RICHIESTA ─────────────────────────
+window.annullaRichiesta = async function(id) {
+  try {
+    const richiesta = dati.richieste.find(r => r.id === id);
+    if (!richiesta) { alert('❌ Richiesta non trovata'); return; }
+
+    const eraApprovata = richiesta.stato === 'approvata';
+    const msgConf = eraApprovata
+      ? '⚠️ Questa richiesta è GIÀ APPROVATA.\nAnnullandola verranno eliminate anche le registrazioni collegate.\nProcedere?'
+      : '❌ Annullare questa richiesta?';
+    if (!confirm(msgConf)) return;
+
+    // 1. Se era approvata, cancella registrazioni collegate
+    if (eraApprovata) {
+      const daCancellare = [];
+      if (richiesta.tipo !== 'recupero_ore') {
+        dati.registrazioni.forEach(r => {
+          if (r.richiesta_id === richiesta.id) daCancellare.push(r.id);
+        });
+      } else {
+        dati.registrazioni.forEach(r => {
+          if (r.utente_id === richiesta.utente_id &&
+              r.data === richiesta.data &&
+              r.tipo === 'lavoro' &&
+              r.recupero === true &&
+              r.ora_inizio === richiesta.ora_inizio &&
+              r.ora_fine === richiesta.ora_fine) {
+            daCancellare.push(r.id);
+          }
+        });
+      }
+
+      const BATCH = 500;
+      for (let i = 0; i < daCancellare.length; i += BATCH) {
+        const batch = _dbFirestore().batch();
+        daCancellare.slice(i, i + BATCH).forEach(idReg =>
+          batch.delete(_dbFirestore().collection('registrazioni').doc(String(idReg)))
+        );
+        await batch.commit();
+      }
+
+      dati.registrazioni = dati.registrazioni.filter(r => !daCancellare.includes(r.id));
+    }
+
+    // 2. Stato → annullata
+    await richAggiorna(id, {
+      stato: 'annullata',
+      data_annullamento: new Date().toISOString()
+    });
+    richiesta.stato = 'annullata';
+    richiesta.data_annullamento = new Date().toISOString();
+
+    // 3. Notifica
+    const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
+    const tipoLabel = richiesta.tipo === 'recupero_ore' ? 'recupero ore' : richiesta.tipo;
+    await aggiungiNotifica(
+      richiesta.utente_id,
+      'annullamento',
+      `${emoji[richiesta.tipo] || '📌'} La tua richiesta di ${tipoLabel} è stata ANNULLATA ❌`,
+      '#'
+    );
+
+    // 4. Trigger push
+    if (!isWeekendOggi()) {
+      try {
+        await _dbFirestore().collection('richieste_trigger').add({
+          richiesta_id: richiesta.id,
+          utente_id: richiesta.utente_id,
+          tipo: richiesta.tipo,
+          azione: 'annullata',
+          creato_il: new Date().toISOString()
+        });
+      } catch (err) { console.warn('Trigger:', err); }
+    }
+
+    caricaRichiesteAdmin();
+    aggiornaBadgeRichieste();
+    caricaRichiesteDipendente();
+    aggiornaBadgeNotifiche();
+    alert('✅ Richiesta annullata!');
+  } catch (err) {
+    console.error('❌ Errore annullamento:', err);
+    alert('❌ Errore: ' + err.message);
+  }
+};
+
+// ─── INVIA RICHIESTA ───────────────────────────
+window.inviaRichiesta = async function() {
+  if (utenteCorrente?.ruolo === 'admin') { alert('Gli admin non fanno richieste'); return; }
+
+  const tipo = document.getElementById('tipo-richiesta').value;
+  const msg = document.getElementById('msg-richiesta');
+
+  try {
+    if (tipo === 'recupero_ore') {
+      const data = document.getElementById('recupero-data').value;
+      const ora_inizio = document.getElementById('recupero-ora-inizio').value;
+      const ora_fine = document.getElementById('recupero-ora-fine').value;
+      const commessa_id = parseInt(document.getElementById('recupero-commessa').value) || null;
+      const descrizione_lavoro = document.getElementById('recupero-motivo').value.trim();
+
+      if (!data || !ora_inizio || !ora_fine || !descrizione_lavoro) {
+        msg.innerHTML = '<div class="error">Compila tutti i campi</div>'; return;
+      }
+      if (ora_inizio >= ora_fine) {
+        msg.innerHTML = '<div class="error">Ora fine deve essere dopo ora inizio</div>'; return;
+      }
+      const oggi = new Date().toISOString().split('T')[0];
+      if (data > oggi) { msg.innerHTML = '<div class="error">Non puoi richiedere date future</div>'; return; }
+
+      const sovr = controllaSovrapposizioni(utenteCorrente.username, data, ora_inizio, ora_fine, 'recupero_ore');
+      if (sovr) { msg.innerHTML = '<div class="error">❌ ' + sovr.messaggio + '</div>'; return; }
+
+      const richiesta = {
+        id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+        utente_id: utenteCorrente.username,
+        tipo, data, ora_inizio, ora_fine, commessa_id, descrizione_lavoro,
+        stato: 'pending',
+        data_richiesta: new Date().toISOString()
+      };
+      await richAggiungi(richiesta);
+      dati.richieste.push(richiesta);
+      msg.innerHTML = '<div class="success">✅ Richiesta inviata!</div>';
+
+      if (!isWeekendOggi()) {
+        try {
+          await _dbFirestore().collection('richieste_trigger').add({
+            richiesta_id: richiesta.id, utente_id: richiesta.utente_id,
+            tipo: richiesta.tipo, data: richiesta.data,
+            ora_inizio: richiesta.ora_inizio, ora_fine: richiesta.ora_fine,
+            commessa_id: richiesta.commessa_id,
+            descrizione_lavoro: richiesta.descrizione_lavoro,
+            creato_il: new Date().toISOString()
+          });
+        } catch (err) { console.warn('Trigger:', err); }
+      }
+
+      document.getElementById('recupero-data').value = '';
+      document.getElementById('recupero-ora-inizio').value = '';
+      document.getElementById('recupero-ora-fine').value = '';
+      document.getElementById('recupero-motivo').value = '';
+      aggiornaBadgeRichieste();
+      caricaRichiesteDipendente();
+      return;
+    }
+
+    // Ferie / permesso / malattia
+    const data_inizio = document.getElementById('richiesta-data-inizio').value;
+    const data_fine = document.getElementById('richiesta-data-fine').value;
+    const note = document.getElementById('richiesta-note').value.trim();
+    if (!data_inizio || !data_fine) { msg.innerHTML = '<div class="error">Inserisci le date</div>'; return; }
+    if (data_inizio > data_fine) { msg.innerHTML = '<div class="error">Data inizio > fine</div>'; return; }
+
+    let protocollo = '';
+    if (tipo === 'malattia') {
+      protocollo = nmLeggiProtocollo();
+      if (protocollo.length !== 9 || !/^\d{9}$/.test(protocollo)) {
+        msg.innerHTML = '<div class="error">❌ Inserisci 9 cifre del protocollo</div>'; return;
+      }
+    }
+
+    const richiesta = {
+      id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+      utente_id: utenteCorrente.username,
+      tipo, data_inizio, data_fine, note,
+      stato: 'pending',
+      data_richiesta: new Date().toISOString()
+    };
+    if (tipo === 'malattia') richiesta.protocollo = protocollo;
+
+    await richAggiungi(richiesta);
+    dati.richieste.push(richiesta);
+    msg.innerHTML = '<div class="success">✅ Richiesta inviata!</div>';
+    document.getElementById('richiesta-note').value = '';
+    if (tipo === 'malattia') nmSvuotaProtocollo();
+
+    if (!isWeekendOggi()) {
+      try {
+        await _dbFirestore().collection('richieste_trigger').add({
+          richiesta_id: richiesta.id, utente_id: richiesta.utente_id,
+          tipo: richiesta.tipo, data_inizio: richiesta.data_inizio,
+          data_fine: richiesta.data_fine, note: richiesta.note,
+          creato_il: new Date().toISOString()
+        });
+      } catch (err) { console.warn('Trigger:', err); }
+    }
+
+    caricaRichiesteDipendente();
+    aggiornaBadgeRichieste();
+  } catch (err) {
+    console.error('❌ Errore invio richiesta:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+};
+
+// ─── SALVA REGISTRAZIONE MANUALE (admin) ───────
+window.salvaRegistrazioneManuale = async function() {
+  const username = document.getElementById('addreg-dipendente').value;
+  const data = document.getElementById('addreg-data').value;
+  const oraInizio = document.getElementById('addreg-ora-inizio').value;
+  const oraFine = document.getElementById('addreg-ora-fine').value;
+  const commessaId = parseInt(document.getElementById('addreg-commessa').value) || null;
+  const descrizione = document.getElementById('addreg-descrizione').value.trim();
+  const straordinario = document.getElementById('addreg-straordinario').checked;
+  const msg = document.getElementById('addreg-msg');
+
+  if (!username) { msg.innerHTML = '<div class="error">❌ Seleziona dipendente</div>'; return; }
+  if (!data) { msg.innerHTML = '<div class="error">❌ Inserisci data</div>'; return; }
+  if (!oraInizio || !oraFine) { msg.innerHTML = '<div class="error">❌ Inserisci orari</div>'; return; }
+  if (oraInizio >= oraFine) { msg.innerHTML = '<div class="error">❌ Ora fine > inizio</div>'; return; }
+  if (!descrizione) { msg.innerHTML = '<div class="error">❌ Inserisci descrizione</div>'; return; }
+
+  const [h1, m1] = oraInizio.split(':').map(Number);
+  const [h2, m2] = oraFine.split(':').map(Number);
+  const oreLav = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+
+  const nuova = {
+    id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+    utente_id: username,
+    commessa_id: commessaId,
+    data, ora_inizio: oraInizio, ora_fine: oraFine,
+    descrizione: descrizione + (straordinario ? ' (STRAORDINARIO)' : ''),
+    tipo: 'lavoro',
+    straordinario: straordinario,
+    ore: oreLav,
+    _manuale: true
+  };
+
+  try {
+    await regAggiungi(nuova);
+    dati.registrazioni.push(nuova);
+    msg.innerHTML = '<div class="success">✅ Registrazione creata!</div>';
+    setTimeout(() => {
+      chiudiModaleAggiungiReg();
+      if (typeof applicaFiltriDipendente === 'function') applicaFiltriDipendente();
+      caricaRegistrazioniModifica();
+      if (typeof caricaCalendario === 'function') caricaCalendario();
+    }, 800);
+  } catch (err) {
+    console.error('❌ Errore:', err);
+    msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  }
+};
+
+// ─── OVERRIDE salvaDati: NON tocca più gli array grandi ─
+window.salvaDati = async function() {
+  // Ora salva solo piccole cose in dati/main (aziende, commesse).
+  // Registrazioni, richieste, notifiche, utenti vanno nelle loro collezioni.
+  try {
+    const daSalvare = {
+      aziende: dati.aziende || [],
+      commesse: dati.commesse || []
+    };
+    await _dbFirestore().collection('dati').doc('main').set(daSalvare, { merge: true });
+    try { localStorage.setItem('datiLavoroV2', JSON.stringify(dati)); } catch (e) {}
+  } catch (err) {
+    console.warn('⚠️ Errore salvataggio dati/main:', err);
+  }
+};
+
+// ─── OVERRIDE salvaFotoModale (usa utenteAggiorna) ──
+window.salvaFotoModale = async function() {
+  if (!_usernameModaleFoto) return;
+  const utente = dati.utenti.find(u => u.username === _usernameModaleFoto);
+  if (!utente) return;
+  const msg = document.getElementById('msg-foto');
+  const btnSalva = document.getElementById('foto-btn-salva');
+
+  if (!_fotoModaleBase64) {
+    try {
+      delete utente.foto;
+      await utenteSalva(utente);
+      msg.innerHTML = '<div class="success">✅ Foto rimossa!</div>';
+      setTimeout(() => { chiudiModaleFoto(); caricaListaDipendenti(); }, 700);
+    } catch (err) { msg.innerHTML = '<div class="error">❌ ' + err.message + '</div>'; }
+    return;
+  }
+
+  btnSalva.disabled = true;
+  const orig = btnSalva.innerHTML;
+  btnSalva.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio...';
+
+  generaFotoFinale(async (base64Final) => {
+    if (!base64Final) {
+      msg.innerHTML = '<div class="error">❌ Errore ritaglio</div>';
+      btnSalva.disabled = false;
+      btnSalva.innerHTML = orig;
+      return;
+    }
+    try {
+      utente.foto = base64Final;
+      await utenteSalva(utente);
+      msg.innerHTML = '<div class="success">✅ Foto aggiornata!</div>';
+      setTimeout(() => { chiudiModaleFoto(); caricaListaDipendenti(); }, 700);
+    } catch (err) {
+      msg.innerHTML = '<div class="error">❌ ' + err.message + '</div>';
+      btnSalva.disabled = false;
+      btnSalva.innerHTML = orig;
+    }
+  });
+};
+
+// ─── OVERRIDE salvaNuovaPassword (admin) ───────
+window.salvaNuovaPassword = async function() {
+  const nuova = document.getElementById('nuova-password').value.trim();
+  const conferma = document.getElementById('conferma-password').value.trim();
+  const msg = document.getElementById('msg-password');
+  if (!nuova || nuova.length < 4) { msg.innerHTML = '<div class="error">Min 4 caratteri</div>'; return; }
+  if (nuova !== conferma) { msg.innerHTML = '<div class="error">Password diverse</div>'; return; }
+
+  const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
+  if (!utente) return;
+
+  try {
+    utente.password = nuova;
+    await utenteSalva(utente);
+    msg.innerHTML = '<div class="success">✅ Password cambiata!</div>';
+    setTimeout(() => chiudiModificaPassword(), 1500);
+  } catch (err) {
+    msg.innerHTML = '<div class="error">❌ ' + err.message + '</div>';
+  }
+};
+
+// ─── OVERRIDE aggiungiAzienda (dati/main va bene) ───
+// (invariata, ma se vuoi salvarla puntuale in un doc azienda, si può fare in futuro)
+// Lascio la funzione originale: le aziende sono piccole e cambiano raramente.
+
+// ─── OVERRIDE aggiungiCommessa (dati/main va bene) ───
+// Idem: commesse piccole e raramente toccate.
+
+console.log('✅ script.js — SOTTOCOLLEZIONI + OVERRIDE caricati');
+
+// ============================================
+// script-migrazione.js
+// Eseguito PRIMA di script.js
+// Contiene la funzione di migrazione one-shot
+// ============================================
+
+async function migraDatiVecchi() {
+  // Controllo infallibile
+  if (typeof utenteCorrente === 'undefined' || !utenteCorrente || utenteCorrente.ruolo !== 'admin') {
+    alert('❌ Solo un admin può migrare');
+    return;
+  }
+
+  const conferma = confirm(
+    'MIGRAZIONE DATI\n\n' +
+    'Verranno COPIATI (non cancellati) tutti i dati vecchi nelle nuove collezioni:\n' +
+    '• registrazioni\n' +
+    '• richieste\n' +
+    '• notifiche\n' +
+    '• utenti\n\n' +
+    'I vecchi array in dati/main resteranno intatti come backup.\n\n' +
+    'Procedere?'
+  );
+  if (!conferma) return;
+
+  const btn = document.getElementById('btn-migra-dati');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Migrazione in corso...';
+  }
+
+  try {
+    const db = firebase.firestore();
+
+    // 1. Leggi il documento principale
+    const snap = await db.collection('dati').doc('main').get();
+    if (!snap.exists) {
+      alert('❌ Documento dati/main non trovato');
+      return;
+    }
+
+    const d = snap.data();
+
+    if (d.migrazione_fatta === true) {
+      alert('✅ Migrazione già completata in data ' + d.migrazione_data);
+      return;
+    }
+
+    const registrazioni = d.registrazioni || [];
+    const richieste = d.richieste || [];
+    const notifiche = d.notifiche || [];
+    const utenti = d.utenti || [];
+
+    console.log(`📦 Da migrare: ${registrazioni.length} reg, ${richieste.length} rich, ${notifiche.length} not, ${utenti.length} utenti`);
+
+    let contaReg = 0, contaRich = 0, contaNot = 0, contaUt = 0;
+
+    // 2. Migra UTENTI → utenti/{username}
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Migrazione utenti...';
+    for (const u of utenti) {
+      if (!u.username) continue;
+      await db.collection('utenti').doc(u.username).set(u);
+      contaUt++;
+    }
+    console.log(`✅ Migrati ${contaUt} utenti`);
+
+    // 3. Migra REGISTRAZIONI a batch (max 500 per batch)
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Migrazione registrazioni...';
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < registrazioni.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      const chunk = registrazioni.slice(i, i + BATCH_SIZE);
+      for (const r of chunk) {
+        const idDoc = String(r.id);
+        const ref = db.collection('registrazioni').doc(idDoc);
+        batch.set(ref, r);
+        contaReg++;
+      }
+      await batch.commit();
+      console.log(`✅ Batch registrazioni ${i / BATCH_SIZE + 1}: ${chunk.length} doc`);
+    }
+
+    // 4. Migra RICHIESTE a batch
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Migrazione richieste...';
+    for (let i = 0; i < richieste.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      const chunk = richieste.slice(i, i + BATCH_SIZE);
+      for (const r of chunk) {
+        const idDoc = String(r.id);
+        const ref = db.collection('richieste').doc(idDoc);
+        batch.set(ref, r);
+        contaRich++;
+      }
+      await batch.commit();
+      console.log(`✅ Batch richieste ${i / BATCH_SIZE + 1}: ${chunk.length} doc`);
+    }
+
+    // 5. Migra NOTIFICHE a batch
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Migrazione notifiche...';
+    for (let i = 0; i < notifiche.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      const chunk = notifiche.slice(i, i + BATCH_SIZE);
+      for (const n of chunk) {
+        const idDoc = String(n.id);
+        const ref = db.collection('notifiche').doc(idDoc);
+        batch.set(ref, n);
+        contaNot++;
+      }
+      await batch.commit();
+      console.log(`✅ Batch notifiche ${i / BATCH_SIZE + 1}: ${chunk.length} doc`);
+    }
+
+    // 6. Segna migrazione fatta (SOLO i campi di stato, non tocca gli array)
+    await db.collection('dati').doc('main').update({
+      migrazione_fatta: true,
+      migrazione_data: new Date().toISOString(),
+      migrazione_conteggi: {
+        registrazioni: contaReg,
+        richieste: contaRich,
+        notifiche: contaNot,
+        utenti: contaUt
+      }
+    });
+
+    console.log('✅ MIGRAZIONE COMPLETATA');
+    alert(
+      '✅ MIGRAZIONE COMPLETATA\n\n' +
+      `• ${contaReg} registrazioni\n` +
+      `• ${contaRich} richieste\n` +
+      `• ${contaNot} notifiche\n` +
+      `• ${contaUt} utenti\n\n` +
+      'I vecchi array in dati/main NON sono stati cancellati (backup).\n\n' +
+      'Da ora in poi tutti i salvataggi vanno nelle nuove collezioni sicure.'
+    );
+
+    if (btn) {
+      btn.innerHTML = '<i class="fas fa-check"></i> Migrazione completata';
+      btn.style.background = '#28a745';
+    }
+
+  } catch (err) {
+    console.error('❌ Errore migrazione:', err);
+    alert('❌ Errore durante la migrazione:\n\n' + err.message + '\n\nRiprova. I dati vecchi non sono stati toccati.');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-database"></i> MIGRA DATI (admin)';
+    }
+  }
+}
+
+// Inietta il bottone admin quando la pagina dipendenti si apre
+function iniettaBottoneMigrazione() {
+  if (!window.utenteCorrente || utenteCorrente.ruolo !== 'admin') return;
+  const wrapper = document.querySelector('#panel-dipendenti .dipendenti-azioni-wrapper');
+  if (!wrapper) return;
+  if (document.getElementById('btn-migra-dati')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'btn-migra-dati';
+  btn.className = 'btn-danger';
+  btn.style.marginTop = '15px';
+  btn.style.background = '#b71c1c';
+  btn.innerHTML = '<i class="fas fa-database"></i> MIGRA DATI (admin)';
+  btn.onclick = migraDatiVecchi;
+  wrapper.appendChild(btn);
+
+  // Aggiungi anche un indicatore di stato
+  const status = document.createElement('div');
+  status.id = 'migrazione-status';
+  status.style.marginTop = '10px';
+  status.style.fontSize = '0.85em';
+  status.innerHTML = '<em>Verifica stato migrazione...</em>';
+  wrapper.appendChild(status);
+
+  firebase.firestore().collection('dati').doc('main').get().then(snap => {
+    if (snap.exists && snap.data().migrazione_fatta === true) {
+      const d = snap.data();
+      status.innerHTML = `<span style="color:#28a745;">✅ Migrazione completata il ${new Date(d.migrazione_data).toLocaleString('it-IT')}</span><br><small>${d.migrazione_conteggi.registrazioni} reg · ${d.migrazione_conteggi.richieste} rich · ${d.migrazione_conteggi.notifiche} not · ${d.migrazione_conteggi.utenti} utenti</small>`;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-check"></i> Già migrato';
+      btn.style.background = '#28a745';
+    } else {
+      status.innerHTML = '<span style="color:#d32f2f;">⚠️ Migrazione NON ancora eseguita</span>';
+    }
+  });
+}
+
+// Hook: quando utenteCorrente viene impostato, inietta bottone
+document.addEventListener('DOMContentLoaded', () => {
+  const observer = new MutationObserver(() => {
+    if (window.utenteCorrente && document.querySelector('#panel-dipendenti.active')) {
+      iniettaBottoneMigrazione();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+});
