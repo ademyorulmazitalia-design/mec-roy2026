@@ -1340,7 +1340,7 @@ document.addEventListener('click', function (e) {
 // APPROVA RICHIESTA — CON TRANSAZIONE (FIX #5)
 // ============================================
 async function approvaRichiesta(id) {
-  const richiesta = dati.richieste.find(r => r.id === id);
+  const richiesta = dati.richieste.find(r => String(r.id) === String(id));
   if (!richiesta) { alert('❌ Richiesta non trovata'); return; }
   if (richiesta.stato !== 'pending') { alert('⚠️ Questa richiesta è già stata processata.'); return; }
 
@@ -1482,7 +1482,7 @@ async function approvaRichiesta(id) {
 // ANNULLA RICHIESTA
 // ============================================
 async function annullaRichiesta(id) {
-  const richiesta = dati.richieste.find(r => r.id === id);
+  const richiesta = dati.richieste.find(r => String(r.id) === String(id));
   if (!richiesta) { alert('❌ Richiesta non trovata'); return; }
 
   const eraApprovata = richiesta.stato === 'approvata';
@@ -2549,7 +2549,10 @@ function caricaCalendarioDettagliato() {
         continue;
       }
 
-      if (richiesta && registrazioni.length === 0) {
+      // ✅ FIX: Mostra il permesso SOLO se non ci sono già ore registrate per quel giorno
+      const haLavoro = registrazioni.some(r => r.tipo === 'lavoro');
+      
+      if (richiesta && richiesta.tipo !== 'permesso' && !haLavoro) {
         const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒', recupero_ore: '⏰' };
         const tipo = richiesta.tipo === 'recupero_ore' ? 'RECUPERO ORE' : richiesta.tipo.toUpperCase();
         const emojiChar = emoji[richiesta.tipo] || '📌';
@@ -2559,21 +2562,44 @@ function caricaCalendarioDettagliato() {
         continue;
       }
 
-      const regSpeciale = registrazioni.find(r => r.tipo === 'malattia' || r.tipo === 'ferie' || r.tipo === 'permesso');
-      if (regSpeciale) {
+      // ⭐ FIX: Se c'è un permesso/ferie/malattia ma non ci sono ore di lavoro, mostra solo la riga speciale
+      const regSpeciale = registrazioni.find(r => 
+        (r.tipo === 'malattia' || r.tipo === 'ferie' || r.tipo === 'permesso')
+      );
+
+      if (regSpeciale && !haLavoro) {
         const emoji = { ferie: '🏖️', permesso: '📋', malattia: '🤒' };
         const tipo = regSpeciale.tipo.toUpperCase();
         const emojiChar = emoji[regSpeciale.tipo] || '📌';
-        const richCollegata = dati.richieste.find(r =>
-          r.utente_id === dip.username && r.stato === 'approvata' &&
-          r.tipo === regSpeciale.tipo && r.data_inizio <= data && r.data_fine >= data
+        
+        const richiestaCollegata = dati.richieste.find(r =>
+          r.utente_id === dip.username &&
+          r.stato === 'approvata' &&
+          r.tipo === regSpeciale.tipo &&
+          r.data_inizio <= data && r.data_fine >= data
         );
-        const protocolloHTML = (regSpeciale.tipo === 'malattia' && richCollegata && richCollegata.protocollo)
-          ? `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richCollegata.protocollo}</span>` : '';
-        htmlDip += `<div class="giorno-dettaglio"><div class="giorno-dettaglio-header"><h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${giorniSett[gs]})</span></h4><span class="giorno-totale">${emojiChar} ${tipo}</span></div><div class="table-wrapper" style="margin-top:0;border:none;"><table><tbody><tr class="riga-speciale-giorno ${regSpeciale.tipo}"><td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>${regSpeciale.descrizione ? ' - ' + regSpeciale.descrizione : ''}${protocolloHTML}</td></tr></tbody></table></div></div>`;
+        
+        const protocolloHTML = (regSpeciale.tipo === 'malattia' && richiestaCollegata && richiestaCollegata.protocollo) 
+          ? `<br><span style="font-size:0.9em;color:#00695C;font-weight:bold;">📄 Protocollo: ${richiestaCollegata.protocollo}</span>` 
+          : '';
+        
+        htmlDip += `<div class="giorno-dettaglio">`;
+        htmlDip += `<div class="giorno-dettaglio-header">`;
+        htmlDip += `<h4><i class="fas fa-calendar-day"></i> ${g} ${meseNome} ${anno} <span class="giorno-nome">(${giorniSett[gs]})</span></h4>`;
+        htmlDip += `<span class="giorno-totale">${emojiChar} ${tipo}</span>`;
+        htmlDip += `</div>`;
+        htmlDip += `<div class="table-wrapper" style="margin-top:0;border:none;">`;
+        htmlDip += `<table><tbody>`;
+        htmlDip += `<tr class="riga-speciale-giorno ${regSpeciale.tipo}">`;
+        htmlDip += `<td><span class="icona-tipo">${emojiChar}</span> <strong>${tipo}</strong>`;
+        if (regSpeciale.descrizione) htmlDip += ` - ${regSpeciale.descrizione}`;
+        htmlDip += `${protocolloHTML}`;
+        htmlDip += `</td></tr>`;
+        htmlDip += `</tbody></table></div>`;
+        htmlDip += `</div>`;
         continue;
       }
-
+      
       let totaleGiorno = 0;
       registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
       registrazioni.forEach(r => {
