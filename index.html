@@ -7,17 +7,21 @@
 
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#00695C" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
+  
+  <!-- ✅ FIX #1: Sostituito apple-mobile-web-app-capable deprecato con mobile-web-app-capable (evita il warning in console) -->
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MEC-ROY" />
   <link rel="apple-touch-icon" href="images/logo-192.png" />
+  <link rel="icon" href="images/logo-192.png" type="image/png">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
 
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js"></script>
+  <!-- ⭐ FIX #2: Aggiunto onerror per gestire CDN bloccati (es. uffici con firewall) -->
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js" onerror="console.error('❌ Errore caricamento Firebase App')"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js" onerror="console.error('❌ Errore caricamento Firebase Firestore')"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js" onerror="console.error('❌ Errore caricamento Firebase Messaging')"></script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -44,8 +48,8 @@
           <p data-i18n="login_titolo">registro ore</p>
         </div>
       </div>
-      <input type="text" id="username" class="login-anim-1" data-i18n-placeholder="login_username" placeholder="Username" />
-      <input type="password" id="password" class="login-anim-2" data-i18n-placeholder="login_password" placeholder="Password" />
+      <input type="text" id="username" class="login-anim-1" data-i18n-placeholder="login_username" placeholder="Username" autocomplete="username" />
+      <input type="password" id="password" class="login-anim-2" data-i18n-placeholder="login_password" placeholder="Password" autocomplete="current-password" />
 
       <label class="ricordami-label login-anim-3">
         <input type="checkbox" id="ricordami" />
@@ -1002,19 +1006,19 @@
       </div>
 
       <div class="nm-popup-azioni">
-  <button onclick="nmScaricaCSVPhoenix()" class="btn-success" title="Scarica un file CSV apribile con Excel Online">
-    <i class="fas fa-file-csv"></i> Scarica CSV per Phoenix
-  </button>
-  <button onclick="nmCopiaPerPhoenix()" class="btn-primary" title="Copia i numeri in formato tabella (per incollare in Phoenix)">
-    <i class="fas fa-copy"></i> Copia tabella
-  </button>
-  <button onclick="nmCondividiCartella()" class="btn-info">
-    <i class="fas fa-share-alt"></i> Condividi / Stampa
-  </button>
-  <button onclick="nmHoStampato()" class="btn-stampato">
-    <i class="fas fa-check-circle"></i> Ho stampato
-  </button>
-</div>
+        <button onclick="nmScaricaCSVPhoenix()" class="btn-success" title="Scarica un file CSV apribile con Excel Online">
+          <i class="fas fa-file-csv"></i> Scarica CSV per Phoenix
+        </button>
+        <button onclick="nmCopiaPerPhoenix()" class="btn-primary" title="Copia i numeri in formato tabella (per incollare in Phoenix)">
+          <i class="fas fa-copy"></i> Copia tabella
+        </button>
+        <button onclick="nmCondividiCartella()" class="btn-info">
+          <i class="fas fa-share-alt"></i> Condividi / Stampa
+        </button>
+        <button onclick="nmHoStampato()" class="btn-stampato">
+          <i class="fas fa-check-circle"></i> Ho stampato
+        </button>
+      </div>
 
     </div>
   </div>
@@ -1149,33 +1153,41 @@
   </div>
 </div>
 
+<!-- ============================================================
+     ✅ FIX #3: Script di inizializzazione con controlli di sicurezza 
+     ============================================================ -->
 <script src="script.js"></script>
 
 <script>
-  // ⭐ REGISTRIAMO UN SOLO SERVICE WORKER: firebase-messaging-sw.js
-  // (gestisce sia le notifiche push SIA la PWA)
-  // Non registriamo più 'service-worker.js' perché crea conflitti e notifiche doppie.
-  
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./firebase-messaging-sw.js', {
-        scope: './firebase-cloud-messaging-push-scope'
-      })
-        .then((registration) => {
-          console.log('✅ Service Worker registrato:', registration.scope);
-        })
-        .catch((error) => {
-          console.error('❌ Errore Service Worker:', error);
-        });
-    });
-  }
+  // Controllo se Firebase è stato caricato (evita crash se CDN è bloccato)
+  if (typeof firebase === 'undefined') {
+    console.error('❌ Firebase non è stato caricato. Controlla la connessione o il firewall.');
+  } else {
+    
+    // ⭐ REGISTRIAMO UN SOLO SERVICE WORKER: firebase-messaging-sw.js
+    // (gestisce sia le notifiche push SIA la PWA)
+    // Non registriamo più 'service-worker.js' perché crea conflitti e notifiche doppie.
+    
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        // ✅ Usa './' per cercare il file nella stessa cartella dell'HTML
+        navigator.serviceWorker.register('./firebase-messaging-sw.js')
+          .then((registration) => {
+            console.log('✅ Service Worker registrato con successo:', registration.scope);
+          })
+          .catch((error) => {
+            console.warn('⚠️ Errore registrazione Service Worker (non bloccante):', error);
+          });
+      });
+    }
 
-  if (firebase.messaging && firebase.messaging.isSupported()) {
-    try {
-      const messaging = firebase.messaging();
-      console.log('✅ Firebase Messaging inizializzato');
-    } catch (e) {
-      console.warn('⚠️ Firebase Messaging non disponibile:', e);
+    if (firebase.messaging && firebase.messaging.isSupported()) {
+      try {
+        const messaging = firebase.messaging();
+        console.log('✅ Firebase Messaging inizializzato correttamente');
+      } catch (e) {
+        console.warn('⚠️ Firebase Messaging non disponibile:', e);
+      }
     }
   }
 </script>
