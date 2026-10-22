@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MEC-ROY srls - Gestione lavoro </title>
 
+  <style>
+    /* ✅ NASCONDE IL LOGIN ALL'AVVIO (evita il lampo bianco) */
+    #login-page { opacity: 0; transition: opacity 0.2s ease-in-out; }
+    #login-page.pronta { opacity: 1; }
+  </style>
+
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#00695C" />
-  
-  <!-- ✅ FIX #1: Sostituito apple-mobile-web-app-capable deprecato con mobile-web-app-capable (evita il warning in console) -->
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MEC-ROY" />
@@ -18,10 +22,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
 
-  <!-- ⭐ FIX #2: Aggiunto onerror per gestire CDN bloccati (es. uffici con firewall) -->
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js" onerror="console.error('❌ Errore caricamento Firebase App')"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js" onerror="console.error('❌ Errore caricamento Firebase Firestore')"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js" onerror="console.error('❌ Errore caricamento Firebase Messaging')"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.4.0/firebase-messaging-compat.js"></script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -35,7 +38,7 @@
 <div class="container" id="app-container">
 
   <!-- ===== LOGIN ===== -->
-  <div id="login-page">
+  <div id="login-page" style="display: none;">
     <div class="login-box">
       <div class="login-header">
         <div class="logo-container">
