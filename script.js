@@ -475,8 +475,8 @@ function login() {
     inizializzaAppPerUtente(utente);
 
     attivaAscoltoRealtime();
+    // ✅ Il benvenuto parte solo al login manuale (non al refresh)
     mostraSchermataBenvenuto(utente);
-
     setTimeout(() => {
       applicaTraduzioni();
       popolaTendinaLingua();
@@ -2599,7 +2599,7 @@ function caricaCalendarioDettagliato() {
         htmlDip += `</div>`;
         continue;
       }
-      
+
       let totaleGiorno = 0;
       registrazioni.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
       registrazioni.forEach(r => {
@@ -4681,7 +4681,9 @@ function logout() {
   if (anaC) anaC.style.display = 'none';
   document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
   document.getElementById('login-page').style.display = 'block';
+  document.getElementById('login-page').classList.add('pronta'); // ✅ Fai apparire il login
   document.getElementById('main-page').style.display = 'none';
+  sessionStorage.removeItem('login_manuale'); // ✅ FIX: Resetta il benvenuto
   caricaCredenzialiSalvate();
   if (localStorage.getItem('ricordami_attivo') !== 'true') {
     document.getElementById('username').value = '';
@@ -4796,13 +4798,17 @@ function iniettaBottoneMigrazione() {
   });
 }
 
-// ============================================
-// INIT
-// ============================================
 document.addEventListener('DOMContentLoaded', function () {
   popolaTendinaLingua();
   caricaLinguaSalvata();
   caricaCredenzialiSalvate();
+
+  // ✅ Mostriamo subito il login (che è trasparente per via del CSS)
+  const loginPage = document.getElementById('login-page');
+  if (loginPage) {
+    loginPage.style.display = 'block';
+  }
+  document.getElementById('main-page').style.display = 'none';
 
   caricaDati().then(() => {
     const adesso = new Date();
@@ -4820,6 +4826,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('main-page').style.display = 'block';
         document.getElementById('errore').style.display = 'none';
+        
         const ruoloBadge = document.getElementById('user-ruolo');
         ruoloBadge.textContent = utente.ruolo === 'admin' ? t('dip_admin') : t('dip_dipendente');
         ruoloBadge.className = 'badge ' + utente.ruolo;
@@ -4827,16 +4834,21 @@ document.addEventListener('DOMContentLoaded', function () {
         configuraUIUtente(utente);
         inizializzaAppPerUtente(utente);
         attivaAscoltoRealtime();
-        mostraSchermataBenvenuto(utente);
         return;
       } else { cancellaSessione(); }
     }
-    document.getElementById('login-page').style.display = 'block';
-    document.getElementById('main-page').style.display = 'none';
+    
+    // ✅ Se l'utente NON è loggato, mostriamo il login con la dissolvenza
+    if (loginPage) {
+      loginPage.classList.add('pronta');
+    }
+    
   }).catch((err) => {
     console.error('❌ Errore caricamento dati:', err);
-    document.getElementById('login-page').style.display = 'block';
-    document.getElementById('main-page').style.display = 'none';
+    // ✅ Anche in caso di errore, mostriamo il login con la dissolvenza
+    if (loginPage) {
+      loginPage.classList.add('pronta');
+    }
   });
 
   // Input protocollo
@@ -4852,19 +4864,14 @@ document.addEventListener('DOMContentLoaded', function () {
       nmAggiornaPreview();
       if (this.value.length === 4) document.getElementById('nm-input-6char').focus();
     });
-    input4.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); if (this.value.length === 4) document.getElementById('nm-input-6char').focus(); }
-    });
   }
   if (input6) {
     input6.addEventListener('input', function () {
       this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
       nmAggiornaPreview();
     });
-    input6.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); nmSalvaNuovaCommessa(); }
-    });
   }
+  
   const inputPopup = document.getElementById('nm-input-numero');
   if (inputPopup) inputPopup.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); nmAggiungiNumero(); }
@@ -4882,7 +4889,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.key === 'Enter') { e.preventDefault(); nmConfermaCancellazione(); }
   });
 
-  // Observer per iniettare bottone migrazione
   const observer = new MutationObserver(() => {
     if (window.utenteCorrente && document.querySelector('#panel-dipendenti.active')) {
       iniettaBottoneMigrazione();
