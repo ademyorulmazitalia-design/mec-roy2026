@@ -3899,7 +3899,7 @@ async function nmScaricaCSVPhoenix() {
 
     let csv = '';
     numeri.forEach(n => { 
-      let t = formattaTestoNumero(n.testo || '').replace(/;/g, ',');
+      let t = formattaTestoNumero(n.testo || '').replace(/;/g, ',').trim();
       // Aggiungiamo una riga speciale che CLIP PROJECT potrebbe leggere come impostazione
       csv += t + '\t\n'; 
     });
