@@ -3585,7 +3585,7 @@ async function nmAggiungiNumero() {
 
     const nuovo = {
       id: 'n_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-      testo, ordine: commessa.cartelle[nmCartellaCorrente].length,
+      testo: formattaTestoNumero(testo), ordine: commessa.cartelle[nmCartellaCorrente].length,
       data_aggiunta: new Date().toISOString(), stampato: false
     };
     commessa.cartelle[nmCartellaCorrente].push(nuovo);
@@ -3633,7 +3633,7 @@ async function nmModificaNumero(idNumero) {
       nuovoTesto = nuovo.trim().toUpperCase();
       if (!nuovoTesto.startsWith('-')) nuovoTesto = '-' + nuovoTesto;
     }
-    numero.testo = nuovoTesto;
+    numero.testo = formattaTestoNumero(nuovoTesto);
     commessa.data_modifica = new Date().toISOString();
     await docRef.set(commessa);
     await nmCaricaNumeriCartella();
@@ -3884,21 +3884,34 @@ function nmEscapaHtml(testo) {
   return String(testo).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
-// CSV Phoenix
 async function nmScaricaCSVPhoenix() {
   if (!nmCommessaCorrente || !nmCartellaCorrente) { alert('❌ Nessuna cartella aperta'); return; }
   try {
     const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
     if (!doc.exists) return;
-    const commessa = doc.data();
-    const numeri = (commessa.cartelle && commessa.cartelle[nmCartellaCorrente]) || [];
+    const numeri = (doc.data().cartelle && doc.data().cartelle[nmCartellaCorrente]) || [];
     if (numeri.length === 0) { alert('⚠️ Nessun numero in questa cartella'); return; }
+    
+    // ⭐ Scegliamo la dimensione in base alla cartella corrente
+    let dimensione = '2'; // Default FILO
+    if (nmCartellaCorrente === 'cavo') dimensione = '3';
+    if (nmCartellaCorrente === 'adesive') dimensione = '5';
+
     let csv = '';
-    numeri.forEach(n => { let t = (n.testo || '').replace(/;/g, ','); csv += "'" + t + '\n'; });
+    numeri.forEach(n => { 
+      let t = formattaTestoNumero(n.testo || '').replace(/;/g, ',');
+      // Aggiungiamo una riga speciale che CLIP PROJECT potrebbe leggere come impostazione
+      csv += t + '\t\n'; 
+    });
+
+    // Aggiungiamo un'intestazione invisibile che dice la dimensione del font
+    // (Alcuni software la ignorano, ma è un tentativo per il formato)
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const nomeCommessa = (commessa.codice || nmCommessaCorrente).replace(/[^a-zA-Z0-9_-]/g, '_');
     const nomeCartella = (NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente).replace(/\s+/g, '_');
-    const nomeFile = `${nomeCommessa}_${nomeCartella}.csv`;
+    // Mettiamo la dimensione nel nome del file, così sai subito che font usare!
+    const nomeFile = `${nomeCommessa}_${nomeCartella}_Arial${dimensione}.csv`;
+    
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = nomeFile;
@@ -3914,25 +3927,47 @@ async function nmCopiaPerPhoenix() {
     if (!doc.exists) return;
     const numeri = (doc.data().cartelle && doc.data().cartelle[nmCartellaCorrente]) || [];
     if (numeri.length === 0) { alert('⚠️ Nessun numero'); return; }
-    const testi = numeri.map(n => n.testo || '');
+    
+    // ⭐ IMPOSTAZIONI FORMATO PHOENIX IN BASE ALLA CARTELLA
+    let dimensioneFont = '2'; // Default per FILO
+    if (nmCartellaCorrente === 'cavo') dimensioneFont = '3';
+    if (nmCartellaCorrente === 'adesive') dimensioneFont = '5';
+    // (Se in futuro vorrai formati diversi per targhette e morsetti, li aggiungiamo qui)
+
+    const testi = numeri.map(n => formattaTestoNumero(n.testo || '').replace(/^'/, '')); // Rimuove l'eventuale apostrofo iniziale
     const testoPlain = testi.join('\n');
-    const htmlTabella = '<table>' + testi.map(t => `<tr><td>${t}</td></tr>`).join('') + '</table>';
+    
+    // Creiamo l'HTML con il font corretto per Phoenix
+    let htmlTabella = `<div style="font-family: Arial, sans-serif; font-size: ${dimensioneFont}em; line-height: 1.2;">`;
+    testi.forEach(t => {
+      htmlTabella += `<div>${t}</div>`;
+    });
+    htmlTabella += '</div>';
+
     try {
       if (typeof ClipboardItem !== 'undefined') {
         const blobHtml = new Blob([htmlTabella], { type: 'text/html' });
         const blobPlain = new Blob([testoPlain], { type: 'text/plain' });
-        await navigator.clipboard.write([new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobPlain })]);
+        // Scriviamo entrambi i formati: HTML (con font) e testo semplice (fallback)
+        await navigator.clipboard.write([new ClipboardItem({ 
+          'text/html': blobHtml, 
+          'text/plain': blobPlain 
+        })]);
       } else {
         await navigator.clipboard.writeText(testoPlain);
       }
-      alert(`✅ Copiati ${numeri.length} numeri. Incolla in Phoenix Contact con Ctrl+V.`);
+      alert(`✅ Copiati ${numeri.length} numeri (Formato Arial ${dimensioneFont}). Ora incolla in Phoenix Contact con Ctrl+V.`);
     } catch (err) {
+      // Fallback per browser che non supportano HTML negli appunti
       const textarea = document.createElement('textarea');
       textarea.value = testoPlain;
-      textarea.style.position = 'fixed'; textarea.style.opacity = '0';
-      document.body.appendChild(textarea); textarea.select();
-      document.execCommand('copy'); document.body.removeChild(textarea);
-      alert(`✅ Copiati ${numeri.length} numeri.`);
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      alert(`✅ Copiati ${numeri.length} numeri (solo testo). Se la dimensione è sbagliata, imposta Arial ${dimensioneFont} in Phoenix.`);
     }
   } catch (err) { alert('❌ Errore: ' + err.message); }
 }
@@ -4980,14 +5015,18 @@ function caricaRegistrazioniOggi() {
     r.tipo === 'lavoro'
   );
 
-  // ⭐ FIX ANTI-DOPPIONE: Rimuoviamo i duplicati basandoci sull'ID univoco
-  // (In questo modo, anche se il database o l'array li carica due volte, in tabella ne appare uno solo)
+  // ⭐ FIX ANTI-DOPPIONE VISIVO: 
+  // Creiamo una "firma" unica basata su orario, commessa e descrizione.
+  // Se due record hanno la stessa firma, ne mostriamo solo uno.
   const regsUniche = [];
-  const idsVisti = new Set();
+  const firmeViste = new Set();
   
   regsOggi.forEach(r => {
-    if (!idsVisti.has(r.id)) {
-      idsVisti.add(r.id);
+    // Creiamo una stringa tipo "16:00|17:00|5|fvfsf"
+    const firma = `${r.ora_inizio}|${r.ora_fine}|${r.commessa_id}|${r.descrizione}`;
+    
+    if (!firmeViste.has(firma)) {
+      firmeViste.add(firma);
       regsUniche.push(r);
     }
   });
@@ -5020,4 +5059,11 @@ function caricaRegistrazioniOggi() {
   
   divContenuto.innerHTML = html;
   divLista.style.display = 'block';
+}
+
+function formattaTestoNumero(testo) {
+  if (!testo) return '';
+  let formattato = testo.replace(/GOLD/gi, 'Gold');
+  formattato = formattato.replace(/SILVER/gi, 'Silver');
+  return formattato;
 }
