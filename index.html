@@ -98,8 +98,10 @@
                onerror="this.style.display='none';" />
           <span class="azienda-small">MEC-ROY</span>
         </div>
-        <div class="user-badge">
-          <i class="fas fa-user"></i>
+        <div class="user-badge" style="display: flex; align-items: center; gap: 8px;">
+          <div id="header-user-foto" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e0e8e6; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc;">
+            <i class="fas fa-user" style="color: #6c7a78; font-size: 0.9em;"></i>
+          </div>
           <span class="badge" id="user-ruolo"></span>
         </div>
         <button onclick="apriModificaPassword()" class="btn-password" id="btn-password" title="Cambia password" style="display:none;">
