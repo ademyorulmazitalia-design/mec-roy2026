@@ -991,7 +991,10 @@ function eliminaCommessa(id) {
 // ✅ FIX #13: ID univoci (Date.now + random)
 // ✅ FIX #37: scrittura puntuale su collezione
 // ============================================
+let _stoSalvandoReg = false;
+
 async function salvaRegistrazione() {
+  if (_stoSalvandoReg) return;
   if (utenteCorrente?.ruolo === 'admin') { alert('Gli amministratori non possono registrare ore qui'); return; }
 
   if (isOltre20()) {
@@ -1077,6 +1080,7 @@ async function salvaRegistrazione() {
     ore: oreLavorate
   };
 
+  _stoSalvandoReg = true;
   try {
     await regAggiungi(nuovaReg);
     if (!dati.registrazioni.some(r => r.id === nuovaReg.id)) dati.registrazioni.push(nuovaReg);
@@ -1092,6 +1096,8 @@ async function salvaRegistrazione() {
   } catch (err) {
     console.error('❌ Errore salvataggio:', err);
     msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
+  } finally {
+    _stoSalvandoReg = false;
   }
 }
 
@@ -4960,6 +4966,10 @@ function caricaRegistrazioniOggi() {
   const divLista = document.getElementById('lista-registrazioni-oggi');
   const divContenuto = document.getElementById('contenuto-registrazioni-oggi');
   if (!divLista || !divContenuto) return;
+
+  // ⭐ Svuota la tabella prima di ridisegnarla
+  divContenuto.innerHTML = ''; 
+  divLista.style.display = 'none'; 
 
   const oggi = new Date().toISOString().split('T')[0];
 
