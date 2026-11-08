@@ -3899,9 +3899,18 @@ async function nmScaricaCSVPhoenix() {
 
     let csv = '';
     numeri.forEach(n => { 
-      let t = formattaTestoNumero(n.testo || '').replace(/;/g, ',').trim();
-      // Aggiungiamo una riga speciale che CLIP PROJECT potrebbe leggere come impostazione
-      csv += t + '\t\n'; 
+      let t = formattaTestoNumero(n.testo || '').replace(/;/g, ',').trim(); 
+      
+      // ⭐ La magia avviene SOLO se siamo nella cartella 'filo'
+      if (nmCartellaCorrente === 'filo') {
+        const righeEsplose = espandiNumeroComplesso(t);
+        righeEsplose.forEach(riga => {
+          csv += riga + '\t\n'; 
+        });
+      } else {
+        // Per tutte le altre cartelle (cavo, adesive, ecc.) scriviamo il numero così com'è
+        csv += t + '\t\n'; 
+      }
     });
 
     // Aggiungiamo un'intestazione invisibile che dice la dimensione del font
@@ -3934,7 +3943,17 @@ async function nmCopiaPerPhoenix() {
     if (nmCartellaCorrente === 'adesive') dimensioneFont = '5';
     // (Se in futuro vorrai formati diversi per targhette e morsetti, li aggiungiamo qui)
 
-    const testi = numeri.map(n => formattaTestoNumero(n.testo || '').replace(/^'/, '')); // Rimuove l'eventuale apostrofo iniziale
+    let testi = [];
+    if (nmCartellaCorrente === 'filo') {
+      // ⭐ Se siamo nel FILO, applichiamo la divisione
+      testi = numeri.flatMap(n => {
+        const testoPulito = formattaTestoNumero(n.testo || '').replace(/^'/, '').trim();
+        return espandiNumeroComplesso(testoPulito);
+      });
+    } else {
+      // Per le altre cartelle, lasciamo tutto normale
+      testi = numeri.map(n => formattaTestoNumero(n.testo || '').replace(/^'/, '').trim());
+    }
     const testoPlain = testi.join('\n');
     
     // Creiamo l'HTML con il font corretto per Phoenix
@@ -5063,7 +5082,60 @@ function caricaRegistrazioniOggi() {
 
 function formattaTestoNumero(testo) {
   if (!testo) return '';
-  let formattato = testo.replace(/GOLD/gi, 'Gold');
+  
+  let formattato = String(testo);
+  
+  // 1. Trasformiamo Gold e Silver per primi (prima di pulire)
+  formattato = formattato.replace(/GOLD/gi, 'Gold');
   formattato = formattato.replace(/SILVER/gi, 'Silver');
+  
+  // 2. ⭐ LA MAGIA: Teniamo SOLO lettere (A-Z, a-z), numeri (0-9) e i simboli - / : . _ 
+  // Tutto il resto (spazi, tab, a capo, apostrofi) viene cancellato!
+  formattato = formattato.replace(/[^a-zA-Z0-9\-\/\:\.\_\,]/g, '');
+  
   return formattato;
+}
+
+function espandiNumeroComplesso(testo) {
+  // Troviamo il prefisso (es. -IP1T2: o -MECX43:)
+  const match = testo.match(/^([^:]+:)(.*)$/);
+  
+  if (match) {
+    const prefisso = match[1]; // "-IP1T2:" oppure "-MECX43:"
+    let resto = match[2];      // "U2,V2,W2" oppure "9:B" oppure "1/2/3/PE:B"
+    
+    // Cerchiamo se c'è un suffisso finale (es. :B)
+    let suffisso = "";
+    if (resto.includes(':')) {
+      const partiResto = resto.split(':');
+      // ⭐ Prendiamo l'ultima parte e la mettiamo in MINUSCOLO
+      suffisso = ":" + partiResto.pop().toLowerCase(); 
+      resto = partiResto.join(':');      
+    }
+
+    // Ora dividiamo il "resto" in base ai separatori
+    let pezzi = [];
+    
+    if (resto.includes('/')) {
+      pezzi = resto.split('/');
+    } else if (resto.includes(',')) {
+      pezzi = resto.split(',');
+    } else if (resto.includes('-')) {
+      pezzi = resto.split('-');
+    } else {
+      // Se è tutto attaccato (es. U2V2W2 o 123456), usiamo la divisione intelligente
+      const blocchi = resto.match(/[A-Za-z]*\d+|[A-Za-z]+/g);
+      if (blocchi && blocchi.length > 1) {
+        pezzi = blocchi;
+      }
+    }
+
+    // Se siamo riusciti a dividere in più pezzi, ricostruiamo le righe
+    if (pezzi.length > 0) {
+      return pezzi.map(p => `${prefisso}${p.trim()}${suffisso}`);
+    }
+  }
+  
+  // Se non c'è niente da dividere, restituisce il numero originale
+  return [testo];
 }
