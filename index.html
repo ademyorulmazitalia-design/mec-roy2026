@@ -1162,28 +1162,40 @@
 <script src="script.js"></script>
 
 <script>
-  // Controllo se Firebase è stato caricato (evita crash se CDN è bloccato)
+  // Controllo se Firebase è stato caricato
   if (typeof firebase === 'undefined') {
     console.error('❌ Firebase non è stato caricato. Controlla la connessione o il firewall.');
   } else {
     
-    // ⭐ REGISTRIAMO UN SOLO SERVICE WORKER: firebase-messaging-sw.js
-    // (gestisce sia le notifiche push SIA la PWA)
-    // Non registriamo più 'service-worker.js' perché crea conflitti e notifiche doppie.
-    
+    // ⭐ GESTIONE SERVICE WORKER: PULIZIA VECCHI E REGISTRAZIONE NUOVO
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        // ✅ Usa './' per cercare il file nella stessa cartella dell'HTML
-        navigator.serviceWorker.register('./firebase-messaging-sw.js')
-          .then((registration) => {
-            console.log('✅ Service Worker registrato con successo:', registration.scope);
-          })
-          .catch((error) => {
-            console.warn('⚠️ Errore registrazione Service Worker (non bloccante):', error);
-          });
+      window.addEventListener('load', async () => {
+        try {
+          // 1. Cerchiamo e disinstalliamo eventuali vecchi Service Worker (es. sw.js)
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let registration of registrations) {
+            if (registration.active && registration.active.scriptURL.includes('sw.js')) {
+              await registration.unregister();
+              console.log('🗑️ Vecchio sw.js disinstallato con successo');
+            }
+          }
+
+          // 2. Registriamo il Service Worker corretto di Firebase
+          navigator.serviceWorker.register('./firebase-messaging-sw.js')
+            .then((registration) => {
+              console.log('✅ Service Worker Firebase registrato con successo:', registration.scope);
+            })
+            .catch((error) => {
+              console.warn('⚠️ Errore registrazione Service Worker (non bloccante):', error);
+            });
+
+        } catch (err) {
+          console.warn('Errore durante la gestione dei Service Worker:', err);
+        }
       });
     }
 
+    // Inizializzazione Firebase Messaging
     if (firebase.messaging && firebase.messaging.isSupported()) {
       try {
         const messaging = firebase.messaging();
