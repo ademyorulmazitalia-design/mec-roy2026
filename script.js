@@ -37,8 +37,7 @@ const db = firebase.firestore();
 // ✅ Nuova sintassi Firebase v10 (rimuove l'avviso di deprecazione)
 db.settings({
   cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
-  ignoreUndefinedProperties: true,
-  merge: true  // <--- AGGIUNGI QUESTA RIGA
+  ignoreUndefinedProperties: true
 });
 
 // ============================================
@@ -4574,24 +4573,51 @@ function saltaAlProssimo(input) {
 const VAPID_KEY = 'BGDim7zjRi-WXyIDYoKnZjAX92fChXCHo1uUZKOef9l2cHSu6FJrInHrB4IEFAJewF8TrJCDzTsNR1BANwLUml0';
 
 async function chiediPermessoNotifiche() {
-  if (!utenteCorrente) return;
+  if (!utenteCorrente || !utenteCorrente.username) return;
   if (!('Notification' in window)) return;
   if (Notification.permission === 'denied') return;
+
+  // 1. Chiedi il permesso all'utente
   if (Notification.permission === 'default') {
     const permesso = await Notification.requestPermission();
     if (permesso !== 'granted') return;
   }
+
   try {
-    const swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './firebase-cloud-messaging-push-scope' });
-    await navigator.serviceWorker.ready;
+    // 2. ASPETTA CHE IL SERVICE WORKER SIA PRONTO
+    // navigator.serviceWorker.ready è una promessa che si risolve SOLO quando il SW è attivo
+    console.log('⏳ Attendo che il Service Worker sia pronto...');
+    const swReg = await navigator.serviceWorker.ready;
+    console.log('✅ Service Worker pronto, scope:', swReg.scope);
+
     const messaging = firebase.messaging();
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
-    if (!token) return;
+
+    // 3. ORA chiedi il token, passando la registrazione esplicita
+    const token = await messaging.getToken({
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: swReg
+    });
+
+    if (!token) {
+      console.warn('⚠️ Nessun token ricevuto da Firebase.');
+      return;
+    }
+
     const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
-    if (!utente || utente.token_fcm === token) return;
+    if (!utente) return;
+    if (utente.token_fcm === token) {
+      console.log('ℹ️ Token già aggiornato.');
+      return;
+    }
+
+    // 4. Salva il token nel database
     utente.token_fcm = token;
     await utenteSalva(utente);
-  } catch (err) { console.error('❌ Errore FCM:', err); }
+    console.log('🎉 Token FCM salvato con successo nel database!');
+
+  } catch (err) {
+    console.error('❌ Errore FCM:', err);
+  }
 }
 async function ascoltaRinnovoToken() {
   if (!utenteCorrente) return;
