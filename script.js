@@ -470,6 +470,7 @@ function login() {
     ruoloBadge.textContent = utente.ruolo === 'admin' ? t('dip_admin') : t('dip_dipendente');
     ruoloBadge.className = 'badge ' + utente.ruolo;
 
+    aggiornaFotoHeader(); 
     configuraUIUtente(utente);
     inizializzaAppPerUtente(utente);
 
@@ -1849,11 +1850,59 @@ async function esportaPDF() {
   if (!output) return;
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
-
   const clone = output.cloneNode(true);
 
+  // ⭐ 1. Sistema l'intestazione "Totale" (toglie la scritta 'cal_totale')
+  const thTotale = clone.querySelector('thead tr:first-child th:nth-child(2)'); // La seconda colonna
+  if (thTotale) {
+    thTotale.innerHTML = 'Totale'; // Scrive "Totale" invece di cal_totale
+    thTotale.style.width = '60px'; // Gli dà una larghezza fissa
+    thTotale.style.minWidth = '60px';
+    thTotale.style.background = '#00695C';
+    thTotale.style.color = 'white';
+  }
+
+  // ⭐ 2. Dà una larghezza fissa alla colonna "Dipendente" (la prima)
+  const thDipendente = clone.querySelector('thead tr:first-child th:first-child');
+  if (thDipendente) {
+    thDipendente.style.width = '120px';
+    thDipendente.style.minWidth = '120px';
+  }
+
+  // ⭐ 3. Svuota i numeri rossi della colonna Totale
+  clone.querySelectorAll('tbody tr').forEach(tr => {
+    // Prendiamo l'ULTIMA cella della riga (che è sempre quella del totale)
+    const tdTotale = tr.querySelector('td:last-child'); 
+    if (tdTotale) {
+      tdTotale.innerHTML = ''; // Svuota il contenuto (toglie 40.0h e triangolini)
+      tdTotale.style.background = '#ffffff'; // Sfondo bianco
+      tdTotale.style.width = '60px';
+    }
+    
+    // Dà larghezza fissa anche alla prima cella (nome dipendente)
+    const tdDipendente = tr.querySelector('td:first-child');
+    if (tdDipendente) {
+      tdDipendente.style.width = '120px';
+      tdDipendente.style.whiteSpace = 'normal';
+    }
+  }); // ⬅️ QUESTA GRAFFA CHIUDE IL CICLO FOR EACH
+
+  // ⭐ 4. Rimuove i colori di sfondo (gialli, verdi, ecc.)
+  clone.querySelectorAll('td').forEach(td => {
+    td.style.backgroundColor = '#ffffff';
+    if (td.style.border.includes('dashed')) {
+      td.style.border = '1px solid #ddd';
+    }
+  });
+  
   // ✅ FIX #16: selettore basato su classe (non su stile inline)
+  // ⭐ 1. Rimuove il totale del mese (se non è già stato rimosso)
   clone.querySelector('.box-totale-mese')?.remove();
+  
+  // ⭐ 2. Rimuove la legenda (Lavorato, Ferie, ecc.)
+  const divs = Array.from(clone.querySelectorAll('div'));
+  const legenda = divs.find(d => d.textContent.includes('Lavorato') && d.textContent.includes('Ferie'));
+  if (legenda) legenda.remove();
   const h4Titolo = clone.querySelector('h4');
   if (h4Titolo && /^\s*\w+\s+\d{4}\s*$/.test(h4Titolo.textContent)) h4Titolo.remove();
 
@@ -2328,13 +2377,13 @@ function caricaCalendario() {
 
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85em;"><thead><tr>';
   html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:120px;vertical-align:middle;">${t('cal_dipendente')}</th>`;
+  html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;vertical-align:middle;">${t('cal_totale')}</th>`;
   const giorniSett = tGiorniSettimana();
   for (let g = 1; g <= giorniMese; g++) {
     const gs = new Date(anno, mese - 1, g).getDay();
     const wk = gs === 0 || gs === 6;
     html += `<th style="padding:4px;border:1px solid #ddd;text-align:center;background:${wk ? '#f5f5f5' : 'white'};min-width:35px;font-size:0.85em;font-weight:bold;color:#00695C;">${g}</th>`;
   }
-  html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;vertical-align:middle;">${t('cal_totale')}</th>`;
   html += '</tr><tr>';
   for (let g = 1; g <= giorniMese; g++) {
     const gs = new Date(anno, mese - 1, g).getDay();
@@ -4388,6 +4437,9 @@ async function salvaFotoModale() {
       utente.foto = base64Final;
       await utenteSalva(utente);
       msg.innerHTML = '<div class="success">✅ Foto aggiornata!</div>';
+
+      aggiornaFotoHeader();
+
       setTimeout(() => { chiudiModaleFoto(); caricaListaDipendenti(); }, 700);
     } catch (err) {
       msg.innerHTML = '<div class="error">❌ ' + err.message + '</div>';
@@ -5138,4 +5190,20 @@ function espandiNumeroComplesso(testo) {
   
   // Se non c'è niente da dividere, restituisce il numero originale
   return [testo];
+}
+
+function aggiornaFotoHeader() {
+  if (!utenteCorrente) return;
+  const container = document.getElementById('header-user-foto');
+  if (!container) return;
+
+  // Cerchiamo l'utente aggiornato nell'array per vedere se ha una foto
+  const utente = dati.utenti.find(u => u.username === utenteCorrente.username);
+  
+  if (utente && utente.foto) {
+    container.innerHTML = `<img src="${utente.foto}" alt="foto" style="width: 100%; height: 100%; object-fit: cover;">`;
+  } else {
+    // Se non ha la foto, mostriamo l'omino di default
+    container.innerHTML = '<i class="fas fa-user" style="color: #6c7a78; font-size: 0.9em;"></i>';
+  }
 }
