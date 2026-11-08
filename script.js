@@ -612,6 +612,7 @@ function inizializzaAppPerUtente(utente) {
       });
     }
     caricaUltimaRegistrazione();
+    caricaRegistrazioniOggi(); // ⭐ AGGIUNGI QUESTA RIGA
   }
 
   const menuC = document.getElementById('commesse-menu');
@@ -1086,6 +1087,8 @@ async function salvaRegistrazione() {
     document.getElementById('descrizione').value = '';
     document.getElementById('straordinario').checked = false;
     caricaUltimaRegistrazione();
+    caricaRegistrazioniOggi(); // ⭐ AGGIUNGI QUESTA RIGA QUI
+
   } catch (err) {
     console.error('❌ Errore salvataggio:', err);
     msg.innerHTML = '<div class="error">❌ Errore: ' + err.message + '</div>';
@@ -4950,3 +4953,61 @@ document.addEventListener('click', function (e) {
 });
 
 console.log('✅ script.js — COMPLETO (versione corretta) caricato');
+
+function caricaRegistrazioniOggi() {
+  if (utenteCorrente?.ruolo === 'admin') return;
+
+  const divLista = document.getElementById('lista-registrazioni-oggi');
+  const divContenuto = document.getElementById('contenuto-registrazioni-oggi');
+  if (!divLista || !divContenuto) return;
+
+  const oggi = new Date().toISOString().split('T')[0];
+
+  // Filtriamo per utente, data e tipo
+  let regsOggi = dati.registrazioni.filter(r => 
+    r.utente_id === utenteCorrente.username && 
+    r.data === oggi && 
+    r.tipo === 'lavoro'
+  );
+
+  // ⭐ FIX ANTI-DOPPIONE: Rimuoviamo i duplicati basandoci sull'ID univoco
+  // (In questo modo, anche se il database o l'array li carica due volte, in tabella ne appare uno solo)
+  const regsUniche = [];
+  const idsVisti = new Set();
+  
+  regsOggi.forEach(r => {
+    if (!idsVisti.has(r.id)) {
+      idsVisti.add(r.id);
+      regsUniche.push(r);
+    }
+  });
+
+  // Se non ci sono registrazioni, nascondi la sezione
+  if (regsUniche.length === 0) {
+    divLista.style.display = 'none';
+    return;
+  }
+
+  // Ordina per ora di inizio
+  regsUniche.sort((a, b) => (a.ora_inizio || '').localeCompare(b.ora_inizio || ''));
+
+  let html = '<div class="table-wrapper" style="margin-top:0; border:none; box-shadow:none;"><table>';
+  html += '<thead><tr><th>Ore</th><th>Commessa</th><th>Descrizione</th></tr></thead><tbody>';
+
+  regsUniche.forEach(r => {
+    const commessa = dati.commesse.find(c => c.id === r.commessa_id);
+    const nomeCommessa = commessa ? commessa.nome : 'N/A';
+    const isStr = r.straordinario ? ' ⭐' : '';
+    
+    html += `<tr>
+      <td style="white-space:nowrap;"><strong>${r.ora_inizio} - ${r.ora_fine}</strong>${isStr}</td>
+      <td>${nomeCommessa}</td>
+      <td style="font-size:0.9em; color:#555;">${r.descrizione || '-'}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  
+  divContenuto.innerHTML = html;
+  divLista.style.display = 'block';
+}
