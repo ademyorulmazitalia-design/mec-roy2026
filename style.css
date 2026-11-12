@@ -4096,3 +4096,81 @@ body.dark-mode::before {
   padding: 12px 20px !important;
   font-size: 1em !important;
 }
+/* ============================================ */
+/* NUMERI MANCANTI — HEADER CON RICERCA         */
+/* ============================================ */
+.nm-header-con-ricerca {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px !important;
+}
+
+.nm-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nm-header-left h2 {
+  margin: 0 !important;
+  font-size: 1.1em !important;
+  white-space: nowrap;
+}
+
+.nm-icona-ricerca {
+  cursor: pointer;
+  color: #00695C;
+  font-size: 1.1em;
+  padding: 6px;
+  border-radius: 50%;
+  transition: all 0.2s;
+  display: inline-block;
+}
+
+.nm-icona-ricerca:hover {
+  background: #e3f5f1;
+  transform: scale(1.1);
+}
+
+.nm-header-con-ricerca .nm-barra-ricerca {
+  flex: 1;
+  margin-bottom: 0 !important;
+  padding: 4px 10px !important;
+  min-width: 100px;
+}
+
+.nm-header-con-ricerca .nm-barra-ricerca input {
+  font-size: 0.85em !important;
+  padding: 4px 0 !important;
+}
+
+.nm-header-con-ricerca .modal-close {
+  position: static !important;
+  margin-left: 5px;
+}
+
+/* Quando la barra di ricerca è aperta, nasconde la lente */
+.nm-barra-ricerca[style*="display: flex"] ~ .nm-icona-ricerca {
+  display: none !important;
+}
+
+/* --- MOBILE --- */
+@media (max-width: 480px) {
+  .nm-header-left {
+    gap: 8px;
+  }
+  .nm-header-left h2 {
+    font-size: 0.95em !important;
+  }
+  .nm-header-con-ricerca .nm-barra-ricerca {
+    padding: 2px 6px !important;
+  }
+  .nm-header-con-ricerca .nm-barra-ricerca input {
+    font-size: 0.75em !important;
+  }
+}
+
