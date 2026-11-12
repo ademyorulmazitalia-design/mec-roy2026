@@ -418,23 +418,67 @@ function controllaSovrapposizioni(username, data, ora_inizio, ora_fine, tipo) {
   return null;
 }
 
+async function hashPassword(password, salt) {
+  const data = new TextEncoder().encode(salt + ':' + password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ============================================
 // LOGIN
 // ============================================
-function login() {
-  // ✅ PROTEZIONE: Blocca il click se i dati non sono ancora arrivati da Firebase
+let _loginInCorso = false;
+
+async function login() {
+  if (_loginInCorso) return;
+  _loginInCorso = true;
+
+  const erroreDiv = document.getElementById('errore');
+
+  // ✅ FIX #1: Retry automatico se i dati non sono pronti (max 8 secondi)
   if (!dati || !dati.utenti || dati.utenti.length === 0) {
-    const erroreDiv = document.getElementById('errore');
-    erroreDiv.innerHTML = "⏳ Connessione in corso... attendi 2 secondi e riprova.";
+    erroreDiv.innerHTML = "⏳ Connessione in corso...";
     erroreDiv.style.display = 'block';
-    return;
+    
+    const inizio = Date.now();
+    while ((!dati || !dati.utenti || dati.utenti.length === 0) && Date.now() - inizio < 8000) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+    
+    if (!dati || !dati.utenti || dati.utenti.length === 0) {
+      erroreDiv.innerHTML = "❌ Impossibile connettersi al server. Controlla la rete e riprova.";
+      _loginInCorso = false;
+      return;
+    }
+    erroreDiv.style.display = 'none';
   }
 
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   const ricordami = document.getElementById('ricordami').checked;
 
-  const utente = dati.utenti.find(u => u.username === username && u.password === password);
+  // ✅ FIX #8: Controllo password con Hash SHA-256 (con migrazione automatica)
+  let utente = null;
+  const utenteTrovato = dati.utenti.find(u => u.username === username);
+
+  if (utenteTrovato) {
+    if (/^[a-f0-9]{64}$/.test(utenteTrovato.password)) {
+      // La password nel DB è già un hash -> confrontiamo l'hash
+      const hashInserito = await hashPassword(password, username);
+      if (utenteTrovato.password === hashInserito) utente = utenteTrovato;
+    } else {
+      // La password nel DB è vecchia (in chiaro) -> confronto diretto e migrazione
+      if (utenteTrovato.password === password) {
+        utente = utenteTrovato;
+        utente.password = await hashPassword(password, username);
+        await utenteSalva(utente);
+        console.log('🔐 Password migrata automaticamente per:', username);
+      }
+    }
+  }
+
+  // ... da qui in poi lascia tutto il tuo codice originale identico (if (utente) { ... })
 
   if (utente) {
     utenteCorrente = utente;
@@ -515,6 +559,8 @@ function login() {
     document.getElementById('errore').innerHTML = "Credenziali errate";
     document.getElementById('errore').style.display = 'block';
   }
+   _loginInCorso = false;
+
 }
 
 // Estrae la logica di configurazione UI (usata anche dal login biometrico)
@@ -1056,6 +1102,8 @@ async function salvaRegistrazione() {
   const esistente = dati.registrazioni.find(r =>
     r.utente_id === utenteCorrente.username &&
     r.data === data &&
+    r.tipo === 'lavoro' &&                    // ⬅️ FIX: controlla solo le ore di lavoro, ignora malattie/permessi
+    r.ora_inizio && r.ora_fine &&             // ⬅️ FIX: evita errori se i campi sono vuoti
     ((ora_inizio >= r.ora_inizio && ora_inizio < r.ora_fine) ||
       (ora_fine > r.ora_inizio && ora_fine <= r.ora_fine) ||
       (ora_inizio <= r.ora_inizio && ora_fine >= r.ora_fine))
@@ -1614,7 +1662,6 @@ async function aggiungiNotifica(utente_id, tipo, messaggio, link) {
   };
   try {
     await notAggiungi(not);
-    if (!dati.notifiche.some(n => n.id === not.id)) dati.notifiche.push(not);
     aggiornaBadgeNotifiche();
   } catch (err) { console.error('❌ Errore notifica:', err); }
 }
