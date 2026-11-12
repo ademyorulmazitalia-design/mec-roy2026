@@ -4175,39 +4175,6 @@ body.dark-mode::before {
 }
 
 /* ============================================ */
-/* FIX PULSANTI LOGIN (Più piccoli)             */
-/* ============================================ */
-
-/* 1. Pulsante "Entra" */
-.login-box button:not(.btn-numeri-mancanti):not(.btn-usa-password):not(.btn-impronta-login-small) {
-  padding: 10px 15px !important; /* Rende il pulsante meno alto */
-  font-size: 1rem !important;    /* Testo leggermente più piccolo */
-  min-height: auto !important;
-}
-
-/* 2. Pulsante "Entra con impronta" */
-.btn-impronta-login-small {
-  padding: 8px 12px !important;  /* Lo rende più sottile */
-  font-size: 0.85rem !important; /* Testo più piccolo */
-  margin-top: 8px !important;
-  min-height: auto !important;
-}
-
-/* 3. Pulsante "NUMERI MANCANTI" */
-.btn-numeri-mancanti {
-  padding: 10px 15px !important; /* Lo rende meno imponente */
-  font-size: 0.95rem !important;
-}
-
-/* 4. Piccolo ritocco alla spaziatura generale del login */
-.login-box input {
-  margin: 6px 0 !important; /* Riduce lo spazio tra i campi di testo */
-}
-.ricordami-label {
-  margin: 8px 0 !important; /* Riduce lo spazio attorno alle checkbox */
-}
-
-/* ============================================ */
 /* FIX PULSANTI LOGIN (Perfettamente Uguali)    */
 /* ============================================ */
 
