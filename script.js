@@ -425,12 +425,10 @@ async function hashPassword(password, salt) {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ============================================
-// LOGIN
-// ============================================
 let _loginInCorso = false;
 
 async function login() {
+  // 🛑 FIX DEFINITIVO: Blocca l'esecuzione se è già in corso un login
   if (_loginInCorso) return;
   _loginInCorso = true;
 
@@ -478,8 +476,6 @@ async function login() {
     }
   }
 
-  // ... da qui in poi lascia tutto il tuo codice originale identico (if (utente) { ... })
-
   if (utente) {
     utenteCorrente = utente;
     salvaSessione(utente.username);
@@ -518,6 +514,8 @@ async function login() {
     inizializzaAppPerUtente(utente);
 
     attivaAscoltoRealtime();
+    
+    // Mostra il benvenuto UNA SOLA VOLTA
     mostraSchermataBenvenuto(utente);
     
     setTimeout(() => {
@@ -530,7 +528,7 @@ async function login() {
       // Forziamo anche il ridisegno del calendario (se necessario)
       if (typeof caricaCalendario === 'function') caricaCalendario();
       
-    }, 400); // Aumentato leggermente il tempo per essere sicuri
+    }, 400); 
 
     // Attivazione biometrica post-login (se richiesta)
     const checkboxAttiva = document.getElementById('attiva-impronta');
@@ -559,8 +557,8 @@ async function login() {
     document.getElementById('errore').innerHTML = "Credenziali errate";
     document.getElementById('errore').style.display = 'block';
   }
-   _loginInCorso = false;
-
+  
+  _loginInCorso = false;
 }
 
 // Estrae la logica di configurazione UI (usata anche dal login biometrico)
@@ -4566,27 +4564,42 @@ function chiudiModaleFoto() {
 // ============================================
 function mostraSchermataBenvenuto(utente) {
   if (!utente) return;
-  if (window._timerBenvenuto) { clearTimeout(window._timerBenvenuto); window._timerBenvenuto = null; }
+  
   const overlay = document.getElementById('welcome-overlay');
   if (!overlay) return;
-  const avatarEl = document.getElementById('welcome-avatar');
+
+  // 🛑 Se l'overlay è già attivo, non fare nulla
+  if (overlay.classList.contains('attivo')) return;
+
+  // 🛑 Se il nome è già stato scritto, non riscriverlo
   const nomeEl = document.getElementById('welcome-nome');
+  if (nomeEl && nomeEl.textContent.trim() !== '') return;
+
+  const avatarEl = document.getElementById('welcome-avatar');
+  
   if (avatarEl) {
     if (utente.foto) avatarEl.innerHTML = `<img src="${utente.foto}" alt="foto" />`;
     else avatarEl.innerHTML = '<i class="fas fa-user"></i>';
   }
-  if (nomeEl) nomeEl.textContent = t('benvenuto') + ' ' + (utente.nome || utente.username);
+  if (nomeEl) {
+    nomeEl.textContent = t('benvenuto') + ' ' + (utente.nome || utente.username);
+  }
+  
   overlay.classList.add('attivo');
   overlay.classList.remove('uscita');
+  
+  if (window._timerBenvenuto) { clearTimeout(window._timerBenvenuto); window._timerBenvenuto = null; }
+  
   window._timerBenvenuto = setTimeout(() => {
     overlay.classList.add('uscita');
     window._timerBenvenuto = setTimeout(() => {
       overlay.classList.remove('attivo');
       overlay.classList.remove('uscita');
+      // Svuota il nome così al prossimo login si può riscrivere
+      if (nomeEl) nomeEl.textContent = '';
     }, 400);
   }, 2000);
 }
-
 // ============================================
 // AGGIUNGI REGISTRAZIONE MANUALE (admin)
 // ============================================
