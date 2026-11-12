@@ -1344,6 +1344,13 @@ function caricaRichiesteAdmin() {
   div.innerHTML = html;
 }
 
+function aggiornaRichiesteManuale() {
+  // Forza il ricaricamento della lista delle richieste per l'admin
+  caricaRichiesteAdmin();
+  aggiornaBadgeRichieste();
+  alert('✅ Richieste aggiornate!');
+}
+
 function toggleTendinaRichiesta(event, idRichiesta) {
   if (event) event.stopPropagation();
   const menu = document.getElementById('dropdown-richiesta-' + idRichiesta);
