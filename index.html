@@ -91,55 +91,57 @@
   <!-- ===== MAIN ===== -->
   <div id="main-page" style="display:none;">
 
-    <header>
-      <div class="header-left">
-        <div class="logo-small">
-          <img src="images/logo.png" alt="MEC-ROY" class="logo-small-img" 
-               onerror="this.style.display='none';" />
-          <span class="azienda-small">MEC-ROY</span>
-        </div>
-        <div class="user-badge" style="display: flex; align-items: center; gap: 8px;">
-          <div id="header-user-foto" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e0e8e6; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc;">
-            <i class="fas fa-user" style="color: #6c7a78; font-size: 0.9em;"></i>
-          </div>
-          <span class="badge" id="user-ruolo"></span>
-        </div>
-        <button onclick="apriModificaPassword()" class="btn-password" id="btn-password" title="Cambia password" style="display:none;">
-          <i class="fas fa-key"></i>
-        </button>
-        <button onclick="toggleDarkMode()" class="btn-darkmode" id="btn-darkmode" title="Dark/Light Mode">
-          <i class="fas fa-moon"></i>
-        </button>
-
-        <!-- ⭐ Pulsante disattiva impronta (visibile solo se attiva) -->
-        <button onclick="disattivaBiometrico()" class="btn-password" id="btn-disattiva-impronta" title="Disattiva impronta" style="display:none;">
-          <i class="fas fa-fingerprint"></i>
-        </button>
-
-        <select id="select-lingua" class="select-lingua" onchange="cambiaLingua(this.value)" title="Lingua / Language">
-          <option value="it">🇮🇹 Italiano</option>
-          <option value="en">🇬🇧 English</option>
-          <option value="ro">🇷🇴 Română</option>
-          <option value="sq">🇦🇱 Shqip</option>
-          <option value="tr">🇹🇷 Türkçe</option>
-          <option value="ar">🇸🇦 العربية</option>
-        </select>
-        <div id="notifiche-container" style="display:none;position:relative;">
-          <button onclick="mostraNotifiche()" class="btn-notifica" id="btn-notifica" title="Notifiche">
-            <i class="fas fa-bell"></i>
-            <span id="badge-notifiche" class="badge-notifica-rossa" style="display:none;">0</span>
-          </button>
-        </div>
-        <div id="azienda-container" style="display:none;margin-left:10px;">
-          <select id="select-azienda" onchange="cambiaAzienda()">
-            <option value="0" data-i18n="header_tutte">-- Tutte --</option>
-          </select>
-        </div>
+<header>
+  <div class="header-left">
+    <div class="logo-small">
+      <img src="images/logo.png" alt="MEC-ROY" class="logo-small-img" 
+           onerror="this.style.display='none';" />
+      <span class="azienda-small">MEC-ROY</span>
+    </div>
+    <div class="user-badge" style="display: flex; align-items: center; gap: 8px;">
+      <div id="header-user-foto" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e0e8e6; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc;">
+        <i class="fas fa-user" style="color: #6c7a78; font-size: 0.9em;"></i>
       </div>
-      <button onclick="logout()" class="btn-logout">
-        <i class="fas fa-sign-out-alt"></i> <span data-i18n="header_logout">Logout</span>
+      <span class="badge" id="user-ruolo"></span>
+    </div>
+    <button onclick="apriModificaPassword()" class="btn-password" id="btn-password" title="Cambia password" style="display:none;">
+      <i class="fas fa-key"></i>
+    </button>
+    <button onclick="toggleDarkMode()" class="btn-darkmode" id="btn-darkmode" title="Dark/Light Mode">
+      <i class="fas fa-moon"></i>
+    </button>
+
+    <!-- ⭐ Pulsante disattiva impronta (visibile solo se attiva) -->
+    <button onclick="disattivaBiometrico()" class="btn-password" id="btn-disattiva-impronta" title="Disattiva impronta" style="display:none;">
+      <i class="fas fa-fingerprint"></i>
+    </button>
+
+    <select id="select-lingua" class="select-lingua" onchange="cambiaLingua(this.value)" title="Lingua / Language">
+      <option value="it">🇮🇹 Italiano</option>
+      <option value="en">🇬🇧 English</option>
+      <option value="ro">🇷🇴 Română</option>
+      <option value="sq">🇦🇱 Shqip</option>
+      <option value="tr">🇹🇷 Türkçe</option>
+      <option value="ar">🇸🇦 العربية</option>
+    </select>
+    <div id="notifiche-container" style="display:none;position:relative;">
+      <button onclick="mostraNotifiche()" class="btn-notifica" id="btn-notifica" title="Notifiche">
+        <i class="fas fa-bell"></i>
+        <span id="badge-notifiche" class="badge-notifica-rossa" style="display:none;">0</span>
       </button>
-    </header>
+    </div>
+    <div id="azienda-container" style="display:none;margin-left:10px;">
+      <select id="select-azienda" onchange="cambiaAzienda()">
+        <option value="0" data-i18n="header_tutte">-- Tutte --</option>
+      </select>
+    </div>
+  </div> <!-- chiusura header-left -->
+
+  <!-- ⭐ LOGOUT FUORI da header-left, dentro header -->
+  <button onclick="logout()" class="btn-logout">
+    <i class="fas fa-sign-out-alt"></i> <span data-i18n="header_logout">Logout</span>
+  </button>
+</header>
 
     <nav class="tabs">
       <button class="tab" id="tab-registra" onclick="showTab('registra')">
@@ -406,7 +408,6 @@
     <!-- ============================================================ -->
     <div id="panel-calendario" class="panel">
       <h2><i class="fas fa-calendar-alt"></i> <span data-i18n="cal_titolo">Calendario</span></h2>
-      <p class="subtitle" data-i18n="cal_sub">Visualizza il riepilogo mensile con ore e assenze</p>
       
       <div id="cal-vista-selector" class="cal-vista-selector" style="display:none;">
         <label class="vista-radio">
