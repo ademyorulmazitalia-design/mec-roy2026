@@ -986,10 +986,22 @@
 <!-- ===== MODALE POPUP NUMERI ===== -->
 <div id="nm-modal-popup" class="modal">
   <div class="modal-content nm-popup-content">
-    <div class="modal-header">
-      <h2><i class="fas fa-list"></i> <span id="nm-popup-titolo">FILO</span></h2>
-      <span class="modal-close" onclick="nmChiudiPopup()">&times;</span>
-    </div>
+      <div class="modal-header nm-header-con-ricerca">
+        <div class="nm-header-left">
+          <h2><i class="fas fa-list"></i> <span id="nm-popup-titolo">FILO</span></h2>
+          
+          <!-- Icona della lente (chiusa di default) -->
+          <i class="fas fa-search nm-icona-ricerca" id="nm-icona-ricerca" onclick="nmApriRicerca()" title="Cerca"></i>
+
+          <!-- Barra di ricerca (nascosta di default) -->
+          <div class="nm-barra-ricerca" id="nm-barra-ricerca-container" style="display: none;">
+            <i class="fas fa-search"></i>
+            <input type="text" id="nm-input-ricerca" placeholder="Cerca..." autocomplete="off" oninput="nmFiltraNumeri()" />
+            <button class="nm-btn-clear-ricerca" onclick="nmChiudiRicerca()" title="Chiudi ricerca"><i class="fas fa-times"></i></button>
+          </div>
+        </div>
+        <span class="modal-close" onclick="nmChiudiPopup()">&times;</span>
+      </div>
     <div class="modal-body nm-popup-body">
       
       <div class="nm-input-wrapper" id="nm-input-singolo">
