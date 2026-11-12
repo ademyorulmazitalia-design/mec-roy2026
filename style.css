@@ -4174,3 +4174,66 @@ body.dark-mode::before {
   }
 }
 
+/* ============================================ */
+/* FIX PULSANTI LOGIN (Più piccoli)             */
+/* ============================================ */
+
+/* 1. Pulsante "Entra" */
+.login-box button:not(.btn-numeri-mancanti):not(.btn-usa-password):not(.btn-impronta-login-small) {
+  padding: 10px 15px !important; /* Rende il pulsante meno alto */
+  font-size: 1rem !important;    /* Testo leggermente più piccolo */
+  min-height: auto !important;
+}
+
+/* 2. Pulsante "Entra con impronta" */
+.btn-impronta-login-small {
+  padding: 8px 12px !important;  /* Lo rende più sottile */
+  font-size: 0.85rem !important; /* Testo più piccolo */
+  margin-top: 8px !important;
+  min-height: auto !important;
+}
+
+/* 3. Pulsante "NUMERI MANCANTI" */
+.btn-numeri-mancanti {
+  padding: 10px 15px !important; /* Lo rende meno imponente */
+  font-size: 0.95rem !important;
+}
+
+/* 4. Piccolo ritocco alla spaziatura generale del login */
+.login-box input {
+  margin: 6px 0 !important; /* Riduce lo spazio tra i campi di testo */
+}
+.ricordami-label {
+  margin: 8px 0 !important; /* Riduce lo spazio attorno alle checkbox */
+}
+
+/* ============================================ */
+/* FIX PULSANTI LOGIN (Perfettamente Uguali)    */
+/* ============================================ */
+
+/* 1. Regole comuni per entrambi i pulsanti */
+.login-box button:not(.btn-numeri-mancanti):not(.btn-usa-password):not(.btn-impronta-login-small),
+.btn-impronta-login-small {
+  padding: 6px 12px !important;   /* Stesso padding */
+  font-size: 0.8rem !important;   /* Stesso testo */
+  font-weight: 600 !important;    /* Stesso spessore */
+  width: 55% !important;          /* Stessa larghezza */
+  min-height: 32px !important;    /* Stessa altezza minima */
+  max-height: 32px !important;    /* Impedisce che cresca */
+  margin-left: auto !important;   /* Centrato */
+  margin-right: auto !important;  /* Centrato */
+  display: flex !important;       
+  justify-content: center !important;
+  align-items: center !important;
+  border-radius: 8px !important;  /* Stessi angoli */
+  border: none !important;        /* Rimuove bordi diversi */
+  box-sizing: border-box !important; /* Assicura che il padding non allarghi */
+  line-height: 1 !important;      /* Allinea il testo verticalmente */
+}
+
+/* 2. Icone più piccole dentro i pulsanti */
+.login-box button i, .btn-impronta-login-small i {
+  font-size: 0.85em !important;
+  margin-right: 6px !important;
+  vertical-align: middle !important;
+}
