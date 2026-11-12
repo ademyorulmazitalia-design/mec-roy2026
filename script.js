@@ -2419,14 +2419,14 @@ function caricaCalendario() {
   let html = `<h4 style="margin-bottom:15px;color:#333;">${meseNome} ${anno}</h4>`;
 
   html += `
-    <div style="margin-bottom:15px;padding:10px 15px;background:#f8f9fa;border-radius:8px;border:1px solid #ddd;display:flex;gap:15px;flex-wrap:wrap;font-size:0.85em;">
-      <span><span style="display:inline-block;width:16px;height:16px;background:#E8F5E9;border:1px solid #4CAF50;border-radius:3px;"></span> ${t('cal_legend_lavorato')}</span>
-      <span><span style="display:inline-block;width:16px;height:16px;background:#E3F2FD;border:1px solid #2196F3;border-radius:3px;"></span> ${t('cal_legend_ferie')}</span>
-      <span><span style="display:inline-block;width:16px;height:16px;background:#FFF3E0;border:1px solid #FF9800;border-radius:3px;"></span> ${t('cal_legend_permesso')}</span>
-      <span><span style="display:inline-block;width:16px;height:16px;background:#FFEBEE;border:1px solid #f44336;border-radius:3px;"></span> ${t('cal_legend_malattia')}</span>
-      <span><span style="display:inline-block;width:16px;height:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:3px;"></span> ${t('cal_legend_recupero')}</span>
-      <span><span style="display:inline-block;width:16px;height:16px;background:#ffebee;border:1px solid #d32f2f;border-radius:3px;"></span> ${t('cal_legend_straordinario')}</span>
-      <span><span style="display:inline-block;width:16px;height:16px;background:#f5f5f5;border:1px solid #999;border-radius:3px;border-style:dashed;"></span> ${t('cal_legend_assente')}</span>
+    <div class="legenda-calendario-compatta">
+      <span><span class="quadratino" style="background:#E8F5E9;border:1px solid #4CAF50;"></span> ${t('cal_legend_lavorato')}</span>
+      <span><span class="quadratino" style="background:#E3F2FD;border:1px solid #2196F3;"></span> ${t('cal_legend_ferie')}</span>
+      <span><span class="quadratino" style="background:#FFF3E0;border:1px solid #FF9800;"></span> ${t('cal_legend_permesso')}</span>
+      <span><span class="quadratino" style="background:#FFEBEE;border:1px solid #f44336;"></span> ${t('cal_legend_malattia')}</span>
+      <span><span class="quadratino" style="background:#fff3cd;border:1px solid #ffc107;"></span> ${t('cal_legend_recupero')}</span>
+      <span><span class="quadratino" style="background:#ffebee;border:1px solid #d32f2f;"></span> ${t('cal_legend_straordinario')}</span>
+      <span><span class="quadratino" style="background:#f5f5f5;border:1px dashed #999;"></span> ${t('cal_legend_assente')}</span>
     </div>`;
 
   if (dipendentiDaMostrare.length === 0) {
@@ -2581,7 +2581,6 @@ function mostraTotaliMese() {
 
   const meseNome = t('mese_' + mese);
   let totaleGenerale = 0;
-  let dipendentiDaContare = 0;
 
   if (utenteCorrente.ruolo === 'admin') {
     dati.registrazioni.forEach(r => {
@@ -2589,7 +2588,6 @@ function mostraTotaliMese() {
         totaleGenerale += r.ore || 0;
       }
     });
-    dipendentiDaContare = dati.utenti.filter(u => u.ruolo === 'dipendente').length;
   } else {
     dati.registrazioni.forEach(r => {
       if (r.utente_id === utenteCorrente.username && r.tipo === 'lavoro' &&
@@ -2597,20 +2595,15 @@ function mostraTotaliMese() {
         totaleGenerale += r.ore || 0;
       }
     });
-    dipendentiDaContare = 1;
   }
 
   const container = document.getElementById('calendario-output');
   if (container) {
-    const label = utenteCorrente.ruolo === 'admin'
-      ? `${t('cal_dipendenti_attivi')}: ${dipendentiDaContare}`
-      : t('cal_le_tue_ore');
-    // ✅ FIX #16: classe .box-totale-mese per rimozione selettiva nel PDF
+    // ⭐ VERSIONE COMPATTA: Niente frase "Dipendenti attivi", testo più piccolo
     const totaliHTML = `
-      <div class="box-totale-mese" style="background:#e8f5e9;border:2px solid #4CAF50;border-radius:10px;padding:15px;margin-bottom:20px;text-align:center;">
-        <h4 style="color:#2e7d32;margin:0;">${t('cal_totale_mese')}: ${meseNome} ${anno}</h4>
-        <p style="margin:5px 0;font-size:1.2em;"><strong>${totaleGenerale.toFixed(2)} ${t('cal_ore_lavorate')}</strong></p>
-        <small style="color:#666;">${label}</small>
+      <div class="box-totale-mese" style="background:#e8f5e9;border:2px solid #4CAF50;border-radius:10px;padding:8px 15px;margin-bottom:15px;text-align:center;">
+        <h4 style="color:#2e7d32;margin:0;font-size:0.95em;">${t('cal_totale_mese')}: ${meseNome} ${anno}</h4>
+        <p style="margin:2px 0;font-size:1.1em;"><strong>${totaleGenerale.toFixed(2)} ${t('cal_ore_lavorate')}</strong></p>
       </div>`;
     container.innerHTML = totaliHTML + container.innerHTML;
   }
