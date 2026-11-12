@@ -471,16 +471,22 @@ function login() {
     ruoloBadge.className = 'badge ' + utente.ruolo;
 
     aggiornaFotoHeader(); 
-    configuraUIUtente(utente);
     inizializzaAppPerUtente(utente);
 
     attivaAscoltoRealtime();
-    // ✅ Il benvenuto parte solo al login manuale (non al refresh)
     mostraSchermataBenvenuto(utente);
+    
     setTimeout(() => {
       applicaTraduzioni();
       popolaTendinaLingua();
-    }, 300);
+      
+      // ⭐ SPOSTATO QUI: Configuriamo i tab SOLO DOPO le traduzioni
+      configuraUIUtente(utente);
+      
+      // Forziamo anche il ridisegno del calendario (se necessario)
+      if (typeof caricaCalendario === 'function') caricaCalendario();
+      
+    }, 400); // Aumentato leggermente il tempo per essere sicuri
 
     // Attivazione biometrica post-login (se richiesta)
     const checkboxAttiva = document.getElementById('attiva-impronta');
@@ -672,8 +678,17 @@ function showTab(tab) {
     nmMostraSchermataCommesse();
     nmCommessaCorrente = null;
     nmCartellaCorrente = null;
-    nmCaricaListaCommesse();
+    
+    // ⭐ Mostriamo un messaggio di caricamento e diamo il tempo a Firebase di rispondere
+    const divCommesse = document.getElementById('nm-lista-commesse');
+    if (divCommesse) divCommesse.innerHTML = '<p class="text-muted">⏳ Caricamento commesse...</p>';
+    
+    // Ritardiamo leggermente la chiamata per essere sicuri che tutto sia pronto
+    setTimeout(() => {
+      nmCaricaListaCommesse();
+    }, 300); // 300 millisecondi di attesa
   }
+
   if (tab === 'calendario') {
     const adesso = new Date();
     const meseSelect = document.getElementById('cal-mese');
@@ -1615,25 +1630,66 @@ function aggiornaBadgeNotifiche() {
   }
 }
 
-function mostraNotifiche() {
+async function mostraNotifiche() {
   const modal = document.getElementById('modal-notifiche');
   if (modal) modal.classList.add('active');
+  
   const div = document.getElementById('notifiche-lista');
   if (!div) return;
+
+  // ⭐ Prendiamo le notifiche dell'utente
   const notifiche = dati.notifiche
     .filter(n => n.utente_id === utenteCorrente.username)
     .sort((a, b) => new Date(b.data) - new Date(a.data));
-  if (notifiche.length === 0) { div.innerHTML = '<p class="text-muted">' + t('mod_nessuna_notifica') + '</p>'; return; }
+
+  if (notifiche.length === 0) { 
+    div.innerHTML = '<p class="text-muted">' + t('mod_nessuna_notifica') + '</p>'; 
+    return; 
+  }
+
   let html = '';
+  let notificheDaSegnare = [];
+
   notifiche.forEach(n => {
     const data = new Date(n.data).toLocaleDateString('it-IT') + ' ' + new Date(n.data).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const classe = n.letto ? 'notifica-item letto' : 'notifica-item non letto';
+    
+    // Se la notifica non è letta, la aggiungiamo alla lista da segnare come letta
+    if (!n.letto) notificheDaSegnare.push(n.id);
+
     html += `<div class="${classe}" onclick="segnaLetta(${n.id})">
       <span class="notifica-testo">${n.messaggio}</span>
       <span class="notifica-data">${data}</span>
     </div>`;
   });
+  
   div.innerHTML = html;
+
+  // ⭐ FIX: Segnamo tutte le notifiche come lette non appena apri la finestra
+  if (notificheDaSegnare.length > 0) {
+    try {
+      const batch = _dbFirestore().batch();
+      notificheDaSegnare.forEach(idNotifica => {
+        const ref = _dbFirestore().collection('notifiche').doc(String(idNotifica));
+        batch.update(ref, { letto: true });
+      });
+      await batch.commit();
+      
+      // Aggiorniamo l'array locale e il badge
+      notificheDaSegnare.forEach(id => {
+        const not = dati.notifiche.find(n => String(n.id) === String(id));
+        if (not) not.letto = true;
+      });
+      
+      // Aspettiamo un secondo per far vedere all'utente che c'era il badge, poi lo togliamo
+      setTimeout(() => {
+        aggiornaBadgeNotifiche();
+      }, 1000);
+      
+    } catch (err) {
+      console.warn("Errore segnando le notifiche come lette:", err);
+    }
+  }
 }
 
 async function segnaLetta(id) {
@@ -2329,9 +2385,6 @@ async function eliminaRegistrazione(id) {
 
 console.log('✅ script.js — PARTE 1/2 caricata');
 
-// ============================================
-// CALENDARIO (vista mensile)
-// ============================================
 function caricaCalendario() {
   const mese = parseInt(document.getElementById('cal-mese').value);
   const anno = parseInt(document.getElementById('cal-anno').value);
@@ -2377,14 +2430,22 @@ function caricaCalendario() {
 
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85em;"><thead><tr>';
   html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:120px;vertical-align:middle;">${t('cal_dipendente')}</th>`;
-  html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;vertical-align:middle;">${t('cal_totale')}</th>`;
+  
   const giorniSett = tGiorniSettimana();
+  
+  // 1. CICLO DEI GIORNI
   for (let g = 1; g <= giorniMese; g++) {
     const gs = new Date(anno, mese - 1, g).getDay();
     const wk = gs === 0 || gs === 6;
     html += `<th style="padding:4px;border:1px solid #ddd;text-align:center;background:${wk ? '#f5f5f5' : 'white'};min-width:35px;font-size:0.85em;font-weight:bold;color:#00695C;">${g}</th>`;
   }
+  
+  // ⭐ 2. INTESTAZIONE TOTALE (MESSA ALLA FINE)
+  html += `<th rowspan="2" style="padding:8px;border:1px solid #ddd;background:#00695C;color:white;min-width:60px;vertical-align:middle;">Totale</th>`;
+  
   html += '</tr><tr>';
+  
+  // 3. SECONDA RIGA (GIORNI SETTIMANA)
   for (let g = 1; g <= giorniMese; g++) {
     const gs = new Date(anno, mese - 1, g).getDay();
     const wk = gs === 0 || gs === 6;
@@ -2392,13 +2453,13 @@ function caricaCalendario() {
   }
   html += '</tr></thead><tbody>';
 
-  // ⭐ Filtro anti-doppione: ignora i doppioni creati dall'approvazione di un recupero ore
   const registrazioniPulite = dati.registrazioni.filter(r => !(r.richiesta_id && r.tipo === 'lavoro'));
 
   dipendentiDaMostrare.forEach(dip => {
     html += `<tr><td style="padding:6px 10px;border:1px solid #ddd;font-weight:600;background:#f8f9fa;"><strong>${dip.nome} ${dip.cognome}</strong></td>`;
     let totaleOre = 0;
 
+    // 4. CELLE DEI GIORNI
     for (let g = 1; g <= giorniMese; g++) {
       const data = `${anno}-${String(mese).padStart(2, '0')}-${String(g).padStart(2, '0')}`;
       const gs = new Date(anno, mese - 1, g).getDay();
@@ -2492,6 +2553,7 @@ function caricaCalendario() {
       html += `<td style="padding:6px;border:${border};text-align:center;background:${bg};font-weight:${cella === 'A' ? 'bold' : 'normal'};color:${cella === 'A' ? '#d32f2f' : '#333'};">${cella}</td>`;
     }
 
+    // ⭐ 5. CELLA DEL TOTALE (MESSA ALLA FINE)
     const isOltre8 = totaleOre > 8;
     html += `<td style="padding:6px 10px;border:1px solid #ddd;text-align:center;font-weight:bold;background:${isOltre8 ? '#ffebee' : '#e8f5e9'};color:${isOltre8 ? '#d32f2f' : '#2e7d32'};">${totaleOre.toFixed(1)}h${isOltre8 ? ' ⚠️' : ''}</td></tr>`;
   });
@@ -3507,17 +3569,13 @@ async function nmCaricaNumeriCartella() {
     const commessa = doc.data();
     const numeri = (commessa.cartelle && commessa.cartelle[nmCartellaCorrente]) || [];
 
-    let barraRicerca = document.getElementById('nm-barra-ricerca');
-    if (!barraRicerca) {
-      barraRicerca = document.createElement('div');
-      barraRicerca.id = 'nm-barra-ricerca';
-      barraRicerca.className = 'nm-barra-ricerca';
-      barraRicerca.innerHTML = `
-        <i class="fas fa-search"></i>
-        <input type="text" id="nm-input-ricerca" placeholder="Cerca numero..." autocomplete="off" oninput="nmFiltraNumeri()" />
-        <button class="nm-btn-clear-ricerca" onclick="nmPulisciRicerca()" title="Pulisci"><i class="fas fa-times"></i></button>`;
-      div.parentElement.insertBefore(barraRicerca, div);
-    }
+    // Assicuriamoci che all'apertura la ricerca sia NASCOSTA
+    const barraRicercaContainer = document.getElementById('nm-barra-ricerca-container');
+    if (barraRicercaContainer) barraRicercaContainer.style.display = 'none';
+    
+    const iconaRicerca = document.getElementById('nm-icona-ricerca');
+    if (iconaRicerca) iconaRicerca.style.display = 'inline-block';
+    
     const inputRicerca = document.getElementById('nm-input-ricerca');
     if (inputRicerca) inputRicerca.value = '';
 
@@ -4972,6 +5030,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ruoloBadge.textContent = utente.ruolo === 'admin' ? t('dip_admin') : t('dip_dipendente');
         ruoloBadge.className = 'badge ' + utente.ruolo;
 
+        aggiornaFotoHeader(); // ⭐ AGGIUNGI QUESTA RIGA
         configuraUIUtente(utente);
         inizializzaAppPerUtente(utente);
         attivaAscoltoRealtime();
@@ -5073,7 +5132,7 @@ function caricaRegistrazioniOggi() {
   const divContenuto = document.getElementById('contenuto-registrazioni-oggi');
   if (!divLista || !divContenuto) return;
 
-  // ⭐ Svuota la tabella prima di ridisegnarla
+  // Svuota la tabella prima di ridisegnarla
   divContenuto.innerHTML = ''; 
   divLista.style.display = 'none'; 
 
@@ -5086,14 +5145,13 @@ function caricaRegistrazioniOggi() {
     r.tipo === 'lavoro'
   );
 
-  // ⭐ FIX ANTI-DOPPIONE VISIVO: 
+  // ⭐ FIX DEFINITIVO ANTI-DOPPIONE: 
   // Creiamo una "firma" unica basata su orario, commessa e descrizione.
   // Se due record hanno la stessa firma, ne mostriamo solo uno.
   const regsUniche = [];
   const firmeViste = new Set();
   
   regsOggi.forEach(r => {
-    // Creiamo una stringa tipo "16:00|17:00|5|fvfsf"
     const firma = `${r.ora_inizio}|${r.ora_fine}|${r.commessa_id}|${r.descrizione}`;
     
     if (!firmeViste.has(firma)) {
@@ -5205,5 +5263,219 @@ function aggiornaFotoHeader() {
   } else {
     // Se non ha la foto, mostriamo l'omino di default
     container.innerHTML = '<i class="fas fa-user" style="color: #6c7a78; font-size: 0.9em;"></i>';
+  }
+}
+// ============================================
+// BIOMETRIA (WebAuthn)
+// ============================================
+const RP_NAME = 'MEC-ROY';
+const RP_ID = window.location.hostname;
+const BIO_STORAGE_KEY = 'bio_credentials_';
+
+function bioSupportato() {
+  return window.PublicKeyCredential && 
+         PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable &&
+         PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+}
+
+// Mostra/nasconde il pulsante "Attiva impronta" nel login
+async function aggiornaUILoginBiometrico() {
+  const labelAttiva = document.getElementById('label-attiva-impronta');
+  const btnImpronta = document.getElementById('btn-login-impronta');
+  const btnDisattiva = document.getElementById('btn-disattiva-impronta');
+  
+  if (!labelAttiva || !btnImpronta) return;
+
+  const supportato = await bioSupportato();
+  if (!supportato) {
+    labelAttiva.style.display = 'none';
+    btnImpronta.style.display = 'none';
+    return;
+  }
+
+  // Controlla se c'è un'identità salvata per questo dispositivo
+  const usernameSalvato = localStorage.getItem('bio_last_user');
+  if (usernameSalvato) {
+    const credentialId = localStorage.getItem(BIO_STORAGE_KEY + usernameSalvato);
+    if (credentialId) {
+      // Se l'utente è loggato e ha attivato l'impronta, mostra il pulsante per disattivarla
+      if (utenteCorrente && utenteCorrente.username === usernameSalvato) {
+        if (btnDisattiva) btnDisattiva.style.display = 'flex';
+      }
+      // Mostra il pulsante "Entra con impronta" nel login
+      btnImpronta.style.display = 'flex';
+      labelAttiva.style.display = 'none';
+      return;
+    }
+  }
+
+  // Se non c'è nulla di salvato, mostra la checkbox per attivare
+  labelAttiva.style.display = 'flex';
+  btnImpronta.style.display = 'none';
+  if (btnDisattiva) btnDisattiva.style.display = 'none';
+}
+
+// Attiva l'impronta per l'utente corrente
+async function attivaBiometrico(username) {
+  try {
+    if (!(await bioSupportato())) {
+      return { ok: false, errore: 'Biometria non supportata su questo dispositivo.' };
+    }
+
+    // 1. Genera una sfida (challenge) casuale
+    const challenge = new Uint8Array(32);
+    window.crypto.getRandomValues(challenge);
+
+    // 2. Crea l'identità
+    const user = {
+      id: new TextEncoder().encode(username),
+      name: username,
+      displayName: username
+    };
+
+    const publicKey = {
+      challenge: challenge,
+      rp: { name: RP_NAME, id: RP_ID },
+      user: user,
+      pubKeyCredParams: [
+        { alg: -7, type: "public-key" }, // ES256
+        { alg: -257, type: "public-key" } // RS256
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: "platform",
+        userVerification: "required",
+        residentKey: "preferred"
+      },
+      timeout: 60000,
+      attestation: "none"
+    };
+
+    const credential = await navigator.credentials.create({ publicKey });
+    
+    // Salviamo l'ID della credenziale nel localStorage
+    const credentialId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+    localStorage.setItem(BIO_STORAGE_KEY + username, credentialId);
+    localStorage.setItem('bio_last_user', username);
+    
+    return { ok: true };
+  } catch (err) {
+    console.error('Errore attivazione biometria:', err);
+    if (err.name === 'NotAllowedError') return { ok: false, errore: 'Operazione annullata.' };
+    return { ok: false, errore: 'Errore durante la configurazione: ' + err.message };
+  }
+}
+
+// Disattiva l'impronta
+function disattivaBiometrico() {
+  if (!utenteCorrente) return;
+  if (!confirm('Vuoi disattivare l\'accesso con impronta per questo dispositivo?')) return;
+  
+  localStorage.removeItem(BIO_STORAGE_KEY + utenteCorrente.username);
+  if (localStorage.getItem('bio_last_user') === utenteCorrente.username) {
+    localStorage.removeItem('bio_last_user');
+  }
+  
+  const btnDisattiva = document.getElementById('btn-disattiva-impronta');
+  if (btnDisattiva) btnDisattiva.style.display = 'none';
+  alert('✅ Impronta disattivata.');
+  aggiornaUILoginBiometrico();
+}
+
+// Login con impronta
+async function loginBiometrico() {
+  const erroreBio = document.getElementById('errore-bio');
+  if (erroreBio) erroreBio.style.display = 'none';
+  
+  try {
+    if (!(await bioSupportato())) {
+      if (erroreBio) { erroreBio.textContent = 'Biometria non supportata.'; erroreBio.style.display = 'block'; }
+      return;
+    }
+
+    const username = localStorage.getItem('bio_last_user');
+    if (!username) {
+      if (erroreBio) { erroreBio.textContent = 'Nessuna impronta salvata.'; erroreBio.style.display = 'block'; }
+      return;
+    }
+
+    const credentialIdB64 = localStorage.getItem(BIO_STORAGE_KEY + username);
+    if (!credentialIdB64) {
+      if (erroreBio) { erroreBio.textContent = 'Credenziale non trovata.'; erroreBio.style.display = 'block'; }
+      return;
+    }
+
+    // Ricostruiamo l'ID
+    const credentialId = Uint8Array.from(atob(credentialIdB64), c => c.charCodeAt(0));
+
+    const challenge = new Uint8Array(32);
+    window.crypto.getRandomValues(challenge);
+
+    const publicKey = {
+      challenge: challenge,
+      rpId: RP_ID,
+      allowCredentials: [{
+        id: credentialId,
+        type: 'public-key',
+        transports: ['internal']
+      }],
+      userVerification: 'required',
+      timeout: 60000
+    };
+
+    const assertion = await navigator.credentials.get({ publicKey });
+    
+    if (assertion) {
+      // Se la verifica ha successo, logghiamo l'utente
+      const utente = dati.utenti.find(u => u.username === username);
+      if (utente) {
+        // Usiamo la stessa logica del login manuale
+        document.getElementById('username').value = username;
+        document.getElementById('password').value = utente.password;
+        login();
+        if (erroreBio) erroreBio.style.display = 'none';
+      } else {
+        if (erroreBio) { erroreBio.textContent = 'Utente non trovato nel database.'; erroreBio.style.display = 'block'; }
+      }
+    }
+  } catch (err) {
+    console.error('Errore login biometrico:', err);
+    const btnUsaPassword = document.getElementById('btn-usa-password');
+    if (btnUsaPassword) btnUsaPassword.style.display = 'flex';
+    
+    if (err.name === 'NotAllowedError' && erroreBio) {
+      erroreBio.textContent = 'Impronta non riconosciuta o operazione annullata. Riprova o usa la password.';
+      erroreBio.style.display = 'block';
+    }
+  }
+}
+
+function mostraFormPassword() {
+  const btnUsaPassword = document.getElementById('btn-usa-password');
+  if (btnUsaPassword) btnUsaPassword.style.display = 'none';
+  document.getElementById('username').focus();
+}
+
+// Funzione per APRIRE la barra di ricerca
+function nmApriRicerca() {
+  const icona = document.getElementById('nm-icona-ricerca');
+  const barra = document.getElementById('nm-barra-ricerca-container');
+  const input = document.getElementById('nm-input-ricerca');
+  
+  if (icona) icona.style.display = 'none';
+  if (barra) barra.style.display = 'flex';
+  if (input) setTimeout(() => input.focus(), 100);
+}
+
+// Funzione per CHIUDERE la barra di ricerca e svuotare il campo
+function nmChiudiRicerca() {
+  const icona = document.getElementById('nm-icona-ricerca');
+  const barra = document.getElementById('nm-barra-ricerca-container');
+  const input = document.getElementById('nm-input-ricerca');
+  
+  if (barra) barra.style.display = 'none';
+  if (icona) icona.style.display = 'inline-block';
+  if (input) {
+    input.value = ''; // Svuota il campo
+    nmFiltraNumeri(); // Ripristina la lista completa
   }
 }
