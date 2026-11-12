@@ -4204,3 +4204,121 @@ body.dark-mode::before {
   margin-right: 6px !important;
   vertical-align: middle !important;
 }
+
+/* ============================================ */
+/* LEGENDA CALENDARIO - Versione Compatta       */
+/* ============================================ */
+
+/* Ridimensiona il contenitore della legenda */
+#calendario-output > div:nth-child(2) {
+  padding: 6px 10px !important;
+  gap: 8px !important;
+  font-size: 0.75em !important;
+  margin-bottom: 10px !important;
+}
+
+/* Ridimensiona i quadratini colorati */
+#calendario-output > div:nth-child(2) span > span {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Ridimensiona il testo della legenda */
+#calendario-output > div:nth-child(2) span {
+  font-size: 0.9em !important;
+}
+
+/* ============================================ */
+/* LEGENDA CALENDARIO - MINI                    */
+/* ============================================ */
+.legenda-calendario-compatta {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  padding: 6px 10px !important;
+  margin-bottom: 10px !important;
+  background: #f8f9fa !important;
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 8px !important;
+  font-size: 0.65em !important; /* Dimensione del testo mini */
+  color: #444 !important;
+}
+
+.legenda-calendario-compatta span {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 1em !important; /* Eredita la dimensione del contenitore */
+}
+
+.legenda-calendario-compatta .quadratino {
+  display: inline-block !important;
+  width: 8px !important;     /* Quadratino più piccolo */
+  height: 8px !important;
+  min-width: 8px !important;
+  border-radius: 2px !important; /* Angoli più tondi ma minuscoli */
+}
+
+/* Mobile: ancora più compatta */
+@media (max-width: 768px) {
+  .legenda-calendario-compatta {
+    gap: 6px !important;
+    padding: 4px 8px !important;
+    font-size: 0.6em !important;
+  }
+  
+  .legenda-calendario-compatta .quadratino {
+    width: 7px !important;
+    height: 7px !important;
+    min-width: 7px !important;
+  }
+}
+
+/* ============================================ */
+/* HEADER - Tutto su una riga                   */
+/* ============================================ */
+
+header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important; /* Forza una sola riga */
+  gap: 10px !important;
+}
+
+.header-left {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important; /* Forza una sola riga interna */
+  gap: 10px !important;
+  flex: 1 !important;
+  overflow-x: auto; /* Se lo schermo è troppo piccolo, scorre */
+}
+
+/* Pulsante Logout - Mini e allineato a destra */
+.btn-logout {
+  margin-left: auto !important;
+  flex-shrink: 0 !important;
+  padding: 4px 10px !important;
+  font-size: 0.75em !important;
+  border-radius: 6px !important;
+  min-height: auto !important;
+}
+
+.btn-logout i {
+  font-size: 0.85em !important;
+  margin-right: 3px !important;
+}
+
+/* Mobile: ancora più piccolo */
+@media (max-width: 768px) {
+  .btn-logout {
+    padding: 3px 8px !important;
+    font-size: 0.65em !important;
+  }
+  
+  .btn-logout i {
+    font-size: 0.8em !important;
+    margin-right: 2px !important;
+  }
+}
