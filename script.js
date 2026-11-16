@@ -4081,6 +4081,48 @@ async function nmScaricaCSVPhoenix() {
   } catch (err) { alert('❌ Errore: ' + err.message); }
 }
 
+async function nmScaricaTXTPhoenix() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) { alert('❌ Nessuna cartella aperta'); return; }
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) return;
+    const numeri = (doc.data().cartelle && doc.data().cartelle[nmCartellaCorrente]) || [];
+    if (numeri.length === 0) { alert('⚠️ Nessun numero in questa cartella'); return; }
+    
+    let testo = '';
+    numeri.forEach(n => { 
+      // Puliamo il testo come facciamo per il CSV
+      let t = formattaTestoNumero(n.testo || '').replace(/;/g, ',').trim(); 
+      
+      // Se siamo nella cartella FILO, applichiamo la divisione dei cavi multipli
+      if (nmCartellaCorrente === 'filo') {
+        const righeEsplose = espandiNumeroComplesso(t);
+        righeEsplose.forEach(riga => {
+          testo += riga + '\n'; // Aggiungiamo solo l'a capo
+        });
+      } else {
+        // Per le altre cartelle, scriviamo il numero così com'è
+        testo += t + '\n'; 
+      }
+    });
+
+    // Creiamo il file .txt puro (senza BOM, così è più pulito)
+    const blob = new Blob([testo], { type: 'text/plain;charset=utf-8;' });
+    
+    // Prepariamo il nome del file
+    const nomeCommessa = (nmCommessaCorrente).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const nomeCartella = (NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente).replace(/\s+/g, '_');
+    const nomeFile = `${nomeCommessa}_${nomeCartella}.txt`;
+    
+    // Scarichiamo
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nomeFile;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) { alert('❌ Errore: ' + err.message); }
+}
+
 async function nmCopiaPerPhoenix() {
   if (!nmCommessaCorrente || !nmCartellaCorrente) { alert('❌ Nessuna cartella aperta'); return; }
   try {
@@ -4089,37 +4131,55 @@ async function nmCopiaPerPhoenix() {
     const numeri = (doc.data().cartelle && doc.data().cartelle[nmCartellaCorrente]) || [];
     if (numeri.length === 0) { alert('⚠️ Nessun numero'); return; }
     
-    // ⭐ IMPOSTAZIONI FORMATO PHOENIX IN BASE ALLA CARTELLA
-    let dimensioneFont = '2'; // Default per FILO
-    if (nmCartellaCorrente === 'cavo') dimensioneFont = '3';
-    if (nmCartellaCorrente === 'adesive') dimensioneFont = '5';
-    // (Se in futuro vorrai formati diversi per targhette e morsetti, li aggiungiamo qui)
-
     let testi = [];
     if (nmCartellaCorrente === 'filo') {
-      // ⭐ Se siamo nel FILO, applichiamo la divisione
       testi = numeri.flatMap(n => {
         const testoPulito = formattaTestoNumero(n.testo || '').replace(/^'/, '').trim();
         return espandiNumeroComplesso(testoPulito);
       });
     } else {
-      // Per le altre cartelle, lasciamo tutto normale
       testi = numeri.map(n => formattaTestoNumero(n.testo || '').replace(/^'/, '').trim());
     }
     const testoPlain = testi.join('\n');
     
-    // Creiamo l'HTML con il font corretto per Phoenix
-    let htmlTabella = `<div style="font-family: Arial, sans-serif; font-size: ${dimensioneFont}em; line-height: 1.2;">`;
+    // 🛑 CONFIGURAZIONE FORMATI PHOENIX
+    // Modifica qui le misure in mm, il font, e quanti caratteri entrano al massimo prima di "schiacciare"
+    const formati = {
+      filo:     { w: '23mm', h: '4mm',  font: '14pt', maxCar: 14 }, // Arial 2
+      cavo:     { w: '29mm', h: '8mm',  font: '12pt', maxCar: 16 }, // Arial 3
+      adesive:  { w: '27mm', h: '15mm', font: '18pt', maxCar: 12 }, // Arial 5 (27x15, limite 12 caratteri)
+      targhette:{ w: '20mm', h: '6mm',  font: '10pt', maxCar: 12 }, // Da definire
+      morsetti: { w: '20mm', h: '6mm',  font: '10pt', maxCar: 12 }  // Da definire
+    };
+
+    // Se la cartella corrente non è nella lista, usa un formato standard di sicurezza
+    const config = formati[nmCartellaCorrente] || { w: '100%', h: 'auto', font: '14pt', maxCar: 20 };
+
+    let htmlTabella = `<div style="font-family: Arial, sans-serif; background: #fff;">`;
+    
     testi.forEach(t => {
-      htmlTabella += `<div>${t}</div>`;
+      let scalaLarghezza = 1;
+      
+      // Se la scritta supera il numero massimo di caratteri, la schiacciamo in orizzontale
+      if (t.length > config.maxCar) {
+        scalaLarghezza = config.maxCar / t.length;
+      }
+      
+      // Creiamo la gabbia fisica con le misure esatte per questa cartella
+      htmlTabella += `<div style="width: ${config.w}; height: ${config.h}; line-height: ${config.h}; overflow: hidden; white-space: nowrap; display: inline-block; margin-bottom: 2px;">
+        <span style="font-size: ${config.font}; font-weight: bold; display: inline-block; transform: scaleX(${scalaLarghezza}); transform-origin: left center;">
+          ${t}
+        </span>
+      </div>`;
     });
     htmlTabella += '</div>';
 
+    // COPIA NEGLI APPUNTI
     try {
       if (typeof ClipboardItem !== 'undefined') {
         const blobHtml = new Blob([htmlTabella], { type: 'text/html' });
         const blobPlain = new Blob([testoPlain], { type: 'text/plain' });
-        // Scriviamo entrambi i formati: HTML (con font) e testo semplice (fallback)
+        
         await navigator.clipboard.write([new ClipboardItem({ 
           'text/html': blobHtml, 
           'text/plain': blobPlain 
@@ -4127,9 +4187,12 @@ async function nmCopiaPerPhoenix() {
       } else {
         await navigator.clipboard.writeText(testoPlain);
       }
-      alert(`✅ Copiati ${numeri.length} numeri (Formato Arial ${dimensioneFont}). Ora incolla in Phoenix Contact con Ctrl+V.`);
+      
+      const cartellaNome = NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente.toUpperCase();
+      alert(`✅ Copiati ${testi.length} numeri da ${cartellaNome} (Formato ${config.w} x ${config.h}). Ora incolla in Phoenix.`);
+      
     } catch (err) {
-      // Fallback per browser che non supportano HTML negli appunti
+      // Fallback nel caso il browser blocchi la copia HTML
       const textarea = document.createElement('textarea');
       textarea.value = testoPlain;
       textarea.style.position = 'fixed';
@@ -4138,7 +4201,50 @@ async function nmCopiaPerPhoenix() {
       textarea.select();
       document.execCommand('copy');
       document.body.removeChild(textarea);
-      alert(`✅ Copiati ${numeri.length} numeri (solo testo). Se la dimensione è sbagliata, imposta Arial ${dimensioneFont} in Phoenix.`);
+      alert(`✅ Copiati ${testi.length} numeri (solo testo).`);
+    }
+  } catch (err) { alert('❌ Errore: ' + err.message); }
+}
+
+async function nmCopiaFiloFormattato() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) { alert('❌ Nessuna cartella aperta'); return; }
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) return;
+    const numeri = (doc.data().cartelle && doc.data().cartelle[nmCartellaCorrente]) || [];
+    if (numeri.length === 0) { alert('⚠️ Nessun numero'); return; }
+
+    let testi = numeri.flatMap(n => {
+      const testoPulito = formattaTestoNumero(n.testo || '').replace(/^'/, '').trim();
+      return espandiNumeroComplesso(testoPulito);
+    });
+    
+    const testoPlain = testi.join('\n');
+    
+    // Formato esatto 23x4, Arial Formato 2
+    let htmlTabella = `<div style="font-family: Arial, sans-serif; font-size: 14pt; line-height: 1.1;">`;
+    testi.forEach(t => {
+      htmlTabella += `<div>${t}</div>`;
+    });
+    htmlTabella += '</div>';
+
+    try {
+      const blobHtml = new Blob([htmlTabella], { type: 'text/html' });
+      const blobPlain = new Blob([testoPlain], { type: 'text/plain' });
+      await navigator.clipboard.write([new ClipboardItem({ 
+        'text/html': blobHtml, 
+        'text/plain': blobPlain 
+      })]);
+      alert(`✅ Copiati ${testi.length} numeri in formato FILO Arial 2. Incolla in Phoenix.`);
+    } catch (err) {
+      // Fallback per testo semplice
+      const textarea = document.createElement('textarea');
+      textarea.value = testoPlain;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      alert(`✅ Copiati ${testi.length} numeri (solo testo).`);
     }
   } catch (err) { alert('❌ Errore: ' + err.message); }
 }
@@ -5539,3 +5645,4 @@ function nmChiudiRicerca() {
     nmFiltraNumeri(); // Ripristina la lista completa
   }
 }
+
