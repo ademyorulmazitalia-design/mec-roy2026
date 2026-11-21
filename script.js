@@ -664,6 +664,45 @@ function inizializzaAppPerUtente(utente) {
     }
     caricaUltimaRegistrazione();
     caricaRegistrazioniOggi(); // ⭐ AGGIUNGI QUESTA RIGA
+        // ⭐ PROMEMORIA IN-APP: Controlla se ci sono giorni scorsi senza ore registrate
+    setTimeout(() => {
+      if (utenteCorrente.ruolo !== 'dipendente') return;
+      
+      const oggi = new Date();
+      const ieri = new Date(oggi);
+      ieri.setDate(oggi.getDate() - 1);
+      const dataIeri = ieri.toISOString().split('T')[0];
+      
+      // Se ieri era domenica o sabato, non segnalare
+      const giornoSettIeri = ieri.getDay();
+      if (giornoSettIeri === 0 || giornoSettIeri === 6) return;
+
+      // Controlla se ieri c'erano registrazioni
+      const regIeri = dati.registrazioni.filter(r => 
+        r.utente_id === utenteCorrente.username && 
+        r.data === dataIeri && 
+        r.tipo === 'lavoro'
+      );
+
+      // Controlla se ieri c'era una richiesta approvata (ferie/malattia)
+      const richiestaApprovata = dati.richieste.find(r =>
+        r.utente_id === utenteCorrente.username && 
+        r.stato === 'approvata' &&
+        r.data_inizio <= dataIeri && r.data_fine >= dataIeri
+      );
+
+      if (regIeri.length === 0 && !richiestaApprovata) {
+        const infoDiv = document.getElementById('info-registrazione');
+        if (infoDiv && !document.getElementById('avviso-ore-dimenticate')) {
+          const avviso = document.createElement('div');
+          avviso.id = 'avviso-ore-dimenticate';
+          avviso.className = 'info-msg';
+          avviso.style.cssText = 'background:#fff3cd; border-color:#ffc107; color:#856404; margin-bottom:15px; font-weight:bold;';
+          avviso.innerHTML = `⚠️ <strong>Attenzione:</strong> Non hai registrato le ore di ieri! <br><small>Clicca su "Richiedi" -> "Recupero Ore" per segnalarle.</small>`;
+          infoDiv.insertBefore(avviso, infoDiv.firstChild);
+        }
+      }
+    }, 1500);
   }
 
   const menuC = document.getElementById('commesse-menu');
@@ -4115,6 +4154,50 @@ async function nmScaricaTXTPhoenix() {
     const nomeFile = `${nomeCommessa}_${nomeCartella}.txt`;
     
     // Scarichiamo
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nomeFile;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) { alert('❌ Errore: ' + err.message); }
+}
+
+async function nmScaricaTXTSoloNuovi() {
+  if (!nmCommessaCorrente || !nmCartellaCorrente) { alert('❌ Nessuna cartella aperta'); return; }
+  try {
+    const doc = await nmGetCollection().doc(nmCommessaCorrente).get();
+    if (!doc.exists) return;
+    
+    // Prendiamo tutti i numeri della cartella
+    const tuttiNumeri = (doc.data().cartelle && doc.data().cartelle[nmCartellaCorrente]) || [];
+    
+    // ⭐ FILTRO MAGICO: Prendiamo solo quelli NON stampati (stampato !== true)
+    const nuoviNumeri = tuttiNumeri.filter(n => n.stampato !== true);
+    
+    if (nuoviNumeri.length === 0) { 
+      alert('✅ Nessun numero nuovo da scaricare. Hai già stampato tutto!'); 
+      return; 
+    }
+    
+    let testo = '';
+    nuoviNumeri.forEach(n => { 
+      let t = formattaTestoNumero(n.testo || '').replace(/;/g, ',').trim(); 
+      
+      if (nmCartellaCorrente === 'filo') {
+        const righeEsplose = espandiNumeroComplesso(t);
+        righeEsplose.forEach(riga => { testo += riga + '\n'; });
+      } else {
+        testo += t + '\n'; 
+      }
+    });
+
+    const blob = new Blob([testo], { type: 'text/plain;charset=utf-8;' });
+    const nomeCommessa = (nmCommessaCorrente).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const nomeCartella = (NM_CARTELLE_LABEL[nmCartellaCorrente] || nmCartellaCorrente).replace(/\s+/g, '_');
+    
+    // Aggiungiamo "NUOVI" nel nome del file per riconoscerlo
+    const nomeFile = `${nomeCommessa}_${nomeCartella}_NUOVI.txt`;
+    
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = nomeFile;
