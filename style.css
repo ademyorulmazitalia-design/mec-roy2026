@@ -55,24 +55,27 @@ body::before {
 }
 
 /* ============================================ */
-/* HEADER                                       */
+/* HEADER - Layout flessibile                   */
 /* ============================================ */
 header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important; /* Forza tutto su una riga */
+  gap: 10px !important;
   padding-bottom: 15px;
   border-bottom: 2px solid rgba(0,105,92,0.12);
   margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 
 .header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important; /* Forza tutto su una riga */
+  gap: 10px !important;
+  flex: 1 !important;
+  min-width: 0; /* Permette di restringere gli elementi */
+  overflow-x: auto; /* Se lo schermo è troppo piccolo, scorre */
 }
 
 .user-badge {
@@ -107,19 +110,12 @@ header {
 /* PULSANTI HEADER                              */
 /* ============================================ */
 .btn-logout {
-  background: linear-gradient(180deg, #ef4a5c 0%, #c82333 100%);
-  color: white;
-  border: 1px solid #b81e2d;
-  padding: 8px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.2s;
-  box-shadow:
-    0 2px 4px rgba(200,35,51,0.35),
-    0 1px 0 rgba(255,255,255,0.3) inset,
-    0 -2px 0 rgba(0,0,0,0.12) inset;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.15);
+  flex-shrink: 0 !important;
+  padding: 6px 15px !important;
+  font-size: 0.8em !important;
+  border-radius: 8px !important;
+  margin-left: 10px !important; /* Un margine fisso invece di auto */
+  white-space: nowrap;
 }
 .btn-logout:hover {
   background: linear-gradient(180deg, #f05a6b 0%, #d42a3a 100%);
@@ -379,19 +375,35 @@ header {
 }
 
 .btn-notifica {
-  background: none;
-  border: none;
-  font-size: 1.4em;
-  cursor: pointer;
-  color: #555;
-  padding: 8px 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f4f3 100%);
+  border: 1px solid #ddd;
   border-radius: 50%;
+  width: 32px; /* Dimensione ridotta per stare nell'header */
+  height: 32px;
+  min-width: 32px; /* Evita che si schiacci */
+  flex-shrink: 0; /* Evita che venga compressa */
+  cursor: pointer;
+  font-size: 1em; 
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s;
   position: relative;
+  box-shadow: 0 2px 3px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.9) inset;
+  padding: 0; /* Rimuove il padding che schiacciava l'icona */
 }
+
 .btn-notifica:hover {
-  background: linear-gradient(180deg, #f0faf8 0%, #dff3ee 100%);
-  transform: scale(1.1);
+  background: linear-gradient(180deg, #00917d 0%, #00695C 100%);
+  color: white;
+  transform: scale(1.05);
+}
+
+/* Assicura che l'icona FontAwesome sia visibile */
+.btn-notifica i {
+  font-size: 1.1em;
+  line-height: 1;
 }
 
 /* ============================================ */
@@ -3873,6 +3885,7 @@ body.dark-mode::before {
   background-repeat: no-repeat;
   background-position: right 8px center;
   padding-right: 26px;
+  flex-shrink: 0;
 }
 
 .select-lingua:focus {
@@ -4320,5 +4333,71 @@ header {
   .btn-logout i {
     font-size: 0.8em !important;
     margin-right: 2px !important;
+  }
+}
+
+/* FIX DEFINITIVO HEADER E TABS (Non si accavallano e non vanno a capo) */
+header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 10px !important;
+  width: 100% !important;
+  padding-bottom: 15px;
+  border-bottom: 2px solid rgba(0,105,92,0.12);
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important; /* Tutto su una riga! */
+  gap: 8px !important;
+  flex: 1 !important;
+  overflow-x: auto !important; /* Se non c'è spazio, permette lo scroll orizzontale */
+}
+
+/* I tabs stanno sotto e non si rompono */
+.tabs {
+  display: flex !important;
+  flex-wrap: wrap !important; 
+  width: 100% !important;
+  gap: 8px !important;
+  margin-top: 5px !important;
+  padding-bottom: 10px !important;
+  border-bottom: 2px solid rgba(0,105,92,0.12) !important;
+}
+.secondo-header {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 5px;
+}
+/* ============================================ */
+/* PULSANTI PICCOLI PER NUMERI MANCANTI         */
+/* ============================================ */
+.btn-piccolo {
+  padding: 4px 8px !important; /* Ancora meno spazio interno */
+  font-size: 0.7em !important;  /* Testo più piccolo */
+  border-radius: 5px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-piccolo i {
+  font-size: 0.8em !important; /* Icona ancora più piccola */
+}
+
+/* Adatta i pulsanti anche sul telefono */
+@media (max-width: 768px) {
+  .btn-piccolo {
+    padding: 3px 6px !important;
+    font-size: 0.65em !important;
+    gap: 3px;
+  }
+  .btn-piccolo i {
+    font-size: 0.75em !important;
   }
 }
