@@ -91,57 +91,58 @@
   <!-- ===== MAIN ===== -->
   <div id="main-page" style="display:none;">
 
-<header>
-  <div class="header-left">
-    <div class="logo-small">
-      <img src="images/logo.png" alt="MEC-ROY" class="logo-small-img" 
-           onerror="this.style.display='none';" />
-      <span class="azienda-small">MEC-ROY</span>
-    </div>
-    <div class="user-badge" style="display: flex; align-items: center; gap: 8px;">
-      <div id="header-user-foto" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e0e8e6; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc;">
-        <i class="fas fa-user" style="color: #6c7a78; font-size: 0.9em;"></i>
+        <header style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap; gap: 10px; padding-bottom: 10px; border-bottom: 2px solid rgba(0,105,92,0.12); margin-bottom: 0px;">
+      <div class="header-left" style="display: flex; align-items: center; flex-wrap: nowrap; gap: 10px; flex: 1; min-width: 0;">
+        <div class="logo-small">
+          <img src="images/logo.png" alt="MEC-ROY" class="logo-small-img" 
+               onerror="this.style.display='none';" />
+          <span class="azienda-small">MEC-ROY</span>
+        </div>
+        <div class="user-badge" style="display: flex; align-items: center; gap: 8px;">
+          <div id="header-user-foto" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e0e8e6; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc;">
+            <i class="fas fa-user" style="color: #6c7a78; font-size: 0.9em;"></i>
+          </div>
+          <span class="badge" id="user-ruolo"></span>
+        </div>
+        <button onclick="apriModificaPassword()" class="btn-password" id="btn-password" title="Cambia password" style="display:none;">
+          <i class="fas fa-key"></i>
+        </button>
+        <button onclick="toggleDarkMode()" class="btn-darkmode" id="btn-darkmode" title="Dark/Light Mode">
+          <i class="fas fa-moon"></i>
+        </button>
+        <button onclick="disattivaBiometrico()" class="btn-password" id="btn-disattiva-impronta" title="Disattiva impronta" style="display:none;">
+          <i class="fas fa-fingerprint"></i>
+        </button>
+               <select id="select-lingua" class="select-lingua" onchange="cambiaLingua(this.value)" title="Lingua / Language">
+          <option value="it">IT</option>
+          <option value="en">EN</option>
+          <option value="ro">RO</option>
+          <option value="sq">SQ</option>
+          <option value="tr">TR</option>
+          <option value="ar">AR</option>
+        </select>
+        <div id="notifiche-container" style="display:none;position:relative;">
+          <button onclick="mostraNotifiche()" class="btn-notifica" id="btn-notifica" title="Notifiche">
+            <i class="fas fa-bell"></i>
+            <span id="badge-notifiche" class="badge-notifica-rossa" style="display:none;">0</span>
+          </button>
+        </div>
+        <div id="azienda-container" style="display:none;margin-left:10px;">
+          <select id="select-azienda" onchange="cambiaAzienda()">
+            <option value="0" data-i18n="header_tutte">-- Tutte --</option>
+          </select>
+        </div>
       </div>
-      <span class="badge" id="user-ruolo"></span>
-    </div>
-    <button onclick="apriModificaPassword()" class="btn-password" id="btn-password" title="Cambia password" style="display:none;">
-      <i class="fas fa-key"></i>
-    </button>
-    <button onclick="toggleDarkMode()" class="btn-darkmode" id="btn-darkmode" title="Dark/Light Mode">
-      <i class="fas fa-moon"></i>
-    </button>
+    </header>
 
-    <!-- ⭐ Pulsante disattiva impronta (visibile solo se attiva) -->
-    <button onclick="disattivaBiometrico()" class="btn-password" id="btn-disattiva-impronta" title="Disattiva impronta" style="display:none;">
-      <i class="fas fa-fingerprint"></i>
-    </button>
-
-    <select id="select-lingua" class="select-lingua" onchange="cambiaLingua(this.value)" title="Lingua / Language">
-      <option value="it">🇮🇹 Italiano</option>
-      <option value="en">🇬🇧 English</option>
-      <option value="ro">🇷🇴 Română</option>
-      <option value="sq">🇦🇱 Shqip</option>
-      <option value="tr">🇹🇷 Türkçe</option>
-      <option value="ar">🇸🇦 العربية</option>
-    </select>
-    <div id="notifiche-container" style="display:none;position:relative;">
-      <button onclick="mostraNotifiche()" class="btn-notifica" id="btn-notifica" title="Notifiche">
-        <i class="fas fa-bell"></i>
-        <span id="badge-notifiche" class="badge-notifica-rossa" style="display:none;">0</span>
+    <!-- SECONDO HEADER (Solo per Logout) - Spinto a destra e senza margini extra -->
+    <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: -5px; margin-bottom: 10px; width: 100%;">
+            <button onclick="logout()" class="btn-logout" style="background-color: #c82333 !important; color: white !important; border: 1px solid #b81e2d !important; border-radius: 6px !important; padding: 6px 12px !important; font-weight: bold !important; cursor: pointer; font-size: 0.65em !important;">
+        <i class="fas fa-sign-out-alt"></i> 
+        <span data-i18n="header_logout">Logout</span>
       </button>
     </div>
-    <div id="azienda-container" style="display:none;margin-left:10px;">
-      <select id="select-azienda" onchange="cambiaAzienda()">
-        <option value="0" data-i18n="header_tutte">-- Tutte --</option>
-      </select>
-    </div>
-  </div> <!-- chiusura header-left -->
-
-  <!-- ⭐ LOGOUT FUORI da header-left, dentro header -->
-  <button onclick="logout()" class="btn-logout">
-    <i class="fas fa-sign-out-alt"></i> <span data-i18n="header_logout">Logout</span>
-  </button>
-</header>
+    <!-- FINE HEADER -->
 
     <nav class="tabs">
       <button class="tab" id="tab-registra" onclick="showTab('registra')">
@@ -234,14 +235,12 @@
           <i class="fas fa-save"></i> <span data-i18n="reg_salva">Salva Registrazione</span>
         </button>
         <div id="msg-registra" style="margin-top:15px;"></div>
-                <!-- ⭐ INIZIO NUOVO BLOCCO -->
         <div id="lista-registrazioni-oggi" style="margin-top: 25px; display: none;">
           <h3 style="font-size: 1.1em; color: #00695C; border-bottom: 2px solid #e3ebe9; padding-bottom: 8px; margin-bottom: 15px;">
             <i class="fas fa-list-check"></i> Registrazioni di oggi
           </h3>
           <div id="contenuto-registrazioni-oggi"></div>
         </div>
-        <!-- ⭐ FINE NUOVO BLOCCO -->
       </div>
     </div>
 
@@ -1032,19 +1031,26 @@
       </div>
 
       <div class="nm-popup-azioni">
-        <button onclick="nmScaricaCSVPhoenix()" class="btn-success" title="Scarica un file CSV apribile con Excel Online">
-          <i class="fas fa-file-csv"></i> Scarica CSV per Phoenix
+        <button onclick="nmScaricaCSVPhoenix()" class="btn-success btn-piccolo" title="Scarica un file CSV apribile con Excel Online">
+          <i class="fas fa-file-csv"></i> Scarica CSV
         </button>
-        <button onclick="nmScaricaTXTPhoenix()" class="btn-info" title="Scarica un file di testo semplice">
+        <button onclick="nmScaricaTXTPhoenix()" class="btn-info btn-piccolo" title="Scarica un file di testo semplice">
           <i class="fas fa-file-alt"></i> <span data-i18n="nm_scarica_txt">Scarica .TXT</span>
         </button>
-        <button onclick="nmCopiaPerPhoenix()" class="btn-primary" title="Copia i numeri in formato tabella (per incollare in Phoenix)">
+        <button onclick="nmScaricaTXTSoloNuovi()" class="btn-warning btn-piccolo" title="Scarica solo i numeri non ancora stampati">
+          <i class="fas fa-file-alt"></i> Solo Nuovi
+        </button>
+        <button onclick="nmCopiaPerPhoenix()" class="btn-primary btn-piccolo" title="Copia i numeri in formato tabella (per incollare in Phoenix)">
           <i class="fas fa-copy"></i> Copia tabella
         </button>
-        <button onclick="nmCondividiCartella()" class="btn-info">
-          <i class="fas fa-share-alt"></i> Condividi / Stampa
+        <button onclick="nmCondividiCartella()" class="btn-info btn-piccolo">
+          <i class="fas fa-share-alt"></i> Condividi
         </button>
-        <button onclick="nmHoStampato()" class="btn-stampato">
+      </div>
+
+      <!-- Pulsante Ho Stampato centrato e separato -->
+      <div style="width: 100%; display: flex; justify-content: center; margin-top: 15px;">
+        <button onclick="nmHoStampato()" class="btn-stampato" style="padding: 10px 30px;">
           <i class="fas fa-check-circle"></i> Ho stampato
         </button>
       </div>
