@@ -23,9 +23,7 @@ self.addEventListener('activate', (event) => {
 messaging.onBackgroundMessage((payload) => {
   console.log('📬 Notifica in background ricevuta:', payload);
 
-  if (payload.notification) {
-    return; // Se c'è già la notifica, il sistema la mostra da solo
-  }
+  if (payload.notification) return; 
 
   const titolo = payload.data?.title || 'MEC-ROY';
   const corpo = payload.data?.body || 'Ricordati di registrare le ore!';
@@ -36,8 +34,10 @@ messaging.onBackgroundMessage((payload) => {
     body: corpo,
     icon: icona,
     badge: 'images/logo-192.png',
-    vibrate: [200, 100, 200],
-    data: { url: url }
+    vibrate: [500, 200, 500, 200, 500], // Vibrazione insistente
+    data: { url: url },
+    requireInteraction: true, // La notifica non sparisce finché non la clicchi
+    silent: false
   };
 
   self.registration.showNotification(titolo, opzioni);
