@@ -4045,11 +4045,11 @@ function nmChiudiAdmin() {
   nmCommessaDaCancellare = null;
 }
 
-// ✅ FIX #10: rilegge utente dal DB per password fresca
 async function nmConfermaCancellazione() {
   if (!nmCommessaDaCancellare) return;
   const password = document.getElementById('nm-admin-password').value;
   const msg = document.getElementById('nm-msg-admin');
+  
   if (!password) { msg.innerHTML = '<div class="error">Inserisci la password</div>'; return; }
   if (!utenteCorrente || utenteCorrente.ruolo !== 'admin') { msg.innerHTML = '<div class="error">❌ Non sei autorizzato</div>'; return; }
 
@@ -4059,7 +4059,23 @@ async function nmConfermaCancellazione() {
     if (snap.exists) utenteFresco = snap.data();
   } catch (e) { console.warn('⚠️ Rilettura utente fallita:', e); }
 
-  if (utenteFresco.password !== password) { msg.innerHTML = '<div class="error">❌ Password errata</div>'; return; }
+  // 🛑 FIX: Controllo password intelligente (gestisce sia testo in chiaro che hash)
+  let passwordCorretta = false;
+  
+  if (utenteFresco.password && /^[a-f0-9]{64}$/.test(utenteFresco.password)) {
+    // La password nel DB è un HASH (64 caratteri)
+    const hashInserito = await hashPassword(password, utenteCorrente.username);
+    passwordCorretta = (utenteFresco.password === hashInserito);
+  } else {
+    // La password nel DB è ancora in chiaro
+    passwordCorretta = (utenteFresco.password === password);
+  }
+
+  if (!passwordCorretta) { 
+    msg.innerHTML = '<div class="error">❌ Password errata</div>'; 
+    return; 
+  }
+
   msg.innerHTML = '<div class="info-msg">⏳ Cancellazione...</div>';
   try {
     await nmGetCollection().doc(nmCommessaDaCancellare).delete();
