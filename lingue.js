@@ -1185,8 +1185,8 @@ function popolaTendinaLingua() {
   if (!select) return;
   select.innerHTML = '';
   Object.keys(LINGUE_DISPONIBILI).forEach(codice => {
-    const l = LINGUE_DISPONIBILI[codice];
-    select.innerHTML += `<option value="${codice}">${l.bandiera} ${l.nome}</option>`;
+    const sigla = codice.toUpperCase(); // Trasforma 'it' in 'IT'
+    select.innerHTML += `<option value="${codice}">${sigla}</option>`;
   });
   select.value = _linguaCorrente;
 }
